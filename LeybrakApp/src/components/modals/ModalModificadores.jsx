@@ -4,6 +4,7 @@ import {
   StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import useAppStore from '../../store/useAppStore';
 
 const formatearSoles = (monto) => `S/ ${parseFloat(monto || 0).toFixed(2)}`;
@@ -150,9 +151,12 @@ export default function ModalModificadores({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {/* SafeArea: con edge-to-edge (RN 0.85) la hoja se dibuja bajo la barra de gestos;
+          el inset evita que el botón inferior pierda los toques. Ver ModalCobro. */}
+      <SafeAreaProvider>
       <View style={s.overlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
-        <View style={[s.container, { backgroundColor: t.bg, borderTopColor: t.border }]}>
+        <SafeAreaView edges={['bottom']} style={[s.container, { backgroundColor: t.bg, borderTopColor: t.border }]}>
 
           {/* Handle */}
           <View style={s.handle}>
@@ -355,8 +359,9 @@ export default function ModalModificadores({
             </TouchableOpacity>
           </View>
 
-        </View>
+        </SafeAreaView>
       </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }

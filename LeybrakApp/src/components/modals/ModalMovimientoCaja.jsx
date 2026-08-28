@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, Alert
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import { registrarMovimientoCaja } from '../../api/api';
@@ -86,8 +87,11 @@ export default function ModalMovimientoCaja({ visible, onClose }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCerrar}>
+      {/* SafeArea: con edge-to-edge (RN 0.85) la hoja se dibuja bajo la barra de gestos;
+          el inset evita que el botón inferior pierda los toques. Ver ModalCobro. */}
+      <SafeAreaProvider>
       <View style={s.overlay}>
-        <View style={[s.container, { backgroundColor: t.bg, borderColor: t.border }]}>
+        <SafeAreaView edges={['bottom']} style={[s.container, { backgroundColor: t.bg, borderColor: t.border }]}>
 
           {/* Header */}
           <View style={[s.header, { backgroundColor: t.bg2, borderBottomColor: t.border }]}>
@@ -178,8 +182,9 @@ export default function ModalMovimientoCaja({ visible, onClose }) {
             </TouchableOpacity>
 
           </View>
-        </View>
+        </SafeAreaView>
       </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }

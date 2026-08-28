@@ -871,10 +871,10 @@ export default function ModalCobro({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={cierreSeguro}>
-      {/* SafeAreaProvider local: un Modal es una ventana aparte en Android, y con
-          edge-to-edge (RN 0.85) el contenido se dibuja bajo la barra de gestos.
-          SafeAreaView edges=['bottom'] reserva ese inset para que el último botón
-          ("Cerrar") no quede bajo la barra del sistema, que se comía los toques. */}
+      {/* SafeAreaProvider local: el Modal es una ventana aparte en Android, así que
+          necesita su propio provider para medir los insets. Con edge-to-edge (RN 0.85)
+          la hoja se dibuja bajo la barra de navegación; el inset inferior evita que el
+          último botón ("Cerrar") quede debajo de la barra de gestos y pierda los toques. */}
       <SafeAreaProvider>
         <View style={s.overlay}>
           <TouchableOpacity style={{ flex: 0.1 }} onPress={cierreSeguro} />

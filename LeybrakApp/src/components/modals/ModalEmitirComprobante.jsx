@@ -4,6 +4,7 @@ import {
   ActivityIndicator, ScrollView, Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { emitirComprobante, consultarRuc, consultarDni } from '../../api/api';
 
 /**
@@ -69,8 +70,11 @@ export default function ModalEmitirComprobante({ visible, onClose, ordenId, isDa
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={cerrar}>
+      {/* SafeArea: con edge-to-edge (RN 0.85) la hoja se dibuja bajo la barra de gestos;
+          el inset evita que el botón inferior pierda los toques. Ver ModalCobro. */}
+      <SafeAreaProvider>
       <View style={st.overlay}>
-        <View style={[st.card, { backgroundColor: t.bg, borderTopColor: t.border }]}>
+        <SafeAreaView edges={['bottom']} style={[st.card, { backgroundColor: t.bg, borderTopColor: t.border }]}>
           <View style={[st.header, { borderBottomColor: t.border }]}>
             <View style={st.headerLeft}>
               <View style={[st.headerIcon, { backgroundColor: color + '22' }]}>
@@ -169,8 +173,9 @@ export default function ModalEmitirComprobante({ visible, onClose, ordenId, isDa
               </>
             )}
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }
