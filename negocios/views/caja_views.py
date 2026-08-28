@@ -2,7 +2,7 @@ import logging
 
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import viewsets, status
@@ -73,12 +73,26 @@ class SesionCajaViewSet(viewsets.ModelViewSet):
         if not sede_id:
             return Response({'error': 'Falta sede_id'}, status=400)
 
-        sesion = SesionCaja.objects.create(
-            empleado_abre_id=empleado_id,
-            sede_id=sede_id,
-            fondo_inicial=fondo,
-            estado='abierta'
-        )
+        if SesionCaja.objects.filter(sede_id=sede_id, estado='abierta').exists():
+            return Response(
+                {'error': 'Ya hay una caja abierta en esta sede.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            sesion = SesionCaja.objects.create(
+                empleado_abre_id=empleado_id,
+                sede_id=sede_id,
+                fondo_inicial=fondo,
+                estado='abierta'
+            )
+        except IntegrityError:
+            # Dos aperturas casi simultáneas pasaron el chequeo de arriba;
+            # la constraint de la BD es la que realmente lo evita.
+            return Response(
+                {'error': 'Ya hay una caja abierta en esta sede.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         return Response({'mensaje': 'Caja abierta con éxito', 'id': sesion.id})
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
@@ -101,7 +115,9 @@ class SesionCajaViewSet(viewsets.ModelViewSet):
             movimientos_turno = MovimientoCaja.objects.filter(sesion_caja=sesion)
 
             total_efectivo = pagos_turno.filter(metodo='efectivo').aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00')
-            total_yape     = pagos_turno.filter(metodo='yape_plin').aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00')
+            # 'yape' y 'plin' son valores separados en Pago.metodo (no existe 'yape_plin');
+            # el frontend los declara juntos en un solo campo ("Total en Yape / Plin").
+            total_yape     = pagos_turno.filter(metodo__in=['yape', 'plin']).aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00')
             total_tarjeta  = pagos_turno.filter(metodo='tarjeta').aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00')
             total_digital  = total_yape + total_tarjeta
 
