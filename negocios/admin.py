@@ -159,6 +159,18 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
         }),
     )
 
+    # Qué módulo del Negocio activa cada permiso del Plan contratado.
+    # mod_salon_activo, mod_clientes_activo y mod_facturacion_activo no están acá
+    # porque son módulos base (no dependen del plan, los prende el dueño a mano).
+    PLAN_MODULO_MAP = {
+        'modulo_kds':       'mod_cocina_activo',
+        'modulo_inventario':'mod_inventario_activo',
+        'modulo_delivery':  'mod_delivery_activo',
+        'modulo_carta_qr':  'mod_carta_qr_activo',
+        'modulo_bot_wsp':   'mod_bot_wsp_activo',
+        'modulo_ml':        'mod_ml_activo',
+    }
+
     def save_model(self, request, obj, form, change):
         if not obj.propietario_id:
             username = form.cleaned_data['propietario_username']
@@ -167,6 +179,15 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
             obj.propietario = User.objects.create_user(username=username, email=email, password=password)
         if not obj.fin_prueba:
             obj.fin_prueba = timezone.now() + timedelta(days=30)
+
+        # Precarga los módulos que incluye el plan (al crear, o al cambiar de plan).
+        # Solo prende módulos (OR): si ya habías activado uno a mano que el plan
+        # no trae, se queda activado igual.
+        if obj.plan_id and (not change or 'plan' in form.changed_data):
+            for campo_plan, campo_modulo in self.PLAN_MODULO_MAP.items():
+                if getattr(obj.plan, campo_plan):
+                    setattr(obj, campo_modulo, True)
+
         super().save_model(request, obj, form, change)
 
 # ==========================================
