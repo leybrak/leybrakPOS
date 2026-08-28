@@ -626,7 +626,12 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
                 if not ya_pagada:
                     # ── Flujo normal: registrar pagos ──────────────────
-                    Pago.objects.filter(orden=orden, estado='pendiente').update(estado='cancelado')
+                    # Cancela los pagos manuales de un intento de cobro anterior (ej. el
+                    # cajero corrigió el monto), sin tocar los ya confirmados por la app
+                    # de Yape/Plin (notificacion_origen) — esos deben sobrevivir al reintento.
+                    Pago.objects.filter(
+                        orden=orden, estado='confirmado', notificacion_origen__isnull=True
+                    ).update(estado='cancelado')
 
                     for p in pagos_data:
                         monto_pago  = Decimal(str(p.get('monto', '0.00')))
