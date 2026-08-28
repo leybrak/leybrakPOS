@@ -1,4 +1,8 @@
+from datetime import timedelta
+
+from django import forms
 from django.contrib import admin
+from django.utils import timezone
 # ✨ IMPORTAMOS LAS HERRAMIENTAS DE UNFOLD ✨
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 
@@ -80,11 +84,90 @@ class PlanSaaSAdmin(ModelAdmin): # ✨ UNFOLD
     list_display = ('nombre', 'precio_mensual', 'max_sedes', 'modulo_kds', 'modulo_inventario', 'modulo_delivery')
     list_editable = ('modulo_kds', 'modulo_inventario', 'modulo_delivery')
 
+class SedeInline(TabularInline): # ✨ UNFOLD
+    model = Sede
+    extra = 1
+    fields = ('nombre', 'direccion', 'activo')
+
+
+class NegocioAdminForm(forms.ModelForm):
+    """
+    Permite crear el Negocio y su propietario (User) en un solo paso,
+    en vez de tener que crear el Usuario aparte antes de poder elegirlo.
+    """
+    propietario_username = forms.CharField(
+        max_length=150, required=False, label='Usuario (login) del propietario',
+        help_text='Solo para crear un propietario nuevo. Si ya existe, elígelo arriba en "Propietario".'
+    )
+    propietario_email = forms.EmailField(required=False, label='Email del propietario')
+    propietario_password = forms.CharField(
+        required=False, widget=forms.PasswordInput, label='Contraseña del propietario',
+    )
+
+    class Meta:
+        model = Negocio
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['propietario'].required = False
+        self.fields['fin_prueba'].required = False
+        self.fields['fin_prueba'].help_text = 'Vacío = 30 días de prueba desde hoy.'
+
+    def clean(self):
+        cleaned = super().clean()
+        propietario = cleaned.get('propietario')
+        username = cleaned.get('propietario_username')
+        if not propietario and not username:
+            raise forms.ValidationError(
+                'Elige un Propietario existente o completa "Usuario (login) del propietario" para crear uno nuevo.'
+            )
+        if username and not propietario and User.objects.filter(username=username).exists():
+            raise forms.ValidationError(
+                f'Ya existe un usuario "{username}". Selecciónalo en el campo Propietario en vez de recrearlo.'
+            )
+        return cleaned
+
+
 @admin.register(Negocio)
 class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
+    form = NegocioAdminForm
+    inlines = [SedeInline]
     list_display = ('nombre', 'propietario', 'plan', 'activo')
     list_filter = ('plan', 'activo')
     search_fields = ('nombre', 'propietario__username')
+
+    fieldsets = (
+        ('Propietario', {
+            'fields': ('propietario', 'propietario_username', 'propietario_email', 'propietario_password'),
+            'description': 'Elige un usuario existente, o completa usuario/email/contraseña para crear uno nuevo automáticamente al guardar.',
+        }),
+        ('Datos del negocio', {
+            'fields': ('nombre', 'ruc', 'razon_social', 'logo', 'plan', 'fin_prueba', 'activo'),
+        }),
+        ('Billeteras digitales', {
+            'fields': ('yape_numero', 'yape_qr', 'plin_numero', 'plin_qr'),
+            'classes': ('collapse',),
+        }),
+        ('Módulos habilitados', {
+            'fields': (
+                'mod_salon_activo', 'mod_cocina_activo', 'mod_inventario_activo',
+                'mod_delivery_activo', 'mod_clientes_activo', 'mod_facturacion_activo',
+                'mod_carta_qr_activo', 'mod_bot_wsp_activo', 'mod_ml_activo',
+            ),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if not obj.propietario_id:
+            username = form.cleaned_data['propietario_username']
+            email = form.cleaned_data.get('propietario_email', '')
+            password = form.cleaned_data.get('propietario_password') or User.objects.make_random_password()
+            obj.propietario = User.objects.create_user(username=username, email=email, password=password)
+        if not obj.fin_prueba:
+            obj.fin_prueba = timezone.now() + timedelta(days=30)
+        super().save_model(request, obj, form, change)
 
 # ==========================================
 # 📊 4. CRM Y MARKETING (¡LO NUEVO!)
