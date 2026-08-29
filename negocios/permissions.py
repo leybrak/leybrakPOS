@@ -19,3 +19,10 @@ class EsDuenioOsoloLectura(BasePermission):
 
         # Escritura: solo usuarios con negocio asociado (Dueños/Admins del sistema)
         return hasattr(request.user, 'negocio')
+
+
+class EsSuperUsuario(BasePermission):
+    """Solo el operador de la plataforma (Leybrak) — panel de staff."""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_superuser)

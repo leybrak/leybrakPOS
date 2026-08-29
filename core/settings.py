@@ -284,6 +284,12 @@ GEMINI_IMAGE_MODEL = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-imag
 # (así no hay que salir de la app). Si está vacío, el envío se omite sin error.
 N8N_TICKET_WEBHOOK_URL = os.environ.get('N8N_TICKET_WEBHOOK_URL', '')
 
+# 📊 Panel de staff — API de n8n para reportar ejecuciones/errores recientes
+# (Settings > API dentro de n8n). Opcional: si falta, el panel muestra
+# "n8n no configurado" en vez de fallar.
+N8N_API_URL = os.environ.get('N8N_API_URL', '')
+N8N_API_KEY = os.environ.get('N8N_API_KEY', '')
+
 # settings.py
 # Reemplaza las últimas líneas de email por esto:
 EMAIL_BACKEND     = 'django.core.mail.backends.smtp.EmailBackend'

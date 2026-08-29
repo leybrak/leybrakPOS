@@ -5,7 +5,7 @@ from .models import (
     ComboPromocional, ComponenteCombo, InsumoBase, InsumoSede, ItemComboPromocional, Negocio, PagoSuscripcion, PlanSaaS, ReglaNegocio, Sede, Mesa, Producto, Orden, DetalleOrden, Pago,
     ModificadorRapido, GrupoVariacion, OpcionVariacion, Rol, Empleado, SesionCaja,
     DetalleOrdenOpcion , Categoria, RecetaOpcion, Cliente, VariacionProducto, ZonaDelivery, HorarioVisibilidad,
-    ModuloGlobal
+    ModuloGlobal, TicketSoporte
 )
 
 
@@ -461,6 +461,18 @@ class ComboPromocionalSerializer(serializers.ModelSerializer):
         model = ComboPromocional
         fields = [
             'id', 'negocio', 'nombre', 'precio', 'imagen',
-            'rangos_fechas', 'activo', 'creado_en', 'items','sede', 'sede_nombre', 
+            'rangos_fechas', 'activo', 'creado_en', 'items','sede', 'sede_nombre',
         ]
         read_only_fields = ['negocio', 'creado_en']
+
+
+class TicketSoporteSerializer(serializers.ModelSerializer):
+    negocio_nombre = serializers.ReadOnlyField(source='negocio.nombre')
+
+    class Meta:
+        model = TicketSoporte
+        fields = [
+            'id', 'negocio', 'negocio_nombre', 'asunto', 'mensaje',
+            'estado', 'prioridad', 'respuesta_staff', 'creado_en', 'actualizado_en',
+        ]
+        read_only_fields = ['negocio', 'creado_en', 'actualizado_en']

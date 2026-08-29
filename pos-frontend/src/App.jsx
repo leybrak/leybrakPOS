@@ -7,6 +7,7 @@ import LoginView from './views/View_Login';
 import PosTerminal from '../src/features/POS/Pos_Terminal';
 import KdsView from './views/View_Kds';
 import ErpDashboard from './views/View_Erp';
+import StaffDashboard from './views/View_Staff';
 import PublicMenu from './features/public/PublicMenu';
 import api from '../src/api/api';
 import usePosStore from './store/usePosStore';
@@ -15,7 +16,7 @@ if (typeof window !== 'undefined') {
   window.__getStoreConfig = () => usePosStore.getState().configuracionGlobal;
 }
 const ROL_A_VISTA = {
-  'superadmin':    'erp',
+  'superadmin':    'staff',
   'dueño':         'erp',
   'admin':         'erp',
   'administrador': 'erp',
@@ -123,6 +124,10 @@ const VistaInternaPOS = () => {
           if (negocio_id) localStorage.setItem('negocio_id', negocio_id);
           setSesion({ rol });
 
+          // El operador de la plataforma no tiene negocio propio — la
+          // suscripción no aplica, va directo al panel de staff.
+          if (vistaDestino === 'staff') { setVista('staff'); return; }
+
           const sus = await verificarSuscripcion();
           if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
 
@@ -168,7 +173,7 @@ const VistaInternaPOS = () => {
     const vistaDestino = getRolVista(rol);
     if (!vistaDestino) { setVista('sin_permiso'); return; }
 
-    if (!suscripcion) {
+    if (!suscripcion && vistaDestino !== 'staff') {
       const sus = await verificarSuscripcion();
       if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
     }
@@ -269,6 +274,7 @@ const VistaInternaPOS = () => {
       {vista === 'terminal' && <PosTerminal rolUsuario={sesion?.rol} onIrAErp={() => setVista('erp')} />}
       {vista === 'cocina'   && <KdsView onVolver={() => setVista('login')} />}
       {vista === 'erp'      && <ErpDashboard onVolverAlPos={() => setVista('terminal')} rolUsuario={sesion?.rol} />}
+      {vista === 'staff'    && <StaffDashboard onLogout={async () => { await cerrarSesionGlobal(); setVista('login'); }} />}
     </div>
   );
 };

@@ -13,7 +13,8 @@ from .models import (
     # ✨ IMPORTAMOS TUS NUEVOS MODELOS DE CRM Y MARKETING ✨
     Cliente, ZonaDelivery, ReglaNegocio, CuponPromocional,
     HorarioVisibilidad, ComponenteCombo, VersionApp, Comprobante, SerieComprobante,
-    HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker, ModuloGlobal
+    HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker, ModuloGlobal,
+    TicketSoporte
 )
 from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
@@ -348,6 +349,17 @@ class FeedbackClienteAdmin(ModelAdmin):  # ✨ UNFOLD
     list_filter = ('visto', 'calificacion', 'negocio')
     list_editable = ('visto',)
     search_fields = ('telefono', 'comentario')
+
+
+# ==========================================
+# 🎫 TICKETS DE SOPORTE (respaldo — la UI principal es el panel de staff)
+# ==========================================
+@admin.register(TicketSoporte)
+class TicketSoporteAdmin(ModelAdmin):  # ✨ UNFOLD
+    list_display = ('creado_en', 'asunto', 'negocio', 'estado', 'prioridad')
+    list_filter = ('estado', 'prioridad', 'negocio')
+    list_editable = ('estado',)
+    search_fields = ('asunto', 'mensaje', 'negocio__nombre')
 
 
 # ==========================================

@@ -20,6 +20,7 @@ from negocios.views.facturacion_views import emitir_comprobante, obtener_comprob
 from negocios.views.delivery_views import pedidos_delivery, tomar_pedido, actualizar_estado_delivery, avisar_cliente
 from negocios.views.historia_views import historias, cancelar_historia, historias_pendientes_bot, marcar_historia_bot
 from negocios.views.cliente_views import geocodificar_bot, registrar_feedback_bot, listar_canjes, stickers_view, eliminar_sticker
+from negocios.views.staff_views import TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor
 from .serializers_jwt import CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView, refresh_movil,login_movil
 from . import views
 
@@ -47,6 +48,7 @@ router.register(r'zonas-delivery',        views.ZonaDeliveryViewSet,     basenam
 router.register(r'reglas-negocio',        views.ReglaNegocioViewSet,     basename='reglanegocio')
 router.register(r'planes-saas',           PlanSaaSViewSet,               basename='planes-saas')
 router.register(r'pagos-suscripcion',     PagoSuscripcionViewSet,        basename='pagos-suscripcion')
+router.register(r'tickets-soporte',       TicketSoporteViewSet,          basename='ticket-soporte')
 
 urlpatterns = [
     path('empleados/login-pin/',        login_empleado_pin,          name='login-empleado-pin'),
@@ -132,4 +134,11 @@ urlpatterns = [
     # Consumidos por el cron de n8n (token X-Bot-Token):
     path('bot/historias-pendientes/',           historias_pendientes_bot, name='historias-pendientes-bot'),
     path('bot/historias-marcar/',               marcar_historia_bot,      name='marcar-historia-bot'),
+
+    # ==========================================
+    # 🛠️ PANEL DE STAFF (Leybrak) — solo superusuario
+    # ==========================================
+    path('staff/metricas/',       metricas_staff,  name='staff-metricas'),
+    path('staff/salud-bot/',      salud_bot,       name='staff-salud-bot'),
+    path('staff/salud-servidor/', salud_servidor,  name='staff-salud-servidor'),
 ]

@@ -1432,3 +1432,37 @@ class Comprobante(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} {self.serie}-{self.numero} [{self.estado_sunat}]"
+
+
+class TicketSoporte(models.Model):
+    """
+    Reporte de un problema que manda el dueño de un negocio desde el ERP.
+    Lo gestiona Leybrak desde el panel de staff (o el admin, como respaldo).
+    """
+    ESTADOS = [
+        ('abierto', 'Abierto'),
+        ('en_progreso', 'En progreso'),
+        ('resuelto', 'Resuelto'),
+    ]
+    PRIORIDADES = [
+        ('baja', 'Baja'),
+        ('media', 'Media'),
+        ('alta', 'Alta'),
+    ]
+
+    negocio = models.ForeignKey('Negocio', on_delete=models.CASCADE, related_name='tickets_soporte')
+    asunto = models.CharField(max_length=150)
+    mensaje = models.TextField()
+    estado = models.CharField(max_length=15, choices=ESTADOS, default='abierto')
+    prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default='media')
+    respuesta_staff = models.TextField(blank=True, default='')
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Ticket de soporte'
+        verbose_name_plural = 'Tickets de soporte'
+
+    def __str__(self):
+        return f"[{self.get_estado_display()}] {self.asunto} — {self.negocio.nombre}"

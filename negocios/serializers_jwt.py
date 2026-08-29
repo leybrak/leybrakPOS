@@ -92,9 +92,16 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         user = serializer.user
 
         # Solo enviamos datos no-sensibles en el body JSON
+        # (mismo cálculo de rol que verificar_sesion en publico_views.py)
+        if user.is_superuser:
+            rol = 'SuperAdmin'
+        elif hasattr(user, 'negocio'):
+            rol = 'Dueño'
+        else:
+            rol = 'Admin'
         response_data = {
             'negocio_id': user.negocio.id if hasattr(user, 'negocio') else None,
-            'rol': 'Dueño' if hasattr(user, 'negocio') else 'Admin',
+            'rol': rol,
             # ⚠️  Los tokens NO van aquí — viajan en las cookies HttpOnly
         }
 

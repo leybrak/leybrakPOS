@@ -1,6 +1,81 @@
 import React, { useState } from 'react';
 import usePosStore from '../../store/usePosStore';
-import { cerrarSesionGlobal } from '../../api/api';
+import { cerrarSesionGlobal, crearTicket } from '../../api/api';
+
+function ModalReportarProblema({ onClose }) {
+  const [asunto, setAsunto] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+
+  const handleEnviar = async () => {
+    if (!asunto.trim() || !mensaje.trim()) return;
+    setEnviando(true);
+    try {
+      await crearTicket({ asunto, mensaje });
+      setEnviado(true);
+    } catch {
+      alert('No se pudo enviar el reporte. Intenta de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {enviado ? (
+          <div className="text-center py-4">
+            <i className="fi fi-rr-check-circle text-4xl text-emerald-500"></i>
+            <p className="text-white font-black mt-3">¡Reporte enviado!</p>
+            <p className="text-neutral-500 text-xs mt-1">Lo vamos a revisar pronto.</p>
+            <button
+              onClick={onClose}
+              className="mt-5 px-6 py-2.5 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest"
+            >
+              Cerrar
+            </button>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-white font-black text-sm mb-4">Reportar un problema</h3>
+            <input
+              value={asunto}
+              onChange={(e) => setAsunto(e.target.value)}
+              placeholder="¿Qué problema tuviste?"
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 mb-3 focus:outline-none focus:border-[#ff5a1f]"
+            />
+            <textarea
+              value={mensaje}
+              onChange={(e) => setMensaje(e.target.value)}
+              placeholder="Cuéntanos con detalle qué pasó…"
+              rows={4}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 mb-4 focus:outline-none focus:border-[#ff5a1f]"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-400 text-xs font-black uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEnviar}
+                disabled={enviando || !asunto.trim() || !mensaje.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                {enviando ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Erp_Sidebar({ 
   vistaActiva, 
@@ -14,9 +89,10 @@ export default function Erp_Sidebar({
   const { configuracionGlobal } = usePosStore();
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
-  const rolUsuario = localStorage.getItem('usuario_rol') || 'Empleado'; 
+  const rolUsuario = localStorage.getItem('usuario_rol') || 'Empleado';
   const esDueño = ['dueño', 'admin', 'administrador'].includes(rolUsuario.trim().toLowerCase());
   const modulos = configuracionGlobal?.modulos || {};
+  const [mostrarReporte, setMostrarReporte] = useState(false);
 
   const [gruposExpandidos, setGruposExpandidos] = useState({
     "MONITOREO": true,
@@ -202,9 +278,22 @@ export default function Erp_Sidebar({
             <i className="fi fi-rr-computer mt-1"></i>
             {!isCollapsed && <span>Terminal POS</span>}
           </button>
-          
-          <button 
-            onClick={handleCerrarSesion} 
+
+          <button
+            onClick={() => setMostrarReporte(true)}
+            className={`text-neutral-500 hover:text-white hover:bg-[#1a1a1a] transition-colors flex items-center justify-center border border-transparent hover:border-[#2a2a2a]
+              ${isCollapsed ? 'w-12 h-12 rounded-xl text-xl' : 'w-full py-2.5 rounded-xl gap-3 font-medium text-sm'}
+            `}
+            title={isCollapsed ? "Reportar un problema" : ""}
+          >
+            <i className="fi fi-rr-life-ring mt-1"></i>
+            {!isCollapsed && <span>Reportar un problema</span>}
+          </button>
+
+          {mostrarReporte && <ModalReportarProblema onClose={() => setMostrarReporte(false)} />}
+
+          <button
+            onClick={handleCerrarSesion}
             className={`text-neutral-500 hover:text-red-500 hover:bg-red-500/10 transition-colors flex items-center justify-center
               ${isCollapsed ? 'w-12 h-12 rounded-xl text-xl' : 'w-full py-2.5 rounded-xl gap-3 font-medium text-sm'}
             `}

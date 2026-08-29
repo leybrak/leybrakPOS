@@ -354,4 +354,15 @@ export const getComprobantes   = (params)           => api.get('/comprobantes/',
 export const consultarRuc      = (ruc)              => api.get(`/negocios/consultar_ruc/${ruc}/`);
 export const consultarDni      = (dni)              => api.get(`/negocios/consultar_dni/${dni}/`);
 
+// ============================================================
+// PANEL DE STAFF (Leybrak) — solo superusuario, salvo crearTicket
+// ============================================================
+export const getMetricasStaff      = () => api.get('/staff/metricas/');
+export const getSaludBot           = () => api.get('/staff/salud-bot/');
+export const getSaludServidor      = () => api.get('/staff/salud-servidor/');
+export const getTicketsStaff       = (params) => api.get('/tickets-soporte/', { params });
+export const actualizarTicketStaff = (id, data) => api.patch(`/tickets-soporte/${id}/`, data);
+// La usa cualquier dueño para reportar un problema desde el ERP normal.
+export const crearTicket           = (data) => api.post('/tickets-soporte/', data);
+
 export default api;
