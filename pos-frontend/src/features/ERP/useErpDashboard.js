@@ -248,6 +248,8 @@ export const useErpDashboard = () => {
           // Plan
           permisosPlan:  datosBD.plan_detalles || {},
           plan_detalles: datosBD.plan_detalles || null,
+          // Interruptor global de Leybrak (ver Tab_Modulos: "Próximamente")
+          modulos_globales: datosBD.modulos_globales || {},
         };
         const plan = datosBD.plan_detalles || {};
         // Interruptor maestro de Leybrak: si un módulo está apagado acá, se

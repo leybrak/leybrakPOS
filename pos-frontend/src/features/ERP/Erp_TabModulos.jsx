@@ -115,6 +115,19 @@ const SYNC_MAP = {
   mod_ml_activo:          'modMl',
 };
 
+// Llave de cada módulo en config.modulos_globales (interruptor único de Leybrak)
+const GLOBAL_KEY_MAP = {
+  mod_salon_activo:       'salon',
+  mod_cocina_activo:      'cocina',
+  mod_inventario_activo:  'inventario',
+  mod_delivery_activo:    'delivery',
+  mod_clientes_activo:    'clientes',
+  mod_facturacion_activo: 'facturacion',
+  mod_carta_qr_activo:    'cartaQr',
+  mod_bot_wsp_activo:     'botWsp',
+  mod_ml_activo:          'machineLearning',
+};
+
 // ─────────────────────────────────────────────────────────────
 // Toggle switch reutilizable
 // ─────────────────────────────────────────────────────────────
@@ -151,9 +164,13 @@ function TarjetaModulo({ mod, config, setConfig, isDark, colorPrimario }) {
     ? true
     : config.plan_detalles?.[mod.key_plan] === true;
 
+  // Interruptor único de Leybrak: si está apagado, se oculta en TODOS los
+  // negocios sin importar su plan ni lo que el dueño haya activado.
+  const habilitadoGlobalmente = config.modulos_globales?.[GLOBAL_KEY_MAP[mod.key_config]] ?? true;
+
   const isActive  = config[mod.key_config] === true;
   const Icon      = mod.icon;
-  const bloqueado = !enPlan;
+  const bloqueado = !enPlan || !habilitadoGlobalmente;
 
   const handleToggle = () => {
     if (bloqueado) return;
@@ -220,12 +237,12 @@ function TarjetaModulo({ mod, config, setConfig, isDark, colorPrimario }) {
             {mod.desc}
           </p>
 
-          {/* Aviso de plan insuficiente */}
+          {/* Aviso: apagado por Leybrak (prioridad) o no incluido en el plan */}
           {bloqueado && (
             <div className="flex items-center gap-1.5 mt-2">
               <Lock size={10} className="text-amber-500 shrink-0" />
               <p className="text-[10px] font-black text-amber-500">
-                No incluido en tu plan actual
+                {!habilitadoGlobalmente ? 'Próximamente' : 'No incluido en tu plan actual'}
               </p>
             </div>
           )}
@@ -251,9 +268,13 @@ function TarjetaModulo({ mod, config, setConfig, isDark, colorPrimario }) {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 export default function Tab_Modulos({ config, setConfig, isDark, colorPrimario }) {
-  // Módulos que el plan actual desbloquea (para el banner de upgrade)
+  // Módulos que el plan actual desbloquea (para el banner de upgrade).
+  // Los que están apagados por el interruptor global de Leybrak NO entran
+  // acá: subir de plan no los reactiva, así que "Ver planes" sería engañoso.
   const modulosBloqueados = MODULOS.filter(
-    m => m.key_plan !== null && !config.plan_detalles?.[m.key_plan]
+    m => m.key_plan !== null
+      && !config.plan_detalles?.[m.key_plan]
+      && (config.modulos_globales?.[GLOBAL_KEY_MAP[m.key_config]] ?? true)
   );
 
   return (

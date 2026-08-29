@@ -28,6 +28,13 @@ const MODULOS_META = [
   { id: 'modMl',          key_plan: 'modulo_ml',         icon: 'cogs',      color: '#ec4899', title: 'Predicciones IA',    desc: 'Anticípate a la demanda con IA.',             badge: 'ENTERPRISE', badgeColor: '#ec4899'  },
 ];
 
+// Llave de cada módulo en config.modulos_globales (interruptor único de Leybrak)
+const GLOBAL_KEY_MAP = {
+  modSalon: 'salon', modCocina: 'cocina', modInventario: 'inventario', modDelivery: 'delivery',
+  modClientes: 'clientes', modFacturacion: 'facturacion', modCartaQr: 'cartaQr',
+  modBotWsp: 'botWsp', modMl: 'machineLearning',
+};
+
 function BotonPermisoNotificaciones({ t, color }) {
   const [tienePermiso, setTienePermiso] = useState(false);
 
@@ -334,8 +341,12 @@ function TabModulos({ config, setConfig, t }) {
         <View style={s.modulosGrid}>
           {MODULOS_META.map(mod => {
             const enPlan  = mod.key_plan === null ? true : planDetalles[mod.key_plan] === true;
+            // Interruptor único de Leybrak: si está apagado, se oculta en
+            // TODOS los negocios sin importar su plan ni lo que el dueño
+            // haya activado.
+            const habilitadoGlobalmente = config.modulos_globales?.[GLOBAL_KEY_MAP[mod.id]] ?? true;
             const activo  = config[mod.id] === true;
-            const bloq    = !enPlan;
+            const bloq    = !enPlan || !habilitadoGlobalmente;
             return (
               <View
                 key={mod.id}
@@ -363,7 +374,9 @@ function TabModulos({ config, setConfig, t }) {
                   {bloq && (
                     <View style={s.moduloBloqAviso}>
                       <Icon name="lock" size={10} color="#f59e0b" />
-                      <Text style={s.moduloBloqText}>No incluido en tu plan</Text>
+                      <Text style={s.moduloBloqText}>
+                        {!habilitadoGlobalmente ? 'Próximamente' : 'No incluido en tu plan'}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -548,6 +561,8 @@ export default function ConfiguracionScreen() {
         colorPrimario:           d.color_primario          || '#3b82f6',
         temaFondo:               d.tema_fondo              || 'dark',
         plan_detalles:           d.plan_detalles           || null,
+        // Interruptor global de Leybrak (ver TabModulos: "Próximamente")
+        modulos_globales:        d.modulos_globales        || {},
         modSalon:       d.mod_salon_activo       ?? true,
         modCocina:      d.mod_cocina_activo      ?? false,
         modInventario:  d.mod_inventario_activo  ?? false,
@@ -600,6 +615,7 @@ export default function ConfiguracionScreen() {
 
       // ✅ Actualizar store global — aplica cambios en toda la app inmediatamente
       const plan = config.plan_detalles || {};
+      const g    = config.modulos_globales || {};
       setConfiguracionGlobal({
         ...configuracionGlobal,
         colorPrimario:           config.colorPrimario,
@@ -609,15 +625,15 @@ export default function ConfiguracionScreen() {
         yape_numero:             config.yape_numero,
         plin_numero:             config.plin_numero,
         modulos: {
-          salon:           config.modSalon       ?? true,
-          cocina:          config.modCocina      && (plan.modulo_kds        ?? false),
-          delivery:        config.modDelivery    && (plan.modulo_delivery   ?? false),
-          inventario:      config.modInventario  && (plan.modulo_inventario ?? false),
-          clientes:        config.modClientes    ?? false,
-          facturacion:     config.modFacturacion ?? false,
-          cartaQr:         config.modCartaQr     && (plan.modulo_carta_qr   ?? false),
-          botWsp:          config.modBotWsp      && (plan.modulo_bot_wsp    ?? false),
-          machineLearning: config.modMl          && (plan.modulo_ml         ?? false),
+          salon:           (config.modSalon       ?? true)  && (g.salon           ?? true),
+          cocina:          config.modCocina      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),
+          delivery:        config.modDelivery    && (plan.modulo_delivery   ?? false) && (g.delivery        ?? true),
+          inventario:      config.modInventario  && (plan.modulo_inventario ?? false) && (g.inventario      ?? true),
+          clientes:        (config.modClientes    ?? false) && (g.clientes        ?? true),
+          facturacion:     (config.modFacturacion ?? false) && (g.facturacion     ?? true),
+          cartaQr:         config.modCartaQr     && (plan.modulo_carta_qr   ?? false) && (g.cartaQr         ?? true),
+          botWsp:          config.modBotWsp      && (plan.modulo_bot_wsp    ?? false) && (g.botWsp          ?? true),
+          machineLearning: config.modMl          && (plan.modulo_ml         ?? false) && (g.machineLearning ?? true),
         },
       });
 
