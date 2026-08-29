@@ -49,6 +49,9 @@ export default function App() {
         const res  = await getNegocio(negocioId);
         const d    = res.data;
         const plan = d.plan_detalles || {};
+        // Interruptor maestro de Leybrak: si un módulo está apagado acá,
+        // se oculta para todos los negocios sin tocar el flag de cada uno.
+        const g    = d.modulos_globales || {};
         if (d.device_token) {
           try {
             NotificationModule.setDeviceToken(d.device_token);
@@ -71,15 +74,15 @@ export default function App() {
           yape_qr:                 d.yape_qr                 || null,
           plin_qr:                 d.plin_qr                 || null,
           modulos: {
-            salon:           d.mod_salon_activo       ?? true,
-            cocina:          d.mod_cocina_activo      && (plan.modulo_kds        ?? false),
-            delivery:        d.mod_delivery_activo    && (plan.modulo_delivery   ?? false),
-            inventario:      d.mod_inventario_activo  && (plan.modulo_inventario ?? false),
-            clientes:        d.mod_clientes_activo    ?? false,
-            facturacion:     d.mod_facturacion_activo ?? false,
-            cartaQr:         d.mod_carta_qr_activo    && (plan.modulo_carta_qr   ?? false),
-            botWsp:          d.mod_bot_wsp_activo     && (plan.modulo_bot_wsp    ?? false),
-            machineLearning: d.mod_ml_activo          && (plan.modulo_ml         ?? false),
+            salon:           (d.mod_salon_activo       ?? true)  && (g.salon           ?? true),
+            cocina:          d.mod_cocina_activo      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),
+            delivery:        d.mod_delivery_activo    && (plan.modulo_delivery   ?? false) && (g.delivery        ?? true),
+            inventario:      d.mod_inventario_activo  && (plan.modulo_inventario ?? false) && (g.inventario      ?? true),
+            clientes:        (d.mod_clientes_activo    ?? false) && (g.clientes        ?? true),
+            facturacion:     (d.mod_facturacion_activo ?? false) && (g.facturacion     ?? true),
+            cartaQr:         d.mod_carta_qr_activo    && (plan.modulo_carta_qr   ?? false) && (g.cartaQr         ?? true),
+            botWsp:          d.mod_bot_wsp_activo     && (plan.modulo_bot_wsp    ?? false) && (g.botWsp          ?? true),
+            machineLearning: d.mod_ml_activo          && (plan.modulo_ml         ?? false) && (g.machineLearning ?? true),
           },
         });
       } catch (e) {

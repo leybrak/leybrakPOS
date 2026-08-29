@@ -250,6 +250,12 @@ export const useErpDashboard = () => {
           plan_detalles: datosBD.plan_detalles || null,
         };
         const plan = datosBD.plan_detalles || {};
+        // Interruptor maestro de Leybrak: si un módulo está apagado acá, se
+        // oculta para todos los negocios sin tocar el flag de cada uno.
+        // OJO: se combina solo para decidir qué mostrar, nunca se guarda en
+        // `config` (ese es el que se reenvía tal cual al grabar cualquier
+        // pestaña) para no persistirlo como si fuera la preferencia real.
+        const g = datosBD.modulos_globales || {};
 
         setConfig(configData);
         setConfigOriginal(JSON.parse(JSON.stringify(configData)));
@@ -265,16 +271,17 @@ export const useErpDashboard = () => {
           device_token:            configData.device_token,
           negocio_id:              configData.negocio_id,
           facturacion_emision:     datosBD.facturacion_emision || 'desactivado',
+          modulos_globales:        g,
           modulos: {
-            salon:           configData.modSalon,
-            cocina:          configData.modCocina      && (plan.modulo_kds        ?? false),
-            delivery:        configData.modDelivery    && (plan.modulo_delivery   ?? false),
-            inventario:      configData.modInventario  && (plan.modulo_inventario ?? false),
-            clientes:        configData.modClientes,
-            facturacion:     configData.modFacturacion,
-            cartaQr:         configData.modCartaQr     && (plan.modulo_carta_qr   ?? false),
-            botWsp:          configData.modBotWsp      && (plan.modulo_bot_wsp    ?? false),
-            machineLearning: configData.modMl          && (plan.modulo_ml         ?? false),
+            salon:           configData.modSalon      && (g.salon           ?? true),
+            cocina:          configData.modCocina      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),
+            delivery:        configData.modDelivery    && (plan.modulo_delivery   ?? false) && (g.delivery        ?? true),
+            inventario:      configData.modInventario  && (plan.modulo_inventario ?? false) && (g.inventario      ?? true),
+            clientes:        configData.modClientes    && (g.clientes        ?? true),
+            facturacion:     configData.modFacturacion && (g.facturacion     ?? true),
+            cartaQr:         configData.modCartaQr     && (plan.modulo_carta_qr   ?? false) && (g.cartaQr         ?? true),
+            botWsp:          configData.modBotWsp      && (plan.modulo_bot_wsp    ?? false) && (g.botWsp          ?? true),
+            machineLearning: configData.modMl          && (plan.modulo_ml         ?? false) && (g.machineLearning ?? true),
           }
         });
       } catch (error) { console.error("Error config:", error); }
@@ -425,6 +432,9 @@ export const useErpDashboard = () => {
       });
 
       const plan = config.plan_detalles || {};
+      // Interruptor maestro de Leybrak, guardado en el store al cargar la
+      // config (ver cargarConfiguracionGlobal) — no se refetchea acá.
+      const g = configuracionGlobal.modulos_globales || {};
 
       // ✅ Store global actualizado con automatización
       setConfiguracionGlobal({
@@ -438,15 +448,15 @@ export const useErpDashboard = () => {
         device_token:            config.device_token,
         negocio_id:              parseInt(negocioId),
         modulos: {
-          salon:           config.modSalon,
-          cocina:          config.modCocina      && (plan.modulo_kds        ?? false),
-          delivery:        config.modDelivery    && (plan.modulo_delivery   ?? false),
-          inventario:      config.modInventario  && (plan.modulo_inventario ?? false),
-          clientes:        config.modClientes,
-          facturacion:     config.modFacturacion,
-          cartaQr:         config.modCartaQr     && (plan.modulo_carta_qr   ?? false),
-          botWsp:          config.modBotWsp      && (plan.modulo_bot_wsp    ?? false),
-          machineLearning: config.modMl          && (plan.modulo_ml         ?? false),
+          salon:           config.modSalon      && (g.salon           ?? true),
+          cocina:          config.modCocina      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),
+          delivery:        config.modDelivery    && (plan.modulo_delivery   ?? false) && (g.delivery        ?? true),
+          inventario:      config.modInventario  && (plan.modulo_inventario ?? false) && (g.inventario      ?? true),
+          clientes:        config.modClientes    && (g.clientes        ?? true),
+          facturacion:     config.modFacturacion && (g.facturacion     ?? true),
+          cartaQr:         config.modCartaQr     && (plan.modulo_carta_qr   ?? false) && (g.cartaQr         ?? true),
+          botWsp:          config.modBotWsp      && (plan.modulo_bot_wsp    ?? false) && (g.botWsp          ?? true),
+          machineLearning: config.modMl          && (plan.modulo_ml         ?? false) && (g.machineLearning ?? true),
         }
       });
 

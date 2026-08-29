@@ -4,7 +4,8 @@ from rest_framework import serializers
 from .models import (
     ComboPromocional, ComponenteCombo, InsumoBase, InsumoSede, ItemComboPromocional, Negocio, PagoSuscripcion, PlanSaaS, ReglaNegocio, Sede, Mesa, Producto, Orden, DetalleOrden, Pago,
     ModificadorRapido, GrupoVariacion, OpcionVariacion, Rol, Empleado, SesionCaja,
-    DetalleOrdenOpcion , Categoria, RecetaOpcion, Cliente, VariacionProducto, ZonaDelivery, HorarioVisibilidad
+    DetalleOrdenOpcion , Categoria, RecetaOpcion, Cliente, VariacionProducto, ZonaDelivery, HorarioVisibilidad,
+    ModuloGlobal
 )
 
 
@@ -32,6 +33,28 @@ class PagoSuscripcionSerializer(serializers.ModelSerializer):
 
 class NegocioSerializer(serializers.ModelSerializer):
     plan_detalles = PlanSaaSSerializer(source='plan', read_only=True)
+    modulos_globales = serializers.SerializerMethodField()
+
+    def get_modulos_globales(self, obj):
+        """
+        Interruptor maestro de Leybrak (ver ModuloGlobal). Se manda APARTE de
+        los mod_*_activo del negocio a propósito: el frontend combina ambos
+        solo para decidir qué mostrar, nunca reenvía este valor de vuelta al
+        guardar la config del negocio, así que apagarlo acá no borra la
+        preferencia real de nadie.
+        """
+        g = ModuloGlobal.actual()
+        return {
+            'salon':           g.salon_activo,
+            'cocina':          g.cocina_activo,
+            'inventario':      g.inventario_activo,
+            'delivery':        g.delivery_activo,
+            'clientes':        g.clientes_activo,
+            'facturacion':     g.facturacion_activo,
+            'cartaQr':         g.carta_qr_activo,
+            'botWsp':          g.bot_wsp_activo,
+            'machineLearning': g.ml_activo,
+        }
 
     class Meta:
         model  = Negocio
@@ -43,6 +66,7 @@ class NegocioSerializer(serializers.ModelSerializer):
             'mod_salon_activo', 'mod_cocina_activo', 'mod_inventario_activo',
             'mod_delivery_activo', 'mod_clientes_activo', 'mod_facturacion_activo',
             'mod_carta_qr_activo', 'mod_bot_wsp_activo', 'mod_ml_activo',
+            'modulos_globales',
             'color_primario', 'tema_fondo', 'carta_config',
             # Facturación electrónica (SUNAT / Nubefact)
             'facturacion_emision', 'facturacion_entorno',

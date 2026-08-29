@@ -13,7 +13,7 @@ from .models import (
     # ✨ IMPORTAMOS TUS NUEVOS MODELOS DE CRM Y MARKETING ✨
     Cliente, ZonaDelivery, ReglaNegocio, CuponPromocional,
     HorarioVisibilidad, ComponenteCombo, VersionApp, Comprobante, SerieComprobante,
-    HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker
+    HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker, ModuloGlobal
 )
 from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
@@ -83,6 +83,38 @@ class MovimientoCajaAdmin(ModelAdmin): # ✨ UNFOLD
 class PlanSaaSAdmin(ModelAdmin): # ✨ UNFOLD
     list_display = ('nombre', 'precio_mensual', 'max_sedes', 'modulo_kds', 'modulo_inventario', 'modulo_delivery')
     list_editable = ('modulo_kds', 'modulo_inventario', 'modulo_delivery')
+
+
+@admin.register(ModuloGlobal)
+class ModuloGlobalAdmin(ModelAdmin): # ✨ UNFOLD
+    """
+    Interruptor único de Leybrak: apaga acá un módulo que todavía tiene
+    cosas pendientes y desaparece para TODOS los negocios (sin tocar el
+    flag de cada uno). Es un singleton, por eso no se permite crear otra
+    fila ni borrar la única que existe.
+    """
+    list_display = (
+        'actualizado_en',
+        'salon_activo', 'cocina_activo', 'inventario_activo', 'delivery_activo',
+        'clientes_activo', 'facturacion_activo', 'carta_qr_activo', 'bot_wsp_activo',
+        'ml_activo',
+    )
+    list_display_links = ('actualizado_en',)
+    list_editable = (
+        'salon_activo', 'cocina_activo', 'inventario_activo', 'delivery_activo',
+        'clientes_activo', 'facturacion_activo', 'carta_qr_activo', 'bot_wsp_activo',
+        'ml_activo',
+    )
+
+    def has_add_permission(self, request):
+        return not ModuloGlobal.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        ModuloGlobal.actual()  # crea la fila si todavía no existe
+        return super().changelist_view(request, extra_context)
 
 class SedeInline(TabularInline): # ✨ UNFOLD
     model = Sede

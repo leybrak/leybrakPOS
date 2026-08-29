@@ -29,6 +29,57 @@ class PlanSaaS(models.Model):
     def __str__(self):
         return self.nombre
 
+
+class ModuloGlobal(models.Model):
+    """
+    Interruptor maestro de Leybrak (no por negocio, no por plan): si un
+    módulo todavía tiene cosas pendientes, se apaga acá y desaparece de
+    TODOS los negocios sin tocar el flag individual de cada uno (Negocio.
+    mod_*_activo) ni lo que incluya su plan. Es un singleton — una sola fila.
+
+    A propósito NO se aplica pisando mod_*_activo en la respuesta de la API:
+    el ERP reenvía esos campos tal cual al guardar cualquier otra pestaña de
+    configuración, así que un "apagado" temporal quedaría grabado como si
+    fuera la preferencia real del negocio. En cambio, viaja aparte (ver
+    NegocioSerializer.modulos_globales) y cada frontend lo combina con sus
+    propios flags solo para decidir qué mostrar.
+    """
+    salon_activo       = models.BooleanField(default=True, verbose_name='Gestión de Salón')
+    cocina_activo       = models.BooleanField(default=True, verbose_name='Pantalla KDS')
+    inventario_activo   = models.BooleanField(default=True, verbose_name='Control de Inventario')
+    delivery_activo     = models.BooleanField(default=True, verbose_name='Módulo Delivery')
+    clientes_activo     = models.BooleanField(default=True, verbose_name='Directorio CRM')
+    facturacion_activo  = models.BooleanField(default=True, verbose_name='Facturación Electrónica')
+    carta_qr_activo     = models.BooleanField(default=True, verbose_name='Menú Digital QR')
+    bot_wsp_activo      = models.BooleanField(default=True, verbose_name='Bot WhatsApp')
+    ml_activo           = models.BooleanField(default=True, verbose_name='Predicciones IA')
+
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Interruptor global de módulos'
+        verbose_name_plural = 'Interruptor global de módulos'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        # force_insert rompería si la fila ya existe (ej. .objects.create()
+        # llamado dos veces); sin él, Django hace UPDATE y si no afecta
+        # ninguna fila, inserta — comportamiento de upsert para el singleton.
+        kwargs['force_insert'] = False
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # el singleton no se borra
+
+    @classmethod
+    def actual(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return 'Interruptor global de módulos'
+
+
 from django.db import models
 from django.contrib.auth.models import User
 # Asegúrate de importar tu modelo PlanSaaS si está en otro archivo, o déjalo como lo tienes
