@@ -3,12 +3,14 @@ import Staff_Dashboard from '../features/Staff/Staff_Dashboard';
 import Staff_Tickets from '../features/Staff/Staff_Tickets';
 import Staff_Salud from '../features/Staff/Staff_Salud';
 import Staff_Negocios from '../features/Staff/Staff_Negocios';
+import Staff_Planes from '../features/Staff/Staff_Planes';
 import Staff_Pagos from '../features/Staff/Staff_Pagos';
 import Staff_Configuracion from '../features/Staff/Staff_Configuracion';
 
 const TABS = [
   { id: 'dashboard',      icono: 'fi-rr-apps',          nombre: 'Dashboard' },
   { id: 'negocios',       icono: 'fi-rr-shop',          nombre: 'Negocios' },
+  { id: 'planes',         icono: 'fi-rr-box',           nombre: 'Planes' },
   { id: 'pagos',          icono: 'fi-rr-sack-dollar',   nombre: 'Pagos' },
   { id: 'tickets',        icono: 'fi-rr-ticket',        nombre: 'Tickets' },
   { id: 'salud',          icono: 'fi-rr-heart-arrow',   nombre: 'Salud' },
@@ -58,6 +60,7 @@ export default function View_Staff({ onLogout }) {
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
         {tabActiva === 'dashboard'     && <Staff_Dashboard />}
         {tabActiva === 'negocios'      && <Staff_Negocios />}
+        {tabActiva === 'planes'        && <Staff_Planes />}
         {tabActiva === 'pagos'         && <Staff_Pagos />}
         {tabActiva === 'tickets'       && <Staff_Tickets />}
         {tabActiva === 'salud'         && <Staff_Salud />}

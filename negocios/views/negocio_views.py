@@ -17,6 +17,7 @@ from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
 from ..services import precargar_modulos_por_plan
+from ..permissions import EsSuperUsuario
 
 logger = logging.getLogger(__name__)
 
@@ -500,17 +501,33 @@ class SedeViewSet(viewsets.ModelViewSet):
             },
         })
     
-class PlanSaaSViewSet(viewsets.ReadOnlyModelViewSet):
+class PlanSaaSViewSet(viewsets.ModelViewSet):
     """
-    Lista todos los planes disponibles, ordenados por precio ASC.
-    Solo lectura — los planes los gestiona el superadmin desde el admin de Django.
-    Ruta: GET /api/planes-saas/
+    GET (list/retrieve) lo puede ver cualquier autenticado — el negocio
+    necesita ver los planes para "contratar" uno. Crear/editar/borrar es
+    solo del panel de staff.
+    Ruta: /api/planes-saas/
     """
     serializer_class   = PlanSaaSSerializer
     permission_classes = [IsAuthenticated]
- 
+
     def get_queryset(self):
         return PlanSaaS.objects.all().order_by('precio_mensual')
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [EsSuperUsuario()]
+        return [IsAuthenticated()]
+
+    def perform_destroy(self, instance):
+        # El FK Negocio.plan es PROTECT — sin este chequeo, borrar un plan
+        # en uso tira un ProtectedError sin manejar (500 crudo).
+        en_uso = instance.negocios.count()
+        if en_uso:
+            raise ValidationError(
+                f'No se puede borrar: {en_uso} negocio(s) todavía usan este plan.'
+            )
+        instance.delete()
 
 
 class PagoSuscripcionViewSet(viewsets.ModelViewSet):

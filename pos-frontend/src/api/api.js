@@ -330,6 +330,10 @@ export const actualizarModificador = (id, data) => api.put(`/modificadores-rapid
 export const eliminarModificador = (id) => api.delete(`/modificadores-rapidos/${id}/`);
 
 export const getPlanesDisponibles = () => api.get('/planes-saas/');
+// — Gestión de planes (staff) —
+export const crearPlanStaff       = (data) => api.post('/planes-saas/', data);
+export const actualizarPlanStaff  = (id, data) => api.patch(`/planes-saas/${id}/`, data);
+export const eliminarPlanStaff    = (id) => api.delete(`/planes-saas/${id}/`);
 export const getCombosPromocionales = () => api.get('/combos-promocionales/');
 export const crearComboPromocional = (data) => api.post('/combos-promocionales/', data);
 export const actualizarComboPromocional = (id, data) => api.put(`/combos-promocionales/${id}/`, data);
