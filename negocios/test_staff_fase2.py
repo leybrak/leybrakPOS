@@ -67,6 +67,37 @@ class CrearNegocioStaffTest(APITestCase):
         self.assertTrue(negocio.mod_delivery_activo)
         self.assertFalse(negocio.mod_bot_wsp_activo)
 
+    def test_dias_prueba_controla_fin_prueba(self):
+        self.client.force_authenticate(user=self.staff)
+        antes = timezone.now()
+        resp = self.client.post(CREAR_NEGOCIO_URL, {
+            'nombre': 'Negocio Prueba Corta',
+            'propietario_username': 'dueno_prueba_corta',
+            'sede_nombre': 'Sede Principal',
+            'dias_prueba': 7,
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        negocio = Negocio.objects.get(nombre='Negocio Prueba Corta')
+        self.assertAlmostEqual(
+            negocio.fin_prueba, antes + timedelta(days=7), delta=timedelta(seconds=10))
+
+    def test_precarga_modulos_crm_y_facturacion_segun_el_plan(self):
+        plan = PlanSaaS.objects.create(
+            nombre='Full', precio_mensual=199, modulo_clientes=True, modulo_facturacion=True)
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.post(CREAR_NEGOCIO_URL, {
+            'nombre': 'Negocio Full',
+            'propietario_username': 'dueno_full',
+            'plan': plan.id,
+            'sede_nombre': 'Sede Principal',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        negocio = Negocio.objects.get(nombre='Negocio Full')
+        self.assertTrue(negocio.mod_clientes_activo)
+        self.assertTrue(negocio.mod_facturacion_activo)
+
     def test_no_deja_crear_dos_veces_el_mismo_usuario(self):
         self.client.force_authenticate(user=self.staff)
         resp = self.client.post(CREAR_NEGOCIO_URL, {

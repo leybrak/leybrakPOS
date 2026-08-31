@@ -16,6 +16,7 @@ class PlanSaaSSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'precio_mensual', 'max_sedes',
             'modulo_kds', 'modulo_inventario', 'modulo_delivery',
             'modulo_carta_qr', 'modulo_bot_wsp', 'modulo_ml',
+            'modulo_clientes', 'modulo_facturacion',
         ]
 
 class PagoSuscripcionSerializer(serializers.ModelSerializer):

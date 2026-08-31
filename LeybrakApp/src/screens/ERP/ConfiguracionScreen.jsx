@@ -18,14 +18,14 @@ const COLORES = [
 // ─── Módulos del sistema ──────────────────────────────────────
 const MODULOS_META = [
   { id: 'modSalon',       key_plan: null,                icon: 'cutlery',   color: '#f59e0b', title: 'Gestión de Salón',   desc: 'Mapa interactivo de mesas y cuentas.',        badge: null,         badgeColor: null       },
-  { id: 'modClientes',    key_plan: null,                icon: 'users',     color: '#3b82f6', title: 'Directorio CRM',     desc: 'Base de datos de clientes.',                  badge: null,         badgeColor: null       },
-  { id: 'modFacturacion', key_plan: null,                icon: 'file-text', color: '#6b7280', title: 'Facturación Elec.',  desc: 'Emite boletas y facturas (SUNAT).',           badge: null,         badgeColor: null       },
   { id: 'modCocina',      key_plan: 'modulo_kds',        icon: 'fire',      color: '#f59e0b', title: 'Pantalla KDS',       desc: 'Despacho en tiempo real para cocineros.',     badge: 'PRO',        badgeColor: '#f59e0b'  },
   { id: 'modDelivery',    key_plan: 'modulo_delivery',   icon: 'truck',     color: '#8b5cf6', title: 'Módulo Delivery',    desc: 'Gestión de despachos y seguimiento.',         badge: 'PRO',        badgeColor: '#f59e0b'  },
   { id: 'modInventario',  key_plan: 'modulo_inventario', icon: 'cube',      color: '#10b981', title: 'Inventario',         desc: 'Descuenta insumos y genera alertas.',         badge: 'PRO',        badgeColor: '#f59e0b'  },
   { id: 'modCartaQr',     key_plan: 'modulo_carta_qr',   icon: 'qrcode',    color: '#3b82f6', title: 'Menú Digital QR',    desc: 'Carta escaneable en mesas y delivery.',       badge: 'PREMIUM',    badgeColor: '#3b82f6'  },
   { id: 'modBotWsp',      key_plan: 'modulo_bot_wsp',    icon: 'comments',  color: '#22c55e', title: 'Bot WhatsApp',       desc: 'Recibe pedidos automáticamente.',             badge: 'BETA',       badgeColor: '#22c55e'  },
   { id: 'modMl',          key_plan: 'modulo_ml',         icon: 'cogs',      color: '#ec4899', title: 'Predicciones IA',    desc: 'Anticípate a la demanda con IA.',             badge: 'ENTERPRISE', badgeColor: '#ec4899'  },
+  { id: 'modClientes',    key_plan: 'modulo_clientes',    icon: 'users',     color: '#3b82f6', title: 'Directorio CRM',    desc: 'Base de datos de clientes.',                  badge: 'PRO',        badgeColor: '#f59e0b'  },
+  { id: 'modFacturacion', key_plan: 'modulo_facturacion', icon: 'file-text', color: '#6b7280', title: 'Facturación Elec.', desc: 'Emite boletas y facturas (SUNAT).',           badge: 'PREMIUM',    badgeColor: '#3b82f6'  },
 ];
 
 // Llave de cada módulo en config.modulos_globales (interruptor único de Leybrak)
@@ -433,7 +433,7 @@ function TabPlan({ config, t }) {
 
         <Text style={[s.label, { color: t.textMuted, marginBottom: 12 }]}>MÓDULOS INCLUIDOS</Text>
         <View style={s.planChipsGrid}>
-          {MODULOS_META.slice(3).map(mod => {
+          {MODULOS_META.slice(1).map(mod => {
             const incluido = plan[mod.key_plan] === true;
             return (
               <View

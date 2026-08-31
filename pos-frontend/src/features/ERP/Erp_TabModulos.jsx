@@ -21,7 +21,9 @@ const MODULOS = [
   },
   {
     key_config: 'mod_clientes_activo',
-    key_plan:   null,
+    key_plan:   'modulo_clientes',
+    badge:      'PRO',
+    badgeColor: '#f59e0b',
     icon:       Users,
     color:      '#3b82f6',
     title:      'Directorio CRM',
@@ -29,7 +31,9 @@ const MODULOS = [
   },
   {
     key_config: 'mod_facturacion_activo',
-    key_plan:   null,
+    key_plan:   'modulo_facturacion',
+    badge:      'PREMIUM',
+    badgeColor: '#3b82f6',
     icon:       FileText,
     color:      '#6b7280',
     title:      'Facturación Electrónica',

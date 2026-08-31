@@ -4,7 +4,7 @@ import {
   CalendarClock, CreditCard, AlertTriangle, Zap,
   ShoppingBag, Bot, BrainCircuit, QrCode, ChefHat,
   Package, Loader2, Sparkles, ArrowRight,
-  Clock, Receipt,Crown
+  Clock, Receipt,Crown, Users, FileText
 } from 'lucide-react';
 import api, { generarPagoSuscripcion, getEstadoSuscripcion } from '../../api/api';
 import Erp_PagoManual from './Erp_PagoManual';
@@ -26,6 +26,8 @@ const MODULOS_META = [
   { key: 'modulo_carta_qr',   label: 'Carta QR',         icon: QrCode,      color: '#10b981' },
   { key: 'modulo_bot_wsp',    label: 'Bot WhatsApp',     icon: Bot,         color: '#22c55e' },
   { key: 'modulo_ml',         label: 'Machine Learning', icon: BrainCircuit,color: '#ec4899' },
+  { key: 'modulo_clientes',    label: 'CRM (Clientes)',          icon: Users,    color: '#3b82f6' },
+  { key: 'modulo_facturacion', label: 'Facturación electrónica', icon: FileText, color: '#6b7280' },
 ];
 
 // Colores asignados a planes por índice (el orden viene del backend por precio_mensual ASC)

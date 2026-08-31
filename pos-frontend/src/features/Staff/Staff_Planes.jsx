@@ -8,6 +8,8 @@ const MODULOS_META = [
   { key: 'modulo_carta_qr',   label: 'Carta QR' },
   { key: 'modulo_bot_wsp',    label: 'Bot WhatsApp' },
   { key: 'modulo_ml',         label: 'Predicciones IA' },
+  { key: 'modulo_clientes',    label: 'CRM (Clientes)' },
+  { key: 'modulo_facturacion', label: 'Facturación electrónica' },
 ];
 
 const PLAN_VACIO = {

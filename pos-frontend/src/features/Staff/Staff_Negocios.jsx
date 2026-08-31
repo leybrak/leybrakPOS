@@ -43,7 +43,7 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
     nombre: '', propietario_username: '', propietario_email: '',
     propietario_password: '', telefono_propietario: '',
     ruc: '', razon_social: '', dni_propietario: '', nombre_propietario: '',
-    plan: '', sede_nombre: '',
+    plan: '', sede_nombre: '', dias_prueba: '30',
   });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
@@ -128,6 +128,15 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
                 className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
               <p className="text-[10px] text-neutral-600 mt-1">
                 Obligatoria: sin al menos una sede, el negocio no puede operar el POS.
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-[#1a1a1a]">
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Días de prueba</p>
+              <input type="number" min="0" placeholder="30" value={form.dias_prueba} onChange={set('dias_prueba')}
+                className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+              <p className="text-[10px] text-neutral-600 mt-1">
+                Cuántos días de prueba gratis tiene el negocio antes de que se le pida pagar.
               </p>
             </div>
 

@@ -8,8 +8,9 @@ from .models import ReglaNegocio, HorarioVisibilidad, Negocio, Sede, PlanSaaS
 
 
 # Qué módulo del Negocio activa cada permiso del Plan contratado.
-# mod_salon_activo, mod_clientes_activo y mod_facturacion_activo no están acá
-# porque son módulos base (no dependen del plan, los prende el dueño a mano).
+# mod_salon_activo no está acá — es el único módulo base (siempre
+# disponible, no depende del plan, lo prende el dueño a mano). CRM y
+# Facturación SÍ dependen del plan desde acá.
 PLAN_MODULO_MAP = {
     'modulo_kds':        'mod_cocina_activo',
     'modulo_inventario': 'mod_inventario_activo',
@@ -17,6 +18,8 @@ PLAN_MODULO_MAP = {
     'modulo_carta_qr':   'mod_carta_qr_activo',
     'modulo_bot_wsp':    'mod_bot_wsp_activo',
     'modulo_ml':         'mod_ml_activo',
+    'modulo_clientes':    'mod_clientes_activo',
+    'modulo_facturacion': 'mod_facturacion_activo',
 }
 
 

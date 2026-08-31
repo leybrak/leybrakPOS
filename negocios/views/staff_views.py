@@ -230,6 +230,14 @@ def crear_negocio_staff(request):
             {'error': 'Falta "sede_nombre" — el negocio necesita al menos una sede para poder operar el POS.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    dias_prueba = data.get('dias_prueba')
+    fin_prueba = None
+    if dias_prueba not in (None, ''):
+        try:
+            fin_prueba = timezone.now() + timedelta(days=int(dias_prueba))
+        except (TypeError, ValueError):
+            return Response({'error': '"dias_prueba" debe ser un número entero.'}, status=400)
+
     try:
         negocio = crear_negocio_completo(
             nombre=data['nombre'],
@@ -237,6 +245,7 @@ def crear_negocio_staff(request):
             propietario_email=data.get('propietario_email', ''),
             propietario_password=data.get('propietario_password'),
             plan_id=data.get('plan') or None,
+            fin_prueba=fin_prueba,
             sede_nombre=data.get('sede_nombre'),
             telefono_propietario=data.get('telefono_propietario', ''),
             dni_propietario=data.get('dni_propietario', ''),

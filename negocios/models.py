@@ -24,6 +24,8 @@ class PlanSaaS(models.Model):
     modulo_carta_qr = models.BooleanField(default=False)      # ✨ Nuevo: Menú QR
     modulo_bot_wsp = models.BooleanField(default=False)       # ✨ Nuevo: Pedidos WhatsApp
     modulo_ml = models.BooleanField(default=False)            # ✨ Nuevo: Machine Learning
+    modulo_clientes = models.BooleanField(default=False, help_text="¿Incluye el directorio CRM?")
+    modulo_facturacion = models.BooleanField(default=False, help_text="¿Incluye facturación electrónica SUNAT?")
     max_sedes = models.IntegerField(default=1)
 
     def __str__(self):
