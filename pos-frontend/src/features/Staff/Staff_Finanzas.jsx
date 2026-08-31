@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getResumenFinancieroStaff } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const fmtSoles = (n) => `S/ ${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
@@ -30,11 +31,14 @@ export default function Staff_Finanzas() {
   const [resumen, setResumen] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const cargar = () => {
     getResumenFinancieroStaff()
       .then(res => setResumen(res.data))
       .catch(() => setError('No se pudo cargar el resumen financiero.'));
-  }, []);
+  };
+
+  useEffect(cargar, []);
+  useAutoRefresh(cargar);
 
   if (error) return <div className="text-red-400 text-sm font-bold">{error}</div>;
   if (!resumen) return <div className="text-neutral-500 text-sm">Cargando finanzas…</div>;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getTicketsStaff, actualizarTicketStaff } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const ESTADOS = {
   abierto:     { label: 'Abierto',     color: '#ef4444' },
@@ -102,14 +103,15 @@ export default function Staff_Tickets() {
   const [filtro, setFiltro] = useState('todos');
   const [cargando, setCargando] = useState(true);
 
-  const cargar = () => {
-    setCargando(true);
+  const cargar = (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     getTicketsStaff()
       .then(res => setTickets(res.data))
-      .finally(() => setCargando(false));
+      .finally(() => { if (!silencioso) setCargando(false); });
   };
 
-  useEffect(cargar, []);
+  useEffect(() => cargar(), []);
+  useAutoRefresh(() => cargar(true));
 
   const handleActualizado = (actualizado) => {
     setTickets(prev => prev.map(t => (t.id === actualizado.id ? actualizado : t)));

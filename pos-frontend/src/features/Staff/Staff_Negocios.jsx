@@ -3,6 +3,7 @@ import {
   listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlanesDisponibles,
   consultarRuc, consultarDni,
 } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 // Input + botón "Buscar" (SUNAT/RENIEC) — mismo patrón para RUC y DNI, en
 // el modal de crear y en el de editar.
@@ -364,14 +365,15 @@ export default function Staff_Negocios() {
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [orden, setOrden] = useState('urgencia');
 
-  const cargar = () => {
-    setCargando(true);
+  const cargar = (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     Promise.all([listarNegociosStaff(), getPlanesDisponibles()])
       .then(([r1, r2]) => { setNegocios(r1.data); setPlanes(r2.data); })
-      .finally(() => setCargando(false));
+      .finally(() => { if (!silencioso) setCargando(false); });
   };
 
-  useEffect(cargar, []);
+  useEffect(() => cargar(), []);
+  useAutoRefresh(() => cargar(true));
 
   const toggleActivo = async (negocio) => {
     const resp = await actualizarNegocioStaff(negocio.id, { activo: !negocio.activo });

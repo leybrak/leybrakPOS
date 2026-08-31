@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getPlanesDisponibles, crearPlanStaff, actualizarPlanStaff, eliminarPlanStaff } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const MODULOS_META = [
   { key: 'modulo_kds',        label: 'Pantalla KDS' },
@@ -91,12 +92,13 @@ export default function Staff_Planes() {
   const [modal, setModal] = useState(null); // null | 'nuevo' | plan-object
   const [error, setError] = useState(null);
 
-  const cargar = () => {
-    setCargando(true);
-    getPlanesDisponibles().then(res => setPlanes(res.data)).finally(() => setCargando(false));
+  const cargar = (silencioso = false) => {
+    if (!silencioso) setCargando(true);
+    getPlanesDisponibles().then(res => setPlanes(res.data)).finally(() => { if (!silencioso) setCargando(false); });
   };
 
-  useEffect(cargar, []);
+  useEffect(() => cargar(), []);
+  useAutoRefresh(() => cargar(true));
 
   const eliminar = async (plan) => {
     if (!window.confirm(`¿Borrar el plan "${plan.nombre}"?`)) return;

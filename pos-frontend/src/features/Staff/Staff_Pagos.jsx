@@ -3,6 +3,7 @@ import {
   getPagosPendientesStaff, getPagosHistorialStaff, actualizarPagoSuscripcion,
   listarNegociosStaff, registrarPagoStaff,
 } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const METODOS_LABEL = {
   yape: 'Yape', plin: 'Plin', transferencia: 'Transferencia',
@@ -180,14 +181,15 @@ export default function Staff_Pagos() {
   const [cargando, setCargando] = useState(true);
   const [mostrarModalRegistro, setMostrarModalRegistro] = useState(false);
 
-  const cargar = () => {
-    setCargando(true);
+  const cargar = (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     Promise.all([getPagosPendientesStaff(), getPagosHistorialStaff(), listarNegociosStaff()])
       .then(([r1, r2, r3]) => { setPendientes(r1.data); setHistorial(r2.data); setNegocios(r3.data); })
-      .finally(() => setCargando(false));
+      .finally(() => { if (!silencioso) setCargando(false); });
   };
 
-  useEffect(cargar, []);
+  useEffect(() => cargar(), []);
+  useAutoRefresh(() => cargar(true));
 
   const handleResuelto = (actualizado) => {
     setPendientes(prev => prev.filter(p => p.id !== actualizado.id));

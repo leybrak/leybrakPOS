@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getMetricasStaff } from '../../api/api';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const ESTADOS_META = {
   activo:     { label: 'Activos',   color: '#10b981', icono: 'fi-rr-check-circle' },
@@ -54,11 +55,14 @@ export default function Staff_Dashboard() {
   const [metricas, setMetricas] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const cargar = () => {
     getMetricasStaff()
       .then(res => setMetricas(res.data))
       .catch(() => setError('No se pudieron cargar las métricas.'));
-  }, []);
+  };
+
+  useEffect(cargar, []);
+  useAutoRefresh(cargar);
 
   if (error) {
     return <div className="text-red-400 text-sm font-bold">{error}</div>;
