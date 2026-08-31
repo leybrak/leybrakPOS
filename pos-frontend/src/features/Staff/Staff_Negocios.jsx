@@ -38,6 +38,7 @@ function CampoBusqueda({ placeholder, value, onChange, onBuscar, className = '' 
 }
 
 function ModalNuevoNegocio({ planes, onClose, onCreado }) {
+  const [paso, setPaso] = useState(1);
   const [form, setForm] = useState({
     nombre: '', propietario_username: '', propietario_email: '',
     propietario_password: '', telefono_propietario: '',
@@ -58,13 +59,22 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
     setForm(prev => ({ ...prev, nombre_propietario: data.nombre }));
   };
 
-  const handleCrear = async () => {
-    if (!form.nombre.trim() || !form.propietario_username.trim()) {
-      setError('Nombre del negocio y usuario del propietario son obligatorios.');
+  const irAPaso2 = () => {
+    if (!form.nombre.trim()) {
+      setError('El nombre del negocio es obligatorio.');
       return;
     }
     if (!form.sede_nombre.trim()) {
       setError('La sede es obligatoria: sin al menos una, el negocio no puede operar el POS.');
+      return;
+    }
+    setError(null);
+    setPaso(2);
+  };
+
+  const handleCrear = async () => {
+    if (!form.propietario_username.trim()) {
+      setError('El usuario (login) del propietario es obligatorio.');
       return;
     }
     setEnviando(true);
@@ -82,61 +92,90 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-white font-black text-sm mb-1">Nuevo negocio</h3>
-
-        <input placeholder="Nombre del negocio" value={form.nombre} onChange={set('nombre')}
-          className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-
-        <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">RUC del negocio (opcional)</p>
-          <CampoBusqueda placeholder="RUC (11 dígitos)" value={form.ruc} onChange={set('ruc')} onBuscar={buscarRuc} />
-          <input placeholder="Razón social" value={form.razon_social} onChange={set('razon_social')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-white font-black text-sm">Nuevo negocio</h3>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${paso === 1 ? 'bg-[#ff5a1f] text-white' : 'bg-[#1a1a1a] text-neutral-500'}`}>1</span>
+            <span className="w-4 h-px bg-[#333]" />
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${paso === 2 ? 'bg-[#ff5a1f] text-white' : 'bg-[#1a1a1a] text-neutral-500'}`}>2</span>
+          </div>
         </div>
 
-        <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Propietario</p>
-          <input placeholder="Usuario (login)" value={form.propietario_username} onChange={set('propietario_username')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-          <input placeholder="Email" value={form.propietario_email} onChange={set('propietario_email')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-          <input type="password" placeholder="Contraseña (vacío = aleatoria)" value={form.propietario_password} onChange={set('propietario_password')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-          <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-          <CampoBusqueda placeholder="DNI del dueño (8 dígitos)" value={form.dni_propietario} onChange={set('dni_propietario')} onBuscar={buscarDni} />
-          <input placeholder="Nombre completo del dueño" value={form.nombre_propietario} onChange={set('nombre_propietario')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-        </div>
+        {paso === 1 && (
+          <>
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Negocio y sede</p>
+            <input placeholder="Nombre del negocio" value={form.nombre} onChange={set('nombre')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
 
-        <div className="pt-2 border-t border-[#1a1a1a]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Plan (opcional)</p>
-          <select value={form.plan} onChange={set('plan')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white mb-2 focus:outline-none focus:border-[#ff5a1f]">
-            <option value="">Sin plan</option>
-            {planes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-            Nombre de la primera sede <span className="text-[#ff5a1f]">*</span>
-          </p>
-          <input placeholder="Ej. Sede Principal" value={form.sede_nombre} onChange={set('sede_nombre')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
-          <p className="text-[10px] text-neutral-600 mt-1">
-            Obligatoria: sin al menos una sede, el negocio no puede operar el POS.
-          </p>
-        </div>
+            <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">RUC del negocio (opcional)</p>
+              <CampoBusqueda placeholder="RUC (11 dígitos)" value={form.ruc} onChange={set('ruc')} onBuscar={buscarRuc} />
+              <input placeholder="Razón social" value={form.razon_social} onChange={set('razon_social')}
+                className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+            </div>
 
-        {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+            <div className="pt-2 border-t border-[#1a1a1a]">
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Plan (opcional)</p>
+              <select value={form.plan} onChange={set('plan')}
+                className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white mb-2 focus:outline-none focus:border-[#ff5a1f]">
+                <option value="">Sin plan</option>
+                {planes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">
+                Nombre de la primera sede <span className="text-[#ff5a1f]">*</span>
+              </p>
+              <input placeholder="Ej. Sede Principal" value={form.sede_nombre} onChange={set('sede_nombre')}
+                className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+              <p className="text-[10px] text-neutral-600 mt-1">
+                Obligatoria: sin al menos una sede, el negocio no puede operar el POS.
+              </p>
+            </div>
 
-        <div className="flex gap-2 pt-2">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-400 text-xs font-black uppercase tracking-widest">
-            Cancelar
-          </button>
-          <button onClick={handleCrear} disabled={enviando}
-            className="flex-1 py-2.5 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest disabled:opacity-40">
-            {enviando ? 'Creando…' : 'Crear negocio'}
-          </button>
-        </div>
+            {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-400 text-xs font-black uppercase tracking-widest">
+                Cancelar
+              </button>
+              <button onClick={irAPaso2}
+                className="flex-1 py-2.5 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest">
+                Siguiente →
+              </button>
+            </div>
+          </>
+        )}
+
+        {paso === 2 && (
+          <>
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+              Propietario de "{form.nombre}"
+            </p>
+            <input placeholder="Usuario (login)" value={form.propietario_username} onChange={set('propietario_username')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+            <input placeholder="Email" value={form.propietario_email} onChange={set('propietario_email')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+            <input type="password" placeholder="Contraseña (vacío = aleatoria)" value={form.propietario_password} onChange={set('propietario_password')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+            <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+            <CampoBusqueda placeholder="DNI del dueño (8 dígitos)" value={form.dni_propietario} onChange={set('dni_propietario')} onBuscar={buscarDni} />
+            <input placeholder="Nombre completo del dueño" value={form.nombre_propietario} onChange={set('nombre_propietario')}
+              className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+
+            {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setPaso(1)} disabled={enviando}
+                className="flex-1 py-2.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-400 text-xs font-black uppercase tracking-widest disabled:opacity-40">
+                ← Atrás
+              </button>
+              <button onClick={handleCrear} disabled={enviando}
+                className="flex-1 py-2.5 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest disabled:opacity-40">
+                {enviando ? 'Creando…' : 'Crear negocio'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
