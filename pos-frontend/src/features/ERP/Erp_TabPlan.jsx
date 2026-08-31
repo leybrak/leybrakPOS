@@ -7,6 +7,7 @@ import {
   Clock, Receipt,Crown
 } from 'lucide-react';
 import api, { generarPagoSuscripcion, getEstadoSuscripcion } from '../../api/api';
+import Erp_PagoManual from './Erp_PagoManual';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -608,6 +609,8 @@ export default function Tab_Plan({ config, setConfig, isDark, colorPrimario }) {
           )}
         </div>
       )}
+
+      <Erp_PagoManual isDark={isDark} colorPrimario={colorPrimario} />
 
       {/* ══════════════════════════════════════════════════════
           SECCIÓN: HISTORIAL DE PAGOS

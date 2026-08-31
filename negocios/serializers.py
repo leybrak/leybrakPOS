@@ -5,7 +5,7 @@ from .models import (
     ComboPromocional, ComponenteCombo, InsumoBase, InsumoSede, ItemComboPromocional, Negocio, PagoSuscripcion, PlanSaaS, ReglaNegocio, Sede, Mesa, Producto, Orden, DetalleOrden, Pago,
     ModificadorRapido, GrupoVariacion, OpcionVariacion, Rol, Empleado, SesionCaja,
     DetalleOrdenOpcion , Categoria, RecetaOpcion, Cliente, VariacionProducto, ZonaDelivery, HorarioVisibilidad,
-    ModuloGlobal, TicketSoporte
+    ModuloGlobal, TicketSoporte, DatosPagoPlataforma
 )
 
 
@@ -21,18 +21,39 @@ class PlanSaaSSerializer(serializers.ModelSerializer):
 class PagoSuscripcionSerializer(serializers.ModelSerializer):
     # Campo extra legible en el frontend: nombre del plan en lugar de ID
     plan_nombre = serializers.CharField(source='plan.nombre', read_only=True, default=None)
- 
+    negocio_nombre = serializers.ReadOnlyField(source='negocio.nombre')
+
     class Meta:
         model  = PagoSuscripcion
         fields = [
-            'id', 'monto', 'estado', 'metodo_pago',
-            'periodo', 'fecha_pago', 'notas',
+            'id', 'negocio', 'negocio_nombre', 'monto', 'estado', 'metodo_pago',
+            'captura_pago', 'periodo', 'fecha_pago', 'notas',
             'referencia_externa', 'preference_id', 'plan_nombre', 'creado_en',
         ]
-        read_only_fields = ['id', 'creado_en', 'plan_nombre']
+        read_only_fields = ['negocio']
+
+
+class ModuloGlobalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModuloGlobal
+        fields = [
+            'salon_activo', 'cocina_activo', 'inventario_activo', 'delivery_activo',
+            'clientes_activo', 'facturacion_activo', 'carta_qr_activo', 'bot_wsp_activo',
+            'ml_activo', 'actualizado_en',
+        ]
+
+
+class DatosPagoPlataformaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DatosPagoPlataforma
+        fields = [
+            'yape_numero', 'yape_titular', 'plin_numero', 'plin_titular',
+            'banco', 'numero_cuenta', 'cci', 'titular_cuenta', 'actualizado_en',
+        ]
 
 class NegocioSerializer(serializers.ModelSerializer):
     plan_detalles = PlanSaaSSerializer(source='plan', read_only=True)
+    propietario_username = serializers.ReadOnlyField(source='propietario.username')
     modulos_globales = serializers.SerializerMethodField()
 
     def get_modulos_globales(self, obj):
@@ -59,7 +80,7 @@ class NegocioSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Negocio
         fields = [
-            'id', 'propietario', 'nombre', 'ruc', 'razon_social', 'logo',
+            'id', 'propietario', 'propietario_username', 'nombre', 'ruc', 'razon_social', 'logo',
             'yape_numero', 'yape_qr', 'plin_numero', 'plin_qr',
             'confirmacion_automatica', 'device_token',
             'plan', 'plan_detalles', 'fecha_registro', 'fin_prueba', 'activo',

@@ -365,4 +365,26 @@ export const actualizarTicketStaff = (id, data) => api.patch(`/tickets-soporte/$
 // La usa cualquier dueño para reportar un problema desde el ERP normal.
 export const crearTicket           = (data) => api.post('/tickets-soporte/', data);
 
+// — Negocios: crear / bloquear-activar (staff) —
+export const crearNegocioStaff     = (data) => api.post('/staff/negocios/crear/', data);
+export const listarNegociosStaff   = () => api.get('/negocios/');
+export const actualizarNegocioStaff = (id, data) => api.patch(`/negocios/${id}/`, data);
+
+// — Pagos manuales de suscripción (Yape/Plin/Transferencia) —
+export const getPagosPendientesStaff  = () => api.get('/staff/pagos-pendientes/');
+export const actualizarPagoSuscripcion = (id, data) => api.patch(`/pagos-suscripcion/${id}/`, data);
+// La usa el dueño para reportar SU propio pago (queda 'pendiente' hasta que staff lo apruebe).
+export const reportarPagoSuscripcion = (data) => {
+  const formData = new FormData();
+  Object.entries(data).forEach(([k, v]) => { if (v !== undefined && v !== null) formData.append(k, v); });
+  return api.post('/pagos-suscripcion/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const getDatosPagoNegocio = () => api.get('/negocio/suscripcion/datos-pago/');
+
+// — Configuración de plataforma (staff) —
+export const getModulosGlobalesStaff        = () => api.get('/staff/modulos-globales/');
+export const actualizarModulosGlobalesStaff = (data) => api.patch('/staff/modulos-globales/', data);
+export const getDatosPagoStaff              = () => api.get('/staff/datos-pago/');
+export const actualizarDatosPagoStaff       = (data) => api.patch('/staff/datos-pago/', data);
+
 export default api;

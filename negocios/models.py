@@ -80,6 +80,45 @@ class ModuloGlobal(models.Model):
         return 'Interruptor global de módulos'
 
 
+class DatosPagoPlataforma(models.Model):
+    """
+    A qué Yape/Plin/cuenta le paga un negocio SU MENSUALIDAD a Leybrak
+    (no confundir con Negocio.yape_numero/plin_numero, que son los datos
+    de CADA negocio para cobrarle a SUS clientes). Singleton, mismo patrón
+    que ModuloGlobal — se edita desde el panel de staff o el admin.
+    """
+    yape_numero    = models.CharField(max_length=15, blank=True, default='')
+    yape_titular   = models.CharField(max_length=100, blank=True, default='')
+    plin_numero    = models.CharField(max_length=15, blank=True, default='')
+    plin_titular   = models.CharField(max_length=100, blank=True, default='')
+    banco          = models.CharField(max_length=50, blank=True, default='')
+    numero_cuenta  = models.CharField(max_length=30, blank=True, default='')
+    cci            = models.CharField(max_length=30, blank=True, default='')
+    titular_cuenta = models.CharField(max_length=100, blank=True, default='')
+
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Datos de pago de la plataforma'
+        verbose_name_plural = 'Datos de pago de la plataforma'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        kwargs['force_insert'] = False
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def actual(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return 'Datos de pago de la plataforma'
+
+
 from django.db import models
 from django.contrib.auth.models import User
 # Asegúrate de importar tu modelo PlanSaaS si está en otro archivo, o déjalo como lo tienes
@@ -1284,7 +1323,11 @@ class PagoSuscripcion(models.Model):
     monto       = models.DecimalField(max_digits=10, decimal_places=2)
     estado      = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='otro')
- 
+
+    # Foto del comprobante — la sube el negocio al reportar un pago manual
+    # (Yape/Plin/transferencia); staff lo revisa antes de aprobar.
+    captura_pago = models.ImageField(upload_to='negocios/pagos_suscripcion/', blank=True, null=True)
+
     # Período al que corresponde este pago (ej: "Mayo 2026")
     periodo     = models.CharField(max_length=30, blank=True, null=True)
  

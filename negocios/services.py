@@ -1,7 +1,76 @@
+from datetime import timedelta
 from decimal import Decimal
+from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.db.models import Q
-from .models import ReglaNegocio, HorarioVisibilidad
+from .models import ReglaNegocio, HorarioVisibilidad, Negocio, Sede, PlanSaaS
+
+
+# Qué módulo del Negocio activa cada permiso del Plan contratado.
+# mod_salon_activo, mod_clientes_activo y mod_facturacion_activo no están acá
+# porque son módulos base (no dependen del plan, los prende el dueño a mano).
+PLAN_MODULO_MAP = {
+    'modulo_kds':        'mod_cocina_activo',
+    'modulo_inventario': 'mod_inventario_activo',
+    'modulo_delivery':   'mod_delivery_activo',
+    'modulo_carta_qr':   'mod_carta_qr_activo',
+    'modulo_bot_wsp':    'mod_bot_wsp_activo',
+    'modulo_ml':         'mod_ml_activo',
+}
+
+
+def precargar_modulos_por_plan(negocio):
+    """
+    Prende (OR, nunca apaga) los módulos que el plan del negocio incluye.
+    Se llama al crear el negocio o al cambiarle el plan — desde el admin
+    (NegocioAdmin.save_model) y desde el panel de staff (crear_negocio_completo).
+    """
+    if not negocio.plan_id:
+        return
+    for campo_plan, campo_modulo in PLAN_MODULO_MAP.items():
+        if getattr(negocio.plan, campo_plan):
+            setattr(negocio, campo_modulo, True)
+
+
+def crear_negocio_completo(
+    nombre, propietario_username, propietario_email='', propietario_password=None,
+    propietario=None, plan_id=None, fin_prueba=None, sede_nombre=None,
+):
+    """
+    Crea (o reusa) el propietario, el Negocio y opcionalmente la primera
+    Sede, en un solo paso — misma lógica para el admin de Django y para
+    el endpoint del panel de staff, así no divergen con el tiempo.
+    """
+    if propietario is None:
+        if User.objects.filter(username=propietario_username).exists():
+            raise ValueError(f'Ya existe un usuario "{propietario_username}".')
+        propietario = User.objects.create_user(
+            username=propietario_username,
+            email=propietario_email,
+            password=propietario_password or get_random_string(16),
+        )
+
+    plan = None
+    if plan_id:
+        try:
+            plan = PlanSaaS.objects.get(id=plan_id)
+        except PlanSaaS.DoesNotExist:
+            raise ValueError(f'No existe el plan con id={plan_id}.')
+
+    negocio = Negocio(
+        propietario=propietario,
+        nombre=nombre,
+        plan=plan,
+        fin_prueba=fin_prueba or (timezone.now() + timedelta(days=30)),
+    )
+    precargar_modulos_por_plan(negocio)
+    negocio.save()
+
+    if sede_nombre:
+        Sede.objects.create(negocio=negocio, nombre=sede_nombre)
+
+    return negocio
 
 
 def _evaluar_condiciones_regla(regla, orden, metodo_lower, ahora):

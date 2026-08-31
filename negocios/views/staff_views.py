@@ -18,9 +18,16 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import Negocio, Sede, Pago, Orden, PagoSuscripcion, TicketSoporte
+from ..models import (
+    Negocio, Sede, Pago, Orden, PagoSuscripcion, TicketSoporte,
+    ModuloGlobal, DatosPagoPlataforma,
+)
 from ..permissions import EsSuperUsuario
-from ..serializers import TicketSoporteSerializer
+from ..serializers import (
+    TicketSoporteSerializer, NegocioSerializer, PagoSuscripcionSerializer,
+    ModuloGlobalSerializer, DatosPagoPlataformaSerializer,
+)
+from ..services import crear_negocio_completo
 
 logger = logging.getLogger(__name__)
 
@@ -201,3 +208,82 @@ def salud_servidor(request):
             'nota': 'Espacio del contenedor del backend, no del disco físico completo del servidor.',
         },
     })
+
+
+# ============================================================
+# CREAR NEGOCIO (propietario + negocio + módulos por plan + primera sede,
+# en un solo paso — misma lógica que el admin, ver negocios/services.py)
+# ============================================================
+@api_view(['POST'])
+@permission_classes([EsSuperUsuario])
+def crear_negocio_staff(request):
+    data = request.data
+    if not data.get('nombre') or not data.get('propietario_username'):
+        return Response(
+            {'error': 'Faltan "nombre" (del negocio) y/o "propietario_username".'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        negocio = crear_negocio_completo(
+            nombre=data['nombre'],
+            propietario_username=data['propietario_username'],
+            propietario_email=data.get('propietario_email', ''),
+            propietario_password=data.get('propietario_password'),
+            plan_id=data.get('plan') or None,
+            sede_nombre=data.get('sede_nombre'),
+        )
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(NegocioSerializer(negocio).data, status=status.HTTP_201_CREATED)
+
+
+# ============================================================
+# PAGOS PENDIENTES (Yape/Plin/Transferencia reportados por los negocios)
+# ============================================================
+@api_view(['GET'])
+@permission_classes([EsSuperUsuario])
+def pagos_pendientes_staff(request):
+    pagos = (PagoSuscripcion.objects
+             .filter(estado='pendiente', metodo_pago__in=['yape', 'plin', 'transferencia'])
+             .select_related('negocio')
+             .order_by('-creado_en'))
+    return Response(PagoSuscripcionSerializer(pagos, many=True, context={'request': request}).data)
+
+
+# ============================================================
+# MÓDULOS GLOBALES (interruptor único — antes solo en el admin de Django)
+# ============================================================
+@api_view(['GET', 'PATCH'])
+@permission_classes([EsSuperUsuario])
+def modulos_globales_staff(request):
+    obj = ModuloGlobal.actual()
+    if request.method == 'PATCH':
+        serializer = ModuloGlobalSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+    return Response(ModuloGlobalSerializer(obj).data)
+
+
+# ============================================================
+# DATOS DE PAGO DE LA PLATAFORMA (a qué Yape/Plin/cuenta pagan los negocios)
+# ============================================================
+@api_view(['GET', 'PATCH'])
+@permission_classes([EsSuperUsuario])
+def datos_pago_staff(request):
+    obj = DatosPagoPlataforma.actual()
+    if request.method == 'PATCH':
+        serializer = DatosPagoPlataformaSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+    return Response(DatosPagoPlataformaSerializer(obj).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def datos_pago_negocio(request):
+    """A qué Yape/Plin/cuenta debe pagar un negocio su mensualidad — lo lee
+    cualquier dueño autenticado (no solo staff) para saber dónde pagar."""
+    return Response(DatosPagoPlataformaSerializer(DatosPagoPlataforma.actual()).data)

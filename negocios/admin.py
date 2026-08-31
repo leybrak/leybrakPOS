@@ -3,6 +3,7 @@ from datetime import timedelta
 from django import forms
 from django.contrib import admin
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 # ✨ IMPORTAMOS LAS HERRAMIENTAS DE UNFOLD ✨
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 
@@ -14,8 +15,9 @@ from .models import (
     Cliente, ZonaDelivery, ReglaNegocio, CuponPromocional,
     HorarioVisibilidad, ComponenteCombo, VersionApp, Comprobante, SerieComprobante,
     HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker, ModuloGlobal,
-    TicketSoporte
+    TicketSoporte, DatosPagoPlataforma
 )
+from .services import precargar_modulos_por_plan
 from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 
@@ -117,6 +119,30 @@ class ModuloGlobalAdmin(ModelAdmin): # ✨ UNFOLD
         ModuloGlobal.actual()  # crea la fila si todavía no existe
         return super().changelist_view(request, extra_context)
 
+
+@admin.register(DatosPagoPlataforma)
+class DatosPagoPlataformaAdmin(ModelAdmin): # ✨ UNFOLD
+    """
+    A qué Yape/Plin/cuenta le pagan los negocios su mensualidad a Leybrak.
+    Singleton — respaldo del mismo formulario que ya vive en el panel de staff.
+    """
+    fieldsets = (
+        ('Yape', {'fields': ('yape_numero', 'yape_titular')}),
+        ('Plin', {'fields': ('plin_numero', 'plin_titular')}),
+        ('Transferencia bancaria', {'fields': ('banco', 'numero_cuenta', 'cci', 'titular_cuenta')}),
+    )
+
+    def has_add_permission(self, request):
+        return not DatosPagoPlataforma.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        DatosPagoPlataforma.actual()
+        return super().changelist_view(request, extra_context)
+
+
 class SedeInline(TabularInline): # ✨ UNFOLD
     model = Sede
     extra = 1
@@ -192,34 +218,21 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
         }),
     )
 
-    # Qué módulo del Negocio activa cada permiso del Plan contratado.
-    # mod_salon_activo, mod_clientes_activo y mod_facturacion_activo no están acá
-    # porque son módulos base (no dependen del plan, los prende el dueño a mano).
-    PLAN_MODULO_MAP = {
-        'modulo_kds':       'mod_cocina_activo',
-        'modulo_inventario':'mod_inventario_activo',
-        'modulo_delivery':  'mod_delivery_activo',
-        'modulo_carta_qr':  'mod_carta_qr_activo',
-        'modulo_bot_wsp':   'mod_bot_wsp_activo',
-        'modulo_ml':        'mod_ml_activo',
-    }
-
     def save_model(self, request, obj, form, change):
         if not obj.propietario_id:
             username = form.cleaned_data['propietario_username']
             email = form.cleaned_data.get('propietario_email', '')
-            password = form.cleaned_data.get('propietario_password') or User.objects.make_random_password()
+            password = form.cleaned_data.get('propietario_password') or get_random_string(16)
             obj.propietario = User.objects.create_user(username=username, email=email, password=password)
         if not obj.fin_prueba:
             obj.fin_prueba = timezone.now() + timedelta(days=30)
 
         # Precarga los módulos que incluye el plan (al crear, o al cambiar de plan).
         # Solo prende módulos (OR): si ya habías activado uno a mano que el plan
-        # no trae, se queda activado igual.
+        # no trae, se queda activado igual. Misma lógica que usa el panel de
+        # staff al crear un negocio (negocios/services.py).
         if obj.plan_id and (not change or 'plan' in form.changed_data):
-            for campo_plan, campo_modulo in self.PLAN_MODULO_MAP.items():
-                if getattr(obj.plan, campo_plan):
-                    setattr(obj, campo_modulo, True)
+            precargar_modulos_por_plan(obj)
 
         super().save_model(request, obj, form, change)
 

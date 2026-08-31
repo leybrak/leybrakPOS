@@ -525,11 +525,36 @@ class PagoSuscripcionViewSet(viewsets.ModelViewSet):
         except Exception:
             return PagoSuscripcion.objects.none()
  
+    # Métodos que un dueño puede auto-reportar (sin pasarela): Leybrak los
+    # confirma a mano viendo el comprobante. 'tarjeta'/'efectivo'/'otro'
+    # quedan reservados para que el staff los registre directamente ya
+    # confirmados (ej. MercadoPago, o un pago que verificó por otro medio).
+    METODOS_AUTORREPORTABLES = ('yape', 'plin', 'transferencia')
+
     def perform_create(self, serializer):
-        # Solo superadmin puede crear pagos manualmente
+        if self.request.user.is_superuser:
+            negocio_id = self.request.data.get('negocio')
+            serializer.save(negocio_id=negocio_id)
+            return
+
+        # Un dueño puede reportar SU propio pago, pero siempre queda
+        # 'pendiente' hasta que staff lo revise — nunca puede auto-aprobarse.
+        if not hasattr(self.request.user, 'negocio'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("No tienes un negocio asociado.")
+        metodo = serializer.validated_data.get('metodo_pago')
+        if metodo not in self.METODOS_AUTORREPORTABLES:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(
+                f"Solo puedes reportar pagos por: {', '.join(self.METODOS_AUTORREPORTABLES)}."
+            )
+        serializer.save(negocio=self.request.user.negocio, estado='pendiente')
+
+    def perform_update(self, serializer):
+        # Aprobar/rechazar un pago (estado, notas) es solo de staff — evita
+        # que un dueño se auto-apruebe la suscripción sin pagar.
         if not self.request.user.is_superuser:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Solo el administrador puede registrar pagos.")
-        negocio_id = self.request.data.get('negocio')
-        serializer.save(negocio_id=negocio_id)
+            raise PermissionDenied("Solo el equipo de soporte puede actualizar un pago.")
+        serializer.save()
  

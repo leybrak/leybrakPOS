@@ -20,7 +20,11 @@ from negocios.views.facturacion_views import emitir_comprobante, obtener_comprob
 from negocios.views.delivery_views import pedidos_delivery, tomar_pedido, actualizar_estado_delivery, avisar_cliente
 from negocios.views.historia_views import historias, cancelar_historia, historias_pendientes_bot, marcar_historia_bot
 from negocios.views.cliente_views import geocodificar_bot, registrar_feedback_bot, listar_canjes, stickers_view, eliminar_sticker
-from negocios.views.staff_views import TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor
+from negocios.views.staff_views import (
+    TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor,
+    crear_negocio_staff, pagos_pendientes_staff, modulos_globales_staff,
+    datos_pago_staff, datos_pago_negocio,
+)
 from .serializers_jwt import CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView, refresh_movil,login_movil
 from . import views
 
@@ -138,7 +142,12 @@ urlpatterns = [
     # ==========================================
     # 🛠️ PANEL DE STAFF (Leybrak) — solo superusuario
     # ==========================================
-    path('staff/metricas/',       metricas_staff,  name='staff-metricas'),
-    path('staff/salud-bot/',      salud_bot,       name='staff-salud-bot'),
-    path('staff/salud-servidor/', salud_servidor,  name='staff-salud-servidor'),
+    path('staff/metricas/',          metricas_staff,          name='staff-metricas'),
+    path('staff/salud-bot/',         salud_bot,               name='staff-salud-bot'),
+    path('staff/salud-servidor/',    salud_servidor,          name='staff-salud-servidor'),
+    path('staff/negocios/crear/',    crear_negocio_staff,     name='staff-crear-negocio'),
+    path('staff/pagos-pendientes/',  pagos_pendientes_staff,  name='staff-pagos-pendientes'),
+    path('staff/modulos-globales/',  modulos_globales_staff,  name='staff-modulos-globales'),
+    path('staff/datos-pago/',        datos_pago_staff,        name='staff-datos-pago'),
+    path('negocio/suscripcion/datos-pago/', datos_pago_negocio, name='negocio-datos-pago'),
 ]
