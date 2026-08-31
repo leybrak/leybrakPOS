@@ -392,3 +392,108 @@ class ConfiguracionStaffTest(APITestCase):
         self.client.force_authenticate(user=self.dueno)
         resp = self.client.patch(DATOS_PAGO_STAFF_URL, {'yape_numero': '111'}, format='json')
         self.assertEqual(resp.status_code, 403)
+
+
+class RegistrarPagoDirectoStaffTest(APITestCase):
+    """
+    El staff puede registrar un pago ya confirmado (negociado por WhatsApp/
+    llamada) sin pasar por el flujo de "el dueño reporta → staff aprueba".
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+        self.dueno = User.objects.create_user(username='dueno', password='x')
+        self.negocio = Negocio.objects.create(
+            propietario=self.dueno, nombre='Negocio', activo=False,
+            fin_prueba=timezone.now() - timedelta(days=5))
+
+    def test_staff_registra_pago_ya_pagado_y_reactiva_el_negocio(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.post(PAGOS_URL, {
+            'negocio': self.negocio.id,
+            'monto': '80.00',
+            'metodo_pago': 'efectivo',
+            'estado': 'pagado',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        self.negocio.refresh_from_db()
+        self.assertTrue(self.negocio.activo)
+        pago = PagoSuscripcion.objects.get(negocio=self.negocio)
+        self.assertEqual(pago.estado, 'pagado')
+        self.assertEqual(pago.metodo_pago, 'efectivo')
+
+    def test_dueno_no_puede_registrarse_un_pago_ya_pagado(self):
+        self.client.force_authenticate(user=self.dueno)
+        resp = self.client.post(PAGOS_URL, {
+            'negocio': self.negocio.id,
+            'monto': '80.00',
+            'metodo_pago': 'efectivo',
+            'estado': 'pagado',
+        }, format='json')
+        # perform_create fuerza estado='pendiente' y método autorreportable
+        # para no-superusers — 'efectivo' no está permitido.
+        self.assertEqual(resp.status_code, 403)
+
+
+class MetricasAlertasCobroTest(APITestCase):
+    """Dashboard: negocios que requieren atención de cobro (ya vencidos o
+    a punto de vencer)."""
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+
+    def test_alertas_cobro_incluye_vencidos_y_proximos_a_vencer(self):
+        dueno1 = User.objects.create_user(username='dueno_vence_pronto', password='x')
+        Negocio.objects.create(
+            propietario=dueno1, nombre='Vence Pronto', fin_prueba=timezone.now() + timedelta(days=2))
+
+        dueno2 = User.objects.create_user(username='dueno_vencido2', password='x')
+        Negocio.objects.create(
+            propietario=dueno2, nombre='Ya Vencido', fin_prueba=timezone.now() - timedelta(days=3))
+
+        dueno3 = User.objects.create_user(username='dueno_tranquilo', password='x')
+        Negocio.objects.create(
+            propietario=dueno3, nombre='Recién Empieza', fin_prueba=timezone.now() + timedelta(days=25))
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/staff/metricas/')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        nombres_alerta = [a['nombre'] for a in resp.data['alertas_cobro']]
+        self.assertIn('Vence Pronto', nombres_alerta)
+        self.assertIn('Ya Vencido', nombres_alerta)
+        self.assertNotIn('Recién Empieza', nombres_alerta)
+        # Vencidos antes que los próximos a vencer.
+        self.assertEqual(nombres_alerta[0], 'Ya Vencido')
+
+
+class ResumenFinancieroStaffTest(APITestCase):
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+        self.dueno = User.objects.create_user(username='dueno', password='x')
+
+    def test_dueno_no_puede_ver_el_resumen_financiero(self):
+        self.client.force_authenticate(user=self.dueno)
+        resp = self.client.get('/api/staff/resumen-financiero/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_resumen_financiero_calcula_facturado_y_mrr(self):
+        plan = PlanSaaS.objects.create(nombre='Pro', precio_mensual=Decimal('80.00'))
+        negocio = Negocio.objects.create(
+            propietario=self.dueno, nombre='Negocio Pagando', plan=plan,
+            fin_prueba=timezone.now() - timedelta(days=60))
+        # Primer día del mes actual al mediodía: cae dentro del "mes
+        # actual" sin importar en qué día del mes se corra el test.
+        fecha_pago = timezone.now().replace(day=1, hour=12, minute=0, second=0, microsecond=0)
+        PagoSuscripcion.objects.create(
+            negocio=negocio, monto=Decimal('80.00'), estado='pagado',
+            metodo_pago='yape', fecha_pago=fecha_pago)
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/staff/resumen-financiero/')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['facturado_mes_actual'], 80.0)
+        self.assertEqual(resp.data['mrr_estimado'], 80.0)
+        self.assertEqual(resp.data['negocios_pagando'], 1)

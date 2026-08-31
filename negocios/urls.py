@@ -24,6 +24,7 @@ from negocios.views.staff_views import (
     TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor,
     crear_negocio_staff, pagos_pendientes_staff, pagos_historial_staff,
     modulos_globales_staff, datos_pago_staff, datos_pago_negocio,
+    resumen_financiero_staff,
 )
 from .serializers_jwt import CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView, refresh_movil,login_movil
 from . import views
@@ -143,6 +144,7 @@ urlpatterns = [
     # 🛠️ PANEL DE STAFF (Leybrak) — solo superusuario
     # ==========================================
     path('staff/metricas/',          metricas_staff,          name='staff-metricas'),
+    path('staff/resumen-financiero/', resumen_financiero_staff, name='staff-resumen-financiero'),
     path('staff/salud-bot/',         salud_bot,               name='staff-salud-bot'),
     path('staff/salud-servidor/',    salud_servidor,          name='staff-salud-servidor'),
     path('staff/negocios/crear/',    crear_negocio_staff,     name='staff-crear-negocio'),

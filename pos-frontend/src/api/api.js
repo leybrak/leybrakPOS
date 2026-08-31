@@ -362,6 +362,7 @@ export const consultarDni      = (dni)              => api.get(`/negocios/consul
 // PANEL DE STAFF (Leybrak) — solo superusuario, salvo crearTicket
 // ============================================================
 export const getMetricasStaff      = () => api.get('/staff/metricas/');
+export const getResumenFinancieroStaff = () => api.get('/staff/resumen-financiero/');
 export const getSaludBot           = () => api.get('/staff/salud-bot/');
 export const getSaludServidor      = () => api.get('/staff/salud-servidor/');
 export const getTicketsStaff       = (params) => api.get('/tickets-soporte/', { params });
@@ -385,6 +386,10 @@ export const reportarPagoSuscripcion = (data) => {
   return api.post('/pagos-suscripcion/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 export const getDatosPagoNegocio = () => api.get('/negocio/suscripcion/datos-pago/');
+// Staff registra un pago ya confirmado directamente (no pasó por el
+// reporte del dueño) — mismo endpoint, el backend deja crear en cualquier
+// estado cuando quien pega es superusuario.
+export const registrarPagoStaff = (data) => api.post('/pagos-suscripcion/', data);
 
 // — Configuración de plataforma (staff) —
 export const getModulosGlobalesStaff        = () => api.get('/staff/modulos-globales/');

@@ -65,36 +65,56 @@ class TicketSoporteViewSet(viewsets.ModelViewSet):
 # ============================================================
 # MÉTRICAS AGREGADAS (todos los negocios)
 # ============================================================
-def _clasificar_suscripcion(negocio, ahora, ultimo_pago_por_negocio):
-    """Misma regla que estado_suscripcion (suscripcion_views.py), pero
-    reutilizando un solo query de PagoSuscripcion para todos los negocios
-    en vez de repetirlo uno por uno."""
+def _ultimo_pago_por_negocio():
+    """Último pago 'pagado' por negocio, en un solo query — evita repetir
+    esta consulta por cada negocio al clasificar su suscripción."""
+    ultimo_pago = {}
+    for pago in (PagoSuscripcion.objects
+                 .filter(estado='pagado')
+                 .order_by('negocio_id', '-fecha_pago')):
+        ultimo_pago.setdefault(pago.negocio_id, pago.fecha_pago)
+    return ultimo_pago
+
+
+def _info_suscripcion(negocio, ahora, ultimo_pago_por_negocio):
+    """Misma regla que Negocio.estado_suscripcion_info() (models.py), pero
+    recibe el mapa de últimos pagos precalculado para no repetir ese query
+    por cada negocio al procesar la lista completa."""
     if not negocio.activo:
-        return 'bloqueado'
+        return {'estado': 'bloqueado', 'dias_restantes': 0}
     ultimo_pago = ultimo_pago_por_negocio.get(negocio.id)
-    if ultimo_pago and (ahora - ultimo_pago).days <= 31:
-        return 'activo'
+    if ultimo_pago:
+        dias_desde_pago = (ahora - ultimo_pago).days
+        if dias_desde_pago <= 31:
+            return {'estado': 'activo', 'dias_restantes': 31 - dias_desde_pago}
     if negocio.fin_prueba and ahora < negocio.fin_prueba:
-        return 'prueba'
-    return 'vencido'
+        return {'estado': 'prueba', 'dias_restantes': (negocio.fin_prueba - ahora).days}
+    return {'estado': 'vencido', 'dias_restantes': 0}
 
 
 @api_view(['GET'])
 @permission_classes([EsSuperUsuario])
 def metricas_staff(request):
     ahora = timezone.now()
-    negocios = list(Negocio.objects.all())
-
-    # Último pago 'pagado' por negocio, en un solo query.
-    ultimo_pago_por_negocio = {}
-    for pago in (PagoSuscripcion.objects
-                 .filter(estado='pagado')
-                 .order_by('negocio_id', '-fecha_pago')):
-        ultimo_pago_por_negocio.setdefault(pago.negocio_id, pago.fecha_pago)
+    negocios = list(Negocio.objects.select_related('propietario', 'plan').all())
+    ultimo_pago_por_negocio = _ultimo_pago_por_negocio()
 
     conteo_estados = {'activo': 0, 'prueba': 0, 'vencido': 0, 'bloqueado': 0}
+    alertas_cobro = []
     for n in negocios:
-        conteo_estados[_clasificar_suscripcion(n, ahora, ultimo_pago_por_negocio)] += 1
+        info = _info_suscripcion(n, ahora, ultimo_pago_por_negocio)
+        conteo_estados[info['estado']] += 1
+        # Requiere atención: ya venció, o le quedan 3 días o menos.
+        if info['estado'] == 'vencido' or (info['estado'] in ('prueba', 'activo') and info['dias_restantes'] <= 3):
+            alertas_cobro.append({
+                'id': n.id,
+                'nombre': n.nombre,
+                'propietario_username': n.propietario.username,
+                'telefono_propietario': n.telefono_propietario,
+                'estado_suscripcion': info['estado'],
+                'dias_restantes_suscripcion': info['dias_restantes'],
+            })
+    alertas_cobro.sort(key=lambda a: (0 if a['estado_suscripcion'] == 'vencido' else 1, a['dias_restantes_suscripcion']))
 
     modulos_adopcion = {
         campo: Negocio.objects.filter(**{campo: True}).count()
@@ -116,6 +136,64 @@ def metricas_staff(request):
         'ventas_pos_ultimos_30_dias': float(ventas_30_dias),
         'ordenes_hoy': ordenes_hoy,
         'modulos_adopcion': modulos_adopcion,
+        'alertas_cobro': alertas_cobro,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([EsSuperUsuario])
+def resumen_financiero_staff(request):
+    """
+    Panorama financiero de la suscripción SaaS (lo que los negocios le
+    pagan a Leybrak, no las ventas de los negocios en su propio POS).
+    """
+    ahora = timezone.now()
+    inicio_mes_actual = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    inicio_mes_anterior = (inicio_mes_actual - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    facturado_mes_actual = (PagoSuscripcion.objects
+                             .filter(estado='pagado', fecha_pago__gte=inicio_mes_actual)
+                             .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
+    facturado_mes_anterior = (PagoSuscripcion.objects
+                               .filter(estado='pagado', fecha_pago__gte=inicio_mes_anterior, fecha_pago__lt=inicio_mes_actual)
+                               .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
+
+    variacion_pct = None
+    if facturado_mes_anterior > 0:
+        variacion_pct = float((facturado_mes_actual - facturado_mes_anterior) / facturado_mes_anterior * 100)
+
+    # MRR estimado: suma del precio de plan de los negocios con un pago
+    # vigente ahora mismo — no cuenta "en prueba" (todavía no pagan) ni
+    # el monto real cobrado (por si hubo descuentos), es una proyección
+    # a partir del plan asignado.
+    negocios = Negocio.objects.select_related('plan').all()
+    ultimo_pago_por_negocio = _ultimo_pago_por_negocio()
+    mrr_estimado = Decimal('0.00')
+    negocios_pagando = 0
+    negocios_vencidos = 0
+    for n in negocios:
+        info = _info_suscripcion(n, ahora, ultimo_pago_por_negocio)
+        if info['estado'] == 'activo':
+            negocios_pagando += 1
+            if n.plan:
+                mrr_estimado += n.plan.precio_mensual
+        elif info['estado'] == 'vencido':
+            negocios_vencidos += 1
+
+    # Proxy de churn: no llevamos historial de transiciones de estado, así
+    # que esto es "de los que ya deberían pagar, cuántos no están pagando
+    # ahora" — no una tasa de cancelación real mes a mes.
+    base = negocios_pagando + negocios_vencidos
+    tasa_vencimiento_pct = round(negocios_vencidos / base * 100, 1) if base > 0 else None
+
+    return Response({
+        'facturado_mes_actual': float(facturado_mes_actual),
+        'facturado_mes_anterior': float(facturado_mes_anterior),
+        'variacion_pct': variacion_pct,
+        'mrr_estimado': float(mrr_estimado),
+        'negocios_pagando': negocios_pagando,
+        'negocios_vencidos': negocios_vencidos,
+        'tasa_vencimiento_pct': tasa_vencimiento_pct,
     })
 
 

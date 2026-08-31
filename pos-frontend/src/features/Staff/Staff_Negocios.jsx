@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlanesDisponibles,
   consultarRuc, consultarDni,
@@ -340,12 +340,29 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
   );
 }
 
+const FILTRO_ESTADO_OPCIONES = [
+  { value: 'todos',     label: 'Todos los estados' },
+  { value: 'activo',    label: 'Activo' },
+  { value: 'prueba',    label: 'En prueba' },
+  { value: 'vencido',   label: 'Vencido' },
+  { value: 'bloqueado', label: 'Bloqueado' },
+];
+
+const ORDEN_OPCIONES = [
+  { value: 'urgencia', label: 'Días restantes (más urgente primero)' },
+  { value: 'nombre',   label: 'Nombre (A-Z)' },
+  { value: 'reciente', label: 'Más recientes primero' },
+];
+
 export default function Staff_Negocios() {
   const [negocios, setNegocios] = useState([]);
   const [planes, setPlanes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [negocioEditando, setNegocioEditando] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [orden, setOrden] = useState('urgencia');
 
   const cargar = () => {
     setCargando(true);
@@ -361,18 +378,64 @@ export default function Staff_Negocios() {
     setNegocios(prev => prev.map(n => (n.id === negocio.id ? resp.data : n)));
   };
 
+  const negociosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    let lista = negocios.filter(n => {
+      const coincideBusqueda = !q || [n.nombre, n.propietario_username, n.telefono_propietario]
+        .some(campo => (campo || '').toLowerCase().includes(q));
+      const coincideEstado = filtroEstado === 'todos' || n.estado_suscripcion === filtroEstado;
+      return coincideBusqueda && coincideEstado;
+    });
+
+    lista = [...lista].sort((a, b) => {
+      if (orden === 'nombre') return a.nombre.localeCompare(b.nombre);
+      if (orden === 'reciente') return new Date(b.fecha_registro) - new Date(a.fecha_registro);
+      // urgencia: bloqueado/vencido primero, luego menos días restantes primero
+      const prioridad = { bloqueado: 0, vencido: 0, prueba: 1, activo: 1 };
+      const pa = prioridad[a.estado_suscripcion] ?? 2;
+      const pb = prioridad[b.estado_suscripcion] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return (a.dias_restantes_suscripcion ?? 0) - (b.dias_restantes_suscripcion ?? 0);
+    });
+
+    return lista;
+  }, [negocios, busqueda, filtroEstado, orden]);
+
   if (cargando) return <div className="text-neutral-500 text-sm">Cargando negocios…</div>;
 
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-black text-white">{negocios.length} negocios</h3>
+        <h3 className="text-sm font-black text-white">{negociosFiltrados.length} de {negocios.length} negocios</h3>
         <button
           onClick={() => setMostrarModal(true)}
           className="px-4 py-2 rounded-xl bg-[#ff5a1f] text-white text-xs font-black uppercase tracking-widest"
         >
           + Nuevo negocio
         </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          placeholder="Buscar por nombre, usuario o celular…"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          className="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]"
+        />
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value)}
+          className="bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff5a1f]"
+        >
+          {FILTRO_ESTADO_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select
+          value={orden}
+          onChange={(e) => setOrden(e.target.value)}
+          className="bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff5a1f]"
+        >
+          {ORDEN_OPCIONES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
 
       <div className="rounded-2xl border border-[#222] overflow-hidden">
@@ -388,7 +451,14 @@ export default function Staff_Negocios() {
             </tr>
           </thead>
           <tbody>
-            {negocios.map(n => (
+            {negociosFiltrados.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-neutral-600 text-sm">
+                  Ningún negocio coincide con la búsqueda/filtro.
+                </td>
+              </tr>
+            )}
+            {negociosFiltrados.map(n => (
               <tr key={n.id} className="border-t border-[#1a1a1a]">
                 <td className="px-4 py-3 text-white font-bold">{n.nombre}</td>
                 <td className="px-4 py-3 text-neutral-400">{n.propietario_username}</td>
