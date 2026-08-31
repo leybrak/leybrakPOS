@@ -223,6 +223,13 @@ def crear_negocio_staff(request):
             {'error': 'Faltan "nombre" (del negocio) y/o "propietario_username".'},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if not data.get('sede_nombre'):
+        # Sin al menos una sede, el negocio queda "fantasma": el POS muestra
+        # una sede "Principal" que no existe en la base y no se puede operar.
+        return Response(
+            {'error': 'Falta "sede_nombre" — el negocio necesita al menos una sede para poder operar el POS.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     try:
         negocio = crear_negocio_completo(
             nombre=data['nombre'],

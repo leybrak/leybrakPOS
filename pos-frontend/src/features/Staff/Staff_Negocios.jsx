@@ -63,6 +63,10 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
       setError('Nombre del negocio y usuario del propietario son obligatorios.');
       return;
     }
+    if (!form.sede_nombre.trim()) {
+      setError('La sede es obligatoria: sin al menos una, el negocio no puede operar el POS.');
+      return;
+    }
     setEnviando(true);
     setError(null);
     try {
@@ -106,14 +110,20 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
         </div>
 
         <div className="pt-2 border-t border-[#1a1a1a]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Plan y sede (opcional)</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Plan (opcional)</p>
           <select value={form.plan} onChange={set('plan')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white mb-2 focus:outline-none focus:border-[#ff5a1f]">
             <option value="">Sin plan</option>
             {planes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
-          <input placeholder="Nombre de la primera sede" value={form.sede_nombre} onChange={set('sede_nombre')}
+          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">
+            Nombre de la primera sede <span className="text-[#ff5a1f]">*</span>
+          </p>
+          <input placeholder="Ej. Sede Principal" value={form.sede_nombre} onChange={set('sede_nombre')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+          <p className="text-[10px] text-neutral-600 mt-1">
+            Obligatoria: sin al menos una sede, el negocio no puede operar el POS.
+          </p>
         </div>
 
         {error && <p className="text-red-400 text-xs font-bold">{error}</p>}

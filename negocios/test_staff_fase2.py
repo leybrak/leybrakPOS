@@ -58,6 +58,7 @@ class CrearNegocioStaffTest(APITestCase):
             'nombre': 'Negocio Con Plan',
             'propietario_username': 'dueno_plan',
             'plan': plan.id,
+            'sede_nombre': 'Sede Principal',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
 
@@ -70,8 +71,21 @@ class CrearNegocioStaffTest(APITestCase):
         self.client.force_authenticate(user=self.staff)
         resp = self.client.post(CREAR_NEGOCIO_URL, {
             'nombre': 'Otro Negocio', 'propietario_username': 'dueno',  # ya existe
+            'sede_nombre': 'Sede Principal',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+        self.assertIn('dueno', resp.data.get('error', ''))
+
+    def test_no_deja_crear_negocio_sin_sede(self):
+        # Sin sede el negocio queda "fantasma": el POS lo muestra como
+        # operativo (sede "Principal" hardcodeada) pero no hay nada real
+        # detrás — verificado a mano contra el POS real.
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.post(CREAR_NEGOCIO_URL, {
+            'nombre': 'Negocio Sin Sede', 'propietario_username': 'nuevo_sin_sede',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Negocio.objects.filter(nombre='Negocio Sin Sede').exists())
 
     def test_dueno_no_puede_crear_negocios(self):
         self.client.force_authenticate(user=self.dueno)
