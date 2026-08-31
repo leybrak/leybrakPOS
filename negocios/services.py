@@ -36,6 +36,7 @@ def precargar_modulos_por_plan(negocio):
 def crear_negocio_completo(
     nombre, propietario_username, propietario_email='', propietario_password=None,
     propietario=None, plan_id=None, fin_prueba=None, sede_nombre=None,
+    telefono_propietario='',
 ):
     """
     Crea (o reusa) el propietario, el Negocio y opcionalmente la primera
@@ -63,6 +64,7 @@ def crear_negocio_completo(
         nombre=nombre,
         plan=plan,
         fin_prueba=fin_prueba or (timezone.now() + timedelta(days=30)),
+        telefono_propietario=telefono_propietario or '',
     )
     precargar_modulos_por_plan(negocio)
     negocio.save()

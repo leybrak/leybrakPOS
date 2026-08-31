@@ -133,6 +133,10 @@ class Negocio(models.Model):
     ruc = models.CharField(max_length=11, blank=True, null=True, unique=True)
     razon_social = models.CharField(max_length=255, blank=True, null=True)
     logo = models.ImageField(upload_to='negocios/logos/', blank=True, null=True)
+    telefono_propietario = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text="Celular del dueño para contactarlo directo (no es el WhatsApp del bot de ninguna sede)."
+    )
 
     # ==========================================
     # 📱 2. BILLETERAS DIGITALES (QRs y Números)

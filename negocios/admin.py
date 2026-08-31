@@ -192,7 +192,7 @@ class NegocioAdminForm(forms.ModelForm):
 class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
     form = NegocioAdminForm
     inlines = [SedeInline]
-    list_display = ('nombre', 'propietario', 'plan', 'activo')
+    list_display = ('nombre', 'propietario', 'telefono_propietario', 'plan', 'activo')
     list_filter = ('plan', 'activo')
     search_fields = ('nombre', 'propietario__username')
 
@@ -202,7 +202,7 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
             'description': 'Elige un usuario existente, o completa usuario/email/contraseña para crear uno nuevo automáticamente al guardar.',
         }),
         ('Datos del negocio', {
-            'fields': ('nombre', 'ruc', 'razon_social', 'logo', 'plan', 'fin_prueba', 'activo'),
+            'fields': ('nombre', 'ruc', 'razon_social', 'logo', 'telefono_propietario', 'plan', 'fin_prueba', 'activo'),
         }),
         ('Billeteras digitales', {
             'fields': ('yape_numero', 'yape_qr', 'plin_numero', 'plin_qr'),

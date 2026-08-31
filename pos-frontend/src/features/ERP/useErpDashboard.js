@@ -47,7 +47,7 @@ export const useErpDashboard = () => {
   const [categorias, setCategorias] = useState([]);
   const [config, setConfig] = useState({
     // Identidad
-    ruc: '', razon_social: '', logoPreview: null, logoFile: null, logo: null,
+    ruc: '', razon_social: '', telefono_propietario: '', logoPreview: null, logoFile: null, logo: null,
     // Billeteras
     yape_numero: '', yape_qrPreview: null, yape_qrFile: null, yape_qr: null,
     plin_numero: '', plin_qrPreview: null, plin_qrFile: null, plin_qr: null,
@@ -210,6 +210,7 @@ export const useErpDashboard = () => {
           // Identidad
           ruc: datosBD.ruc || '',
           razon_social: datosBD.razon_social || '',
+          telefono_propietario: datosBD.telefono_propietario || '',
           logo: datosBD.logo || null,
           // Billeteras
           yape_numero: datosBD.yape_numero || '',
@@ -402,6 +403,7 @@ export const useErpDashboard = () => {
       // Identidad
       formData.append('ruc',          config.ruc          || '');
       formData.append('razon_social', config.razon_social || '');
+      formData.append('telefono_propietario', config.telefono_propietario || '');
 
       // Billeteras
       formData.append('yape_numero', config.yape_numero || '');

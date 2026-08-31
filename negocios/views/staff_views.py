@@ -231,6 +231,7 @@ def crear_negocio_staff(request):
             propietario_password=data.get('propietario_password'),
             plan_id=data.get('plan') or None,
             sede_nombre=data.get('sede_nombre'),
+            telefono_propietario=data.get('telefono_propietario', ''),
         )
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -83,6 +83,21 @@ export default function Tab_Perfil({ config, setConfig, isDark, colorPrimario })
               placeholder="Se completa con SUNAT"
             />
           </div>
+
+          {/* CELULAR DEL DUEÑO */}
+          <div>
+            <label className={`text-[10px] font-black uppercase tracking-widest mb-2 block ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
+              Celular del dueño (número principal)
+            </label>
+            <input
+              type="text"
+              value={config.telefono_propietario || ''}
+              onChange={(e) => setConfig({ ...config, telefono_propietario: e.target.value.replace(/\D/g, '') })}
+              className="w-full border px-4 py-3 rounded-xl outline-none font-bold text-sm transition-colors focus:border-current"
+              style={{ background: isDark ? '#0a0a0a' : '#f9fafb', borderColor: isDark ? '#333' : '#e5e7eb', color: isDark ? '#fff' : '#000' }}
+              placeholder="Ej. 987654321"
+            />
+          </div>
         </div>
 
         {/* LOGO */}

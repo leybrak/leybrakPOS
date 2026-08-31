@@ -4,7 +4,7 @@ import { listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlan
 function ModalNuevoNegocio({ planes, onClose, onCreado }) {
   const [form, setForm] = useState({
     nombre: '', propietario_username: '', propietario_email: '',
-    propietario_password: '', plan: '', sede_nombre: '',
+    propietario_password: '', telefono_propietario: '', plan: '', sede_nombre: '',
   });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
@@ -43,6 +43,8 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
           <input placeholder="Email" value={form.propietario_email} onChange={set('propietario_email')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:outline-none focus:border-[#ff5a1f]" />
           <input type="password" placeholder="Contraseña (vacío = aleatoria)" value={form.propietario_password} onChange={set('propietario_password')}
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:outline-none focus:border-[#ff5a1f]" />
+          <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
         </div>
 
@@ -94,6 +96,7 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
     nombre: negocio.nombre || '',
     ruc: negocio.ruc || '',
     razon_social: negocio.razon_social || '',
+    telefono_propietario: negocio.telefono_propietario || '',
     plan: negocio.plan || '',
     fin_prueba: fechaInput(negocio.fin_prueba),
     ...Object.fromEntries(MODULOS_META.map(m => [m.key, negocio[m.key]])),
@@ -134,6 +137,8 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
           <input placeholder="Razón social" value={form.razon_social} onChange={set('razon_social')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+          <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f] md:col-span-2" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#1a1a1a]">
@@ -223,6 +228,7 @@ export default function Staff_Negocios() {
             <tr>
               <th className="text-left px-4 py-3 font-black">Negocio</th>
               <th className="text-left px-4 py-3 font-black">Propietario</th>
+              <th className="text-left px-4 py-3 font-black">Celular</th>
               <th className="text-left px-4 py-3 font-black">Plan</th>
               <th className="text-left px-4 py-3 font-black">Estado</th>
               <th className="text-right px-4 py-3 font-black">Acción</th>
@@ -233,6 +239,11 @@ export default function Staff_Negocios() {
               <tr key={n.id} className="border-t border-[#1a1a1a]">
                 <td className="px-4 py-3 text-white font-bold">{n.nombre}</td>
                 <td className="px-4 py-3 text-neutral-400">{n.propietario_username}</td>
+                <td className="px-4 py-3 text-neutral-400">
+                  {n.telefono_propietario
+                    ? <a href={`https://wa.me/51${n.telefono_propietario.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-[#ff5a1f]">{n.telefono_propietario}</a>
+                    : '—'}
+                </td>
                 <td className="px-4 py-3 text-neutral-400">{n.plan_detalles?.nombre || '—'}</td>
                 <td className="px-4 py-3">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${
