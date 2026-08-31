@@ -251,6 +251,18 @@ def pagos_pendientes_staff(request):
     return Response(PagoSuscripcionSerializer(pagos, many=True, context={'request': request}).data)
 
 
+@api_view(['GET'])
+@permission_classes([EsSuperUsuario])
+def pagos_historial_staff(request):
+    """Pagos por Yape/Plin/Transferencia ya resueltos (aprobados o
+    rechazados) — para no perderlos de vista apenas salen de 'pendientes'."""
+    pagos = (PagoSuscripcion.objects
+             .filter(estado__in=['pagado', 'fallido'], metodo_pago__in=['yape', 'plin', 'transferencia'])
+             .select_related('negocio')
+             .order_by('-fecha_pago')[:200])
+    return Response(PagoSuscripcionSerializer(pagos, many=True, context={'request': request}).data)
+
+
 # ============================================================
 # MÓDULOS GLOBALES (interruptor único — antes solo en el admin de Django)
 # ============================================================

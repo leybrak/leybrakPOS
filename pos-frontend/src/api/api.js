@@ -372,6 +372,7 @@ export const actualizarNegocioStaff = (id, data) => api.patch(`/negocios/${id}/`
 
 // — Pagos manuales de suscripción (Yape/Plin/Transferencia) —
 export const getPagosPendientesStaff  = () => api.get('/staff/pagos-pendientes/');
+export const getPagosHistorialStaff   = () => api.get('/staff/pagos-historial/');
 export const actualizarPagoSuscripcion = (id, data) => api.patch(`/pagos-suscripcion/${id}/`, data);
 // La usa el dueño para reportar SU propio pago (queda 'pendiente' hasta que staff lo apruebe).
 export const reportarPagoSuscripcion = (data) => {

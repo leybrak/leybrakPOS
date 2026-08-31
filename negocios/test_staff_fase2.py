@@ -14,6 +14,7 @@ from negocios.models import Negocio, PagoSuscripcion, PlanSaaS
 
 CREAR_NEGOCIO_URL = '/api/staff/negocios/crear/'
 PAGOS_PENDIENTES_URL = '/api/staff/pagos-pendientes/'
+PAGOS_HISTORIAL_URL = '/api/staff/pagos-historial/'
 MODULOS_GLOBALES_URL = '/api/staff/modulos-globales/'
 DATOS_PAGO_STAFF_URL = '/api/staff/datos-pago/'
 DATOS_PAGO_NEGOCIO_URL = '/api/negocio/suscripcion/datos-pago/'
@@ -220,6 +221,23 @@ class PagoSuscripcionManualTest(APITestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['metodo_pago'], 'yape')
+
+    def test_historial_lista_solo_resueltos_autorreportables(self):
+        PagoSuscripcion.objects.create(negocio=self.negocio, monto=99, metodo_pago='yape', estado='pendiente')  # no resuelto
+        PagoSuscripcion.objects.create(negocio=self.negocio, monto=99, metodo_pago='plin', estado='pagado')  # aprobado
+        PagoSuscripcion.objects.create(negocio=self.negocio, monto=99, metodo_pago='transferencia', estado='fallido')  # rechazado
+        PagoSuscripcion.objects.create(negocio=self.negocio, monto=99, metodo_pago='otro', estado='pagado')  # MercadoPago, no es manual
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get(PAGOS_HISTORIAL_URL)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        metodos = {p['metodo_pago'] for p in resp.data}
+        self.assertEqual(metodos, {'plin', 'transferencia'})
+
+    def test_dueno_no_puede_ver_historial_de_pagos(self):
+        self.client.force_authenticate(user=self.dueno)
+        resp = self.client.get(PAGOS_HISTORIAL_URL)
+        self.assertEqual(resp.status_code, 403)
 
     def test_dueno_no_puede_ver_pagos_pendientes_de_todos(self):
         self.client.force_authenticate(user=self.dueno)
