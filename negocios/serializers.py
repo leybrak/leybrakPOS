@@ -56,6 +56,21 @@ class NegocioSerializer(serializers.ModelSerializer):
     plan_detalles = PlanSaaSSerializer(source='plan', read_only=True)
     propietario_username = serializers.ReadOnlyField(source='propietario.username')
     modulos_globales = serializers.SerializerMethodField()
+    estado_suscripcion = serializers.SerializerMethodField()
+    dias_restantes_suscripcion = serializers.SerializerMethodField()
+
+    def _info_suscripcion(self, obj):
+        # Cachea en la instancia: la piden estado y días por separado pero
+        # es el mismo cálculo, así no duplicamos la query por negocio.
+        if not hasattr(obj, '_estado_suscripcion_info'):
+            obj._estado_suscripcion_info = obj.estado_suscripcion_info()
+        return obj._estado_suscripcion_info
+
+    def get_estado_suscripcion(self, obj):
+        return self._info_suscripcion(obj)['estado']
+
+    def get_dias_restantes_suscripcion(self, obj):
+        return self._info_suscripcion(obj)['dias_restantes']
 
     def get_modulos_globales(self, obj):
         """
@@ -86,6 +101,7 @@ class NegocioSerializer(serializers.ModelSerializer):
             'yape_numero', 'yape_qr', 'plin_numero', 'plin_qr',
             'confirmacion_automatica', 'device_token',
             'plan', 'plan_detalles', 'fecha_registro', 'fin_prueba', 'activo',
+            'estado_suscripcion', 'dias_restantes_suscripcion',
             'mod_salon_activo', 'mod_cocina_activo', 'mod_inventario_activo',
             'mod_delivery_activo', 'mod_clientes_activo', 'mod_facturacion_activo',
             'mod_carta_qr_activo', 'mod_bot_wsp_activo', 'mod_ml_activo',

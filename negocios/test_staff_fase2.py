@@ -156,6 +156,69 @@ class BloquearNegocioTest(APITestCase):
         self.assertEqual(resp.status_code, 404)  # ni siquiera está en su queryset
 
 
+class EstadoSuscripcionEnListaNegociosTest(APITestCase):
+    """
+    El panel de staff (tabla de "Negocios") necesita ver de un vistazo si
+    un negocio está en prueba, con suscripción vigente, vencido o
+    bloqueado, y cuántos días le quedan — antes solo se veía activo/
+    bloqueado (el bloqueo manual), no el estado real de la suscripción.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+
+    def _negocio_id(self, resp, nombre):
+        return next(n['id'] for n in resp.data if n['nombre'] == nombre)
+
+    def test_negocio_en_prueba_reporta_estado_y_dias(self):
+        dueno = User.objects.create_user(username='dueno_prueba', password='x')
+        Negocio.objects.create(
+            propietario=dueno, nombre='En Prueba', fin_prueba=timezone.now() + timedelta(days=10))
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/negocios/')
+        self.assertEqual(resp.status_code, 200)
+        data = next(n for n in resp.data if n['nombre'] == 'En Prueba')
+        self.assertEqual(data['estado_suscripcion'], 'prueba')
+        self.assertIn(data['dias_restantes_suscripcion'], (9, 10))
+
+    def test_negocio_con_prueba_vencida_y_sin_pago_reporta_vencido(self):
+        dueno = User.objects.create_user(username='dueno_vencido', password='x')
+        Negocio.objects.create(
+            propietario=dueno, nombre='Vencido', fin_prueba=timezone.now() - timedelta(days=1))
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/negocios/')
+        data = next(n for n in resp.data if n['nombre'] == 'Vencido')
+        self.assertEqual(data['estado_suscripcion'], 'vencido')
+        self.assertEqual(data['dias_restantes_suscripcion'], 0)
+
+    def test_negocio_bloqueado_manualmente_reporta_bloqueado(self):
+        dueno = User.objects.create_user(username='dueno_bloq', password='x')
+        Negocio.objects.create(
+            propietario=dueno, nombre='Bloqueado', activo=False,
+            fin_prueba=timezone.now() + timedelta(days=10))
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/negocios/')
+        data = next(n for n in resp.data if n['nombre'] == 'Bloqueado')
+        self.assertEqual(data['estado_suscripcion'], 'bloqueado')
+
+    def test_negocio_con_pago_reciente_reporta_activo_y_dias_de_vigencia(self):
+        dueno = User.objects.create_user(username='dueno_pagado', password='x')
+        negocio = Negocio.objects.create(
+            propietario=dueno, nombre='Pagado', fin_prueba=timezone.now() - timedelta(days=60))
+        PagoSuscripcion.objects.create(
+            negocio=negocio, monto=Decimal('50.00'), estado='pagado',
+            metodo_pago='yape', fecha_pago=timezone.now() - timedelta(days=5))
+
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.get('/api/negocios/')
+        data = next(n for n in resp.data if n['nombre'] == 'Pagado')
+        self.assertEqual(data['estado_suscripcion'], 'activo')
+        self.assertIn(data['dias_restantes_suscripcion'], (25, 26))
+
+
 class EditarNegocioTest(APITestCase):
 
     def setUp(self):

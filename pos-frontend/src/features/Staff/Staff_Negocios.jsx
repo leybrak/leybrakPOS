@@ -37,6 +37,31 @@ function CampoBusqueda({ placeholder, value, onChange, onBuscar, className = '' 
   );
 }
 
+// Badge de estado de suscripción — mismo cálculo que estado_suscripcion()
+// del backend (negocios/models.py: Negocio.estado_suscripcion_info).
+const ESTADO_SUSCRIPCION_META = {
+  activo:    { label: 'Activo',    clases: 'text-emerald-500 bg-emerald-500/15' },
+  prueba:    { label: 'En prueba', clases: 'text-blue-400 bg-blue-400/15' },
+  vencido:   { label: 'Vencido',   clases: 'text-amber-500 bg-amber-500/15' },
+  bloqueado: { label: 'Bloqueado', clases: 'text-red-500 bg-red-500/15' },
+};
+
+function BadgeSuscripcion({ estado, dias }) {
+  const meta = ESTADO_SUSCRIPCION_META[estado] || ESTADO_SUSCRIPCION_META.vencido;
+  return (
+    <div>
+      <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${meta.clases}`}>
+        {meta.label}
+      </span>
+      {(estado === 'activo' || estado === 'prueba') && (
+        <p className="text-[10px] text-neutral-500 mt-1">
+          {dias === 0 ? 'Vence hoy' : `${dias} día${dias === 1 ? '' : 's'} restante${dias === 1 ? '' : 's'}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ModalNuevoNegocio({ planes, onClose, onCreado }) {
   const [paso, setPaso] = useState(1);
   const [form, setForm] = useState({
@@ -374,11 +399,7 @@ export default function Staff_Negocios() {
                 </td>
                 <td className="px-4 py-3 text-neutral-400">{n.plan_detalles?.nombre || '—'}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${
-                    n.activo ? 'text-emerald-500 bg-emerald-500/15' : 'text-red-500 bg-red-500/15'
-                  }`}>
-                    {n.activo ? 'Activo' : 'Bloqueado'}
-                  </span>
+                  <BadgeSuscripcion estado={n.estado_suscripcion} dias={n.dias_restantes_suscripcion} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">

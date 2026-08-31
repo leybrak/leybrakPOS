@@ -271,6 +271,28 @@ class Negocio(models.Model):
         help_text="Valor en S/ de cada punto al canjear (ej. 0.10 → 100 pts = S/10 de descuento)."
     )
 
+    def estado_suscripcion_info(self):
+        """
+        Estado de la suscripción ('activo'/'prueba'/'vencido'/'bloqueado') y
+        días restantes — misma regla que negocios/views/suscripcion_views.py
+        (estado_suscripcion), reutilizada acá para el panel de staff.
+        """
+        ahora = timezone.now()
+
+        if not self.activo:
+            return {'estado': 'bloqueado', 'dias_restantes': 0}
+
+        ultimo_pago = self.pagos_suscripcion.filter(estado='pagado').order_by('-fecha_pago').first()
+        if ultimo_pago:
+            dias_desde_pago = (ahora - ultimo_pago.fecha_pago).days
+            if dias_desde_pago <= 31:
+                return {'estado': 'activo', 'dias_restantes': 31 - dias_desde_pago}
+
+        if self.fin_prueba and ahora < self.fin_prueba:
+            return {'estado': 'prueba', 'dias_restantes': (self.fin_prueba - ahora).days}
+
+        return {'estado': 'vencido', 'dias_restantes': 0}
+
     def __str__(self):
         return self.nombre
 
