@@ -16,6 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 
 from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
+from ..services import precargar_modulos_por_plan
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,16 @@ class NegocioViewSet(viewsets.ModelViewSet):
         if hasattr(self.request.user, 'negocio'):
             return Negocio.objects.filter(propietario=self.request.user)
         return Negocio.objects.none()
+
+    def perform_update(self, serializer):
+        # Si cambia el plan (ej. el panel de staff edita un negocio), precarga
+        # los módulos que ese plan incluye — misma regla que NegocioAdmin.save_model
+        # (negocios/services.py), para que no dependa de por dónde se edite.
+        plan_anterior_id = serializer.instance.plan_id
+        negocio = serializer.save()
+        if negocio.plan_id and negocio.plan_id != plan_anterior_id:
+            precargar_modulos_por_plan(negocio)
+            negocio.save()
 
     # ==========================================
     # ✨ FIX 3 — GUARDAR CONFIGURACIÓN DE CARTA

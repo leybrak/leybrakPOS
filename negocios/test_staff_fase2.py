@@ -104,6 +104,60 @@ class BloquearNegocioTest(APITestCase):
         self.assertEqual(resp.status_code, 404)  # ni siquiera está en su queryset
 
 
+class EditarNegocioTest(APITestCase):
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+        self.dueno = User.objects.create_user(username='dueno', password='x')
+        self.negocio = Negocio.objects.create(
+            propietario=self.dueno, nombre='Negocio', fin_prueba=timezone.now() + timedelta(days=30))
+
+    def test_staff_edita_datos_basicos(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(f'/api/negocios/{self.negocio.id}/', {
+            'ruc': '20123456789', 'razon_social': 'Negocio SAC',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        self.negocio.refresh_from_db()
+        self.assertEqual(self.negocio.ruc, '20123456789')
+        self.assertEqual(self.negocio.razon_social, 'Negocio SAC')
+
+    def test_cambiar_plan_precarga_modulos_tambien_por_api(self):
+        # Regresión: antes solo el admin de Django precargaba módulos al
+        # cambiar de plan; por API (el panel de staff) no pasaba nada.
+        plan = PlanSaaS.objects.create(nombre='Pro', precio_mensual=99, modulo_delivery=True, modulo_ml=True)
+        self.client.force_authenticate(user=self.staff)
+
+        resp = self.client.patch(f'/api/negocios/{self.negocio.id}/', {'plan': plan.id}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        self.negocio.refresh_from_db()
+        self.assertEqual(self.negocio.plan_id, plan.id)
+        self.assertTrue(self.negocio.mod_delivery_activo)
+        self.assertTrue(self.negocio.mod_ml_activo)
+
+    def test_extender_periodo_de_prueba(self):
+        nueva_fecha = timezone.now() + timedelta(days=60)
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(f'/api/negocios/{self.negocio.id}/', {
+            'fin_prueba': nueva_fecha.isoformat(),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        self.negocio.refresh_from_db()
+        self.assertEqual(self.negocio.fin_prueba.date(), nueva_fecha.date())
+
+    def test_dueno_no_puede_editar_otro_negocio(self):
+        otro_user = User.objects.create_user(username='otro2', password='x')
+        otro_negocio = Negocio.objects.create(
+            propietario=otro_user, nombre='Otro2', fin_prueba=timezone.now() + timedelta(days=30))
+
+        self.client.force_authenticate(user=self.dueno)
+        resp = self.client.patch(f'/api/negocios/{otro_negocio.id}/', {'ruc': '11111111111'}, format='json')
+        self.assertEqual(resp.status_code, 404)
+
+
 class PagoSuscripcionManualTest(APITestCase):
 
     def setUp(self):
