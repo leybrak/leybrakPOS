@@ -137,6 +137,11 @@ class Negocio(models.Model):
         max_length=20, blank=True, default='',
         help_text="Celular del dueño para contactarlo directo (no es el WhatsApp del bot de ninguna sede)."
     )
+    dni_propietario = models.CharField(max_length=8, blank=True, default='')
+    nombre_propietario = models.CharField(
+        max_length=150, blank=True, default='',
+        help_text="Nombre completo del dueño (RENIEC) — no es la razón social del negocio."
+    )
 
     # ==========================================
     # 📱 2. BILLETERAS DIGITALES (QRs y Números)

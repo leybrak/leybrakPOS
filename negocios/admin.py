@@ -202,7 +202,11 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
             'description': 'Elige un usuario existente, o completa usuario/email/contraseña para crear uno nuevo automáticamente al guardar.',
         }),
         ('Datos del negocio', {
-            'fields': ('nombre', 'ruc', 'razon_social', 'logo', 'telefono_propietario', 'plan', 'fin_prueba', 'activo'),
+            'fields': (
+                'nombre', 'ruc', 'razon_social', 'logo',
+                'telefono_propietario', 'dni_propietario', 'nombre_propietario',
+                'plan', 'fin_prueba', 'activo',
+            ),
         }),
         ('Billeteras digitales', {
             'fields': ('yape_numero', 'yape_qr', 'plin_numero', 'plin_qr'),

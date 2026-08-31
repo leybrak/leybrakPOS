@@ -1,15 +1,62 @@
 import React, { useEffect, useState } from 'react';
-import { listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlanesDisponibles } from '../../api/api';
+import {
+  listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlanesDisponibles,
+  consultarRuc, consultarDni,
+} from '../../api/api';
+
+// Input + botón "Buscar" (SUNAT/RENIEC) — mismo patrón para RUC y DNI, en
+// el modal de crear y en el de editar.
+function CampoBusqueda({ placeholder, value, onChange, onBuscar, className = '' }) {
+  const [buscando, setBuscando] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleBuscar = async () => {
+    setBuscando(true);
+    setError(null);
+    try {
+      await onBuscar();
+    } catch (e) {
+      setError(e?.response?.data?.error || 'No se encontró.');
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  return (
+    <div className={className}>
+      <div className="flex gap-2">
+        <input placeholder={placeholder} value={value} onChange={onChange}
+          className="flex-1 min-w-0 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+        <button type="button" onClick={handleBuscar} disabled={buscando || !value}
+          className="px-4 py-2.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-300 text-[10px] font-black uppercase tracking-widest disabled:opacity-40 shrink-0 hover:bg-[#222]">
+          {buscando ? '…' : 'Buscar'}
+        </button>
+      </div>
+      {error && <p className="text-red-400 text-[10px] font-bold mt-1">{error}</p>}
+    </div>
+  );
+}
 
 function ModalNuevoNegocio({ planes, onClose, onCreado }) {
   const [form, setForm] = useState({
     nombre: '', propietario_username: '', propietario_email: '',
-    propietario_password: '', telefono_propietario: '', plan: '', sede_nombre: '',
+    propietario_password: '', telefono_propietario: '',
+    ruc: '', razon_social: '', dni_propietario: '', nombre_propietario: '',
+    plan: '', sede_nombre: '',
   });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
+
+  const buscarRuc = async () => {
+    const { data } = await consultarRuc(form.ruc);
+    setForm(prev => ({ ...prev, razon_social: data.razon_social }));
+  };
+  const buscarDni = async () => {
+    const { data } = await consultarDni(form.dni_propietario);
+    setForm(prev => ({ ...prev, nombre_propietario: data.nombre }));
+  };
 
   const handleCrear = async () => {
     if (!form.nombre.trim() || !form.propietario_username.trim()) {
@@ -30,21 +77,31 @@ function ModalNuevoNegocio({ planes, onClose, onCreado }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-white font-black text-sm mb-1">Nuevo negocio</h3>
 
         <input placeholder="Nombre del negocio" value={form.nombre} onChange={set('nombre')}
           className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
 
-        <div className="pt-2 border-t border-[#1a1a1a]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Propietario</p>
+        <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">RUC del negocio (opcional)</p>
+          <CampoBusqueda placeholder="RUC (11 dígitos)" value={form.ruc} onChange={set('ruc')} onBuscar={buscarRuc} />
+          <input placeholder="Razón social" value={form.razon_social} onChange={set('razon_social')}
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+        </div>
+
+        <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Propietario</p>
           <input placeholder="Usuario (login)" value={form.propietario_username} onChange={set('propietario_username')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:outline-none focus:border-[#ff5a1f]" />
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
           <input placeholder="Email" value={form.propietario_email} onChange={set('propietario_email')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:outline-none focus:border-[#ff5a1f]" />
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
           <input type="password" placeholder="Contraseña (vacío = aleatoria)" value={form.propietario_password} onChange={set('propietario_password')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 mb-2 focus:outline-none focus:border-[#ff5a1f]" />
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
           <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+          <CampoBusqueda placeholder="DNI del dueño (8 dígitos)" value={form.dni_propietario} onChange={set('dni_propietario')} onBuscar={buscarDni} />
+          <input placeholder="Nombre completo del dueño" value={form.nombre_propietario} onChange={set('nombre_propietario')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
         </div>
 
@@ -97,6 +154,8 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
     ruc: negocio.ruc || '',
     razon_social: negocio.razon_social || '',
     telefono_propietario: negocio.telefono_propietario || '',
+    dni_propietario: negocio.dni_propietario || '',
+    nombre_propietario: negocio.nombre_propietario || '',
     plan: negocio.plan || '',
     fin_prueba: fechaInput(negocio.fin_prueba),
     ...Object.fromEntries(MODULOS_META.map(m => [m.key, negocio[m.key]])),
@@ -106,6 +165,15 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
   const toggleModulo = (key) => setForm({ ...form, [key]: !form[key] });
+
+  const buscarRuc = async () => {
+    const { data } = await consultarRuc(form.ruc);
+    setForm(prev => ({ ...prev, razon_social: data.razon_social }));
+  };
+  const buscarDni = async () => {
+    const { data } = await consultarDni(form.dni_propietario);
+    setForm(prev => ({ ...prev, nombre_propietario: data.nombre }));
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -133,12 +201,14 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input placeholder="Nombre del negocio" value={form.nombre} onChange={set('nombre')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f] md:col-span-2" />
-          <input placeholder="RUC" value={form.ruc} onChange={set('ruc')}
-            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+          <CampoBusqueda placeholder="RUC (11 dígitos)" value={form.ruc} onChange={set('ruc')} onBuscar={buscarRuc} />
           <input placeholder="Razón social" value={form.razon_social} onChange={set('razon_social')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
           <input placeholder="Celular del dueño (número principal)" value={form.telefono_propietario} onChange={set('telefono_propietario')}
             className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f] md:col-span-2" />
+          <CampoBusqueda placeholder="DNI del dueño (8 dígitos)" value={form.dni_propietario} onChange={set('dni_propietario')} onBuscar={buscarDni} />
+          <input placeholder="Nombre completo del dueño" value={form.nombre_propietario} onChange={set('nombre_propietario')}
+            className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#1a1a1a]">

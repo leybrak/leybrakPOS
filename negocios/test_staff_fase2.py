@@ -38,6 +38,8 @@ class CrearNegocioStaffTest(APITestCase):
             'propietario_password': 'clave123',
             'sede_nombre': 'Sede Principal',
             'telefono_propietario': '987654321',
+            'dni_propietario': '12345678',
+            'nombre_propietario': 'Juan Pérez',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
 
@@ -46,6 +48,8 @@ class CrearNegocioStaffTest(APITestCase):
         self.assertTrue(negocio.propietario.check_password('clave123'))
         self.assertEqual(list(negocio.sedes.values_list('nombre', flat=True)), ['Sede Principal'])
         self.assertEqual(negocio.telefono_propietario, '987654321')
+        self.assertEqual(negocio.dni_propietario, '12345678')
+        self.assertEqual(negocio.nombre_propietario, 'Juan Pérez')
 
     def test_precarga_modulos_segun_el_plan(self):
         plan = PlanSaaS.objects.create(nombre='Pro', precio_mensual=99, modulo_kds=True, modulo_delivery=True)
