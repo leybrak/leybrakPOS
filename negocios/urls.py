@@ -15,7 +15,7 @@ from negocios.views.publico_views import login_empleado_pin, verificar_sesion_em
 from negocios.views.suscripcion_views import estado_suscripcion
 from negocios.views.pago_yape_views import recibir_notificacion_yape, confirmar_pago_yape, validar_pago_bot
 from negocios.views.suscripcion_billing_views import generar_pago_suscripcion, webhook_mercadopago
-from negocios.views.app_version_views import app_version
+from negocios.views.app_version_views import app_version, descargar_apk
 from negocios.views.facturacion_views import emitir_comprobante, obtener_comprobante, listar_comprobantes, enviar_ticket_whatsapp_view
 from negocios.views.delivery_views import pedidos_delivery, tomar_pedido, actualizar_estado_delivery, avisar_cliente
 from negocios.views.historia_views import historias, cancelar_historia, historias_pendientes_bot, marcar_historia_bot
@@ -114,6 +114,7 @@ urlpatterns = [
     # 📱 APP MÓVIL — Control de versión / forzar update
     # ==========================================
     path('app/version/', app_version, name='app-version'),
+    path('app/descargar/', descargar_apk, name='app-descargar'),
 
     # ==========================================
     # 🧾 FACTURACIÓN ELECTRÓNICA (SUNAT)
