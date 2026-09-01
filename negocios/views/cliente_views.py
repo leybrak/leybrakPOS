@@ -64,7 +64,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
         es_cumple = False
         if cliente.fecha_nacimiento:
-            hoy = timezone.now().date()
+            hoy = timezone.localtime().date()
             es_cumple = (cliente.fecha_nacimiento.day == hoy.day and
                          cliente.fecha_nacimiento.month == hoy.month)
 

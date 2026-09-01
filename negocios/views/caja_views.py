@@ -11,10 +11,28 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .helpers import es_valor_nulo, get_empleado_desde_header, get_empleado_verificado
-from ..models import SesionCaja, MovimientoCaja, Pago, Orden, Negocio
+from ..models import SesionCaja, MovimientoCaja, Pago, Orden, Negocio, Sede
 from ..serializers import SesionCajaSerializer
 
 logger = logging.getLogger(__name__)
+
+
+def _sede_pertenece_al_solicitante(request, sede_id):
+    """
+    🛡️ IDOR fix: abrir/cerrar caja tomaban el sede_id del body tal cual,
+    sin validar que sea una sede del negocio del que llama — cualquier
+    negocio autenticado podía abrir o cerrar la caja de OTRO negocio con
+    solo adivinar/probar un sede_id (son enteros correlativos). Mismo
+    patrón que ya usa registrar_movimiento_caja.
+    """
+    empleado = get_empleado_verificado(request)
+    if empleado:
+        return str(empleado.sede_id) == str(sede_id)
+    if request.user.is_superuser:
+        return True
+    if hasattr(request.user, 'negocio'):
+        return Sede.objects.filter(id=sede_id, negocio=request.user.negocio).exists()
+    return False
 
 
 # ============================================================
@@ -59,6 +77,9 @@ class SesionCajaViewSet(viewsets.ModelViewSet):
         if not sede_id:
             return Response({'error': 'Se requiere sede_id válida'}, status=400)
 
+        if not _sede_pertenece_al_solicitante(request, sede_id):
+            return Response({'error': 'No tienes permiso para ver el estado de esta sede.'}, status=403)
+
         sesion = SesionCaja.objects.filter(sede_id=sede_id, estado='abierta').first()
         if sesion:
             return Response({'estado': 'abierto', 'fondo': sesion.fondo_inicial, 'id': sesion.id})
@@ -72,6 +93,9 @@ class SesionCajaViewSet(viewsets.ModelViewSet):
 
         if not sede_id:
             return Response({'error': 'Falta sede_id'}, status=400)
+
+        if not _sede_pertenece_al_solicitante(request, sede_id):
+            return Response({'error': 'No tienes permiso para abrir caja en esta sede.'}, status=403)
 
         if SesionCaja.objects.filter(sede_id=sede_id, estado='abierta').exists():
             return Response(
@@ -102,6 +126,9 @@ class SesionCajaViewSet(viewsets.ModelViewSet):
 
         if not sede_id:
             return Response({'error': 'Se requiere sede_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not _sede_pertenece_al_solicitante(request, sede_id):
+            return Response({'error': 'No tienes permiso para cerrar caja en esta sede.'}, status=403)
 
         with transaction.atomic():
             sesion = SesionCaja.objects.select_for_update().filter(sede_id=sede_id, estado='abierta').first()
@@ -213,7 +240,7 @@ def metricas_dashboard(request):
     negocio_id_raw = request.query_params.get('negocio_id')
     sede_id = None if es_valor_nulo(sede_id_raw) else sede_id_raw
 
-    hoy = timezone.now().date()
+    hoy = timezone.localtime().date()
     ordenes_base = Orden.objects.filter(
         creado_en__date=hoy,
         estado_pago='pagado'

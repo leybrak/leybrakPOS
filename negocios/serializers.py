@@ -405,7 +405,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     def get_es_cumpleanos_hoy(self, obj):
         """Lógica centralizada: Django decide si es el cumple, no el bot."""
         if obj.fecha_nacimiento:
-            hoy = timezone.now().date()
+            hoy = timezone.localtime().date()
             return (obj.fecha_nacimiento.day == hoy.day and
                     obj.fecha_nacimiento.month == hoy.month)
         return False

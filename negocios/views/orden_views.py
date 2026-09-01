@@ -173,7 +173,7 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(sede_id=sede_id_filtrar)
         else:
             if sede_id_filtrar:
-                hoy = timezone.now().date()
+                hoy = timezone.localtime().date()
                 queryset = queryset.filter(
                     sede_id=sede_id_filtrar
                 ).exclude(estado='cancelado').filter(
@@ -227,10 +227,15 @@ class OrdenViewSet(viewsets.ModelViewSet):
             for d in detalles_data:
                 producto = Producto.objects.get(id=d['producto'])
                 if not producto.disponible:
-                    return Response(
-                        {'error': f'"{producto.nombre}" está agotado y no puede agregarse.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    # 🛡️ FIX: perform_create() no puede "return Response(...)" acá —
+                    # CreateModelMixin.create() ignora ese valor de retorno y de
+                    # todos modos responde 201, dejando la orden a medio crear
+                    # en la base (sin aplicar_reglas_negocio, total en 0, sin
+                    # avisar a cocina). Hay que abortar con una excepción para
+                    # que la transacción completa haga rollback.
+                    from rest_framework.exceptions import ValidationError as DRFValidationError
+                    raise DRFValidationError(
+                        {'error': f'"{producto.nombre}" está agotado y no puede agregarse.'})
                 precio_seguro = producto.precio_base
 
                 notas = d.get('notas_y_modificadores', {})
@@ -574,12 +579,19 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
                 RegistroAuditoria.objects.create(
                     sede=orden.sede,
+                    orden=orden,
                     empleado_nombre=empleado_nombre,
                     accion='anular_plato',
                     descripcion=f"Anuló {detalle.cantidad}x {nombre_plato} de Orden #{orden.id}. Motivo: {motivo}"
                 )
 
                 detalle.delete()
+                # 🛡️ FIX: orden viene de un queryset con prefetch_related en
+                # 'detalles' — sin refresh_from_db(), aplicar_reglas_negocio()
+                # recalcula el subtotal contra la lista de detalles CACHEADA
+                # (de antes del delete), y el ítem anulado seguía sumando al
+                # total. Mismo fix que ya usa agregar_productos() acá arriba.
+                orden.refresh_from_db()
                 aplicar_reglas_negocio(orden)
                 orden.save()
 
