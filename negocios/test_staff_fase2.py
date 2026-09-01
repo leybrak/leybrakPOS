@@ -497,3 +497,61 @@ class ResumenFinancieroStaffTest(APITestCase):
         self.assertEqual(resp.data['facturado_mes_actual'], 80.0)
         self.assertEqual(resp.data['mrr_estimado'], 80.0)
         self.assertEqual(resp.data['negocios_pagando'], 1)
+
+
+class CredencialesNegocioStaffTest(APITestCase):
+    """Staff cambia el usuario/contraseña de login del dueño de un negocio
+    (antes solo se podía tocar desde el admin de Django)."""
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(username='leybrak', password='x', email='l@l.com')
+        self.dueno = User.objects.create_user(username='dueno_original', password='clave_vieja')
+        self.negocio = Negocio.objects.create(
+            propietario=self.dueno, nombre='Negocio', fin_prueba=timezone.now() + timedelta(days=30))
+        self.url = f'/api/staff/negocios/{self.negocio.id}/credenciales/'
+
+    def test_staff_cambia_el_usuario(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(self.url, {'username': 'dueno_nuevo'}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['propietario_username'], 'dueno_nuevo')
+
+        self.dueno.refresh_from_db()
+        self.assertEqual(self.dueno.username, 'dueno_nuevo')
+
+    def test_staff_cambia_la_contrasena(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(self.url, {'password': 'clave_nueva_123'}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data['password_cambiada'])
+
+        self.dueno.refresh_from_db()
+        self.assertTrue(self.dueno.check_password('clave_nueva_123'))
+        self.assertFalse(self.dueno.check_password('clave_vieja'))
+
+    def test_no_deja_repetir_un_usuario_que_ya_existe(self):
+        User.objects.create_user(username='ya_existe', password='x')
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(self.url, {'username': 'ya_existe'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+        self.dueno.refresh_from_db()
+        self.assertEqual(self.dueno.username, 'dueno_original')
+
+    def test_rechaza_contrasena_muy_corta(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(self.url, {'password': '123'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+        self.dueno.refresh_from_db()
+        self.assertTrue(self.dueno.check_password('clave_vieja'))
+
+    def test_sin_cambios_da_error_claro(self):
+        self.client.force_authenticate(user=self.staff)
+        resp = self.client.patch(self.url, {}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_dueno_no_puede_cambiarse_credenciales_via_este_endpoint(self):
+        self.client.force_authenticate(user=self.dueno)
+        resp = self.client.patch(self.url, {'password': 'clave_nueva_123'}, format='json')
+        self.assertEqual(resp.status_code, 403)

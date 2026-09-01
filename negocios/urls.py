@@ -24,7 +24,7 @@ from negocios.views.staff_views import (
     TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor,
     crear_negocio_staff, pagos_pendientes_staff, pagos_historial_staff,
     modulos_globales_staff, datos_pago_staff, datos_pago_negocio,
-    resumen_financiero_staff,
+    resumen_financiero_staff, credenciales_negocio_staff,
 )
 from .serializers_jwt import CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView, refresh_movil,login_movil
 from . import views
@@ -148,6 +148,7 @@ urlpatterns = [
     path('staff/salud-bot/',         salud_bot,               name='staff-salud-bot'),
     path('staff/salud-servidor/',    salud_servidor,          name='staff-salud-servidor'),
     path('staff/negocios/crear/',    crear_negocio_staff,     name='staff-crear-negocio'),
+    path('staff/negocios/<int:negocio_id>/credenciales/', credenciales_negocio_staff, name='staff-credenciales-negocio'),
     path('staff/pagos-pendientes/',  pagos_pendientes_staff,  name='staff-pagos-pendientes'),
     path('staff/pagos-historial/',   pagos_historial_staff,   name='staff-pagos-historial'),
     path('staff/modulos-globales/',  modulos_globales_staff,  name='staff-modulos-globales'),

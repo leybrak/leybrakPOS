@@ -129,7 +129,7 @@ def metricas_staff(request):
     ventas_30_dias = (Pago.objects
                       .filter(estado='confirmado', fecha_pago__gte=hace_30_dias)
                       .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
-    ordenes_hoy = Orden.objects.filter(creado_en__date=ahora.date()).exclude(estado='cancelado').count()
+    ordenes_hoy = Orden.objects.filter(creado_en__date=timezone.localtime(ahora).date()).exclude(estado='cancelado').count()
 
     return Response({
         'negocios': {'total': len(negocios), **conteo_estados},
@@ -335,6 +335,55 @@ def crear_negocio_staff(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(NegocioSerializer(negocio).data, status=status.HTTP_201_CREATED)
+
+
+# ============================================================
+# CREDENCIALES DEL PROPIETARIO (usuario/contraseña de login) — el dueño
+# se las puede olvidar o pedir un cambio; hasta ahora solo se podía tocar
+# desde el admin de Django.
+# ============================================================
+@api_view(['PATCH'])
+@permission_classes([EsSuperUsuario])
+def credenciales_negocio_staff(request, negocio_id):
+    try:
+        negocio = Negocio.objects.select_related('propietario').get(id=negocio_id)
+    except Negocio.DoesNotExist:
+        return Response({'error': 'Negocio no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+    nuevo_username = (request.data.get('username') or '').strip()
+    nueva_password = request.data.get('password') or ''
+
+    if not nuevo_username and not nueva_password:
+        return Response(
+            {'error': 'Mandá al menos "username" o "password" para cambiar algo.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    propietario = negocio.propietario
+
+    if nuevo_username and nuevo_username != propietario.username:
+        from django.contrib.auth.models import User
+        if User.objects.filter(username=nuevo_username).exclude(id=propietario.id).exists():
+            return Response(
+                {'error': f'Ya existe un usuario "{nuevo_username}".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        propietario.username = nuevo_username
+
+    if nueva_password:
+        if len(nueva_password) < 6:
+            return Response(
+                {'error': 'La contraseña debe tener al menos 6 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        propietario.set_password(nueva_password)
+
+    propietario.save()
+
+    return Response({
+        'propietario_username': propietario.username,
+        'password_cambiada': bool(nueva_password),
+    })
 
 
 # ============================================================

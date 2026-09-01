@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   listarNegociosStaff, actualizarNegocioStaff, crearNegocioStaff, getPlanesDisponibles,
-  consultarRuc, consultarDni,
+  consultarRuc, consultarDni, actualizarCredencialesNegocioStaff,
 } from '../../api/api';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
@@ -232,7 +232,62 @@ function fechaInput(iso) {
   return iso ? iso.slice(0, 10) : '';
 }
 
-function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
+// Cambia el usuario/contraseña de login del dueño — endpoint aparte
+// (toca el modelo User, no el Negocio), con su propio guardado.
+function SeccionCredenciales({ negocio, onActualizado }) {
+  const [username, setUsername] = useState(negocio.propietario_username || '');
+  const [password, setPassword] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const [ok, setOk] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    setError(null);
+    setOk(false);
+    try {
+      const payload = {};
+      if (username.trim() && username.trim() !== negocio.propietario_username) payload.username = username.trim();
+      if (password) payload.password = password;
+      if (Object.keys(payload).length === 0) {
+        setError('No cambiaste nada.');
+        return;
+      }
+      const resp = await actualizarCredencialesNegocioStaff(negocio.id, payload);
+      setPassword('');
+      setOk(true);
+      onActualizado(resp.data.propietario_username);
+    } catch (e) {
+      setError(e?.response?.data?.error || 'No se pudo actualizar.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="pt-2 border-t border-[#1a1a1a]">
+      <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">
+        Credenciales de acceso del propietario
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input placeholder="Usuario (login)" value={username} onChange={(e) => setUsername(e.target.value)}
+          className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+        <input type="password" placeholder="Nueva contraseña (vacío = no cambiar)" value={password} onChange={(e) => setPassword(e.target.value)}
+          className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-[#ff5a1f]" />
+      </div>
+      <div className="flex items-center gap-3 mt-2">
+        <button onClick={guardar} disabled={guardando}
+          className="px-4 py-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-neutral-300 text-[10px] font-black uppercase tracking-widest disabled:opacity-40 hover:bg-[#222]">
+          {guardando ? 'Guardando…' : 'Guardar credenciales'}
+        </button>
+        {ok && <span className="text-emerald-500 text-xs font-bold">✓ Actualizado</span>}
+        {error && <span className="text-red-400 text-xs font-bold">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ModalEditarNegocio({ negocio, planes, onClose, onGuardado, onCredencialesActualizadas }) {
   const [form, setForm] = useState({
     nombre: negocio.nombre || '',
     ruc: negocio.ruc || '',
@@ -324,6 +379,8 @@ function ModalEditarNegocio({ negocio, planes, onClose, onGuardado }) {
             ))}
           </div>
         </div>
+
+        <SeccionCredenciales negocio={negocio} onActualizado={onCredencialesActualizadas} />
 
         {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
 
@@ -515,6 +572,9 @@ export default function Staff_Negocios() {
           onGuardado={(actualizado) => {
             setNegocios(prev => prev.map(n => (n.id === actualizado.id ? actualizado : n)));
             setNegocioEditando(null);
+          }}
+          onCredencialesActualizadas={(nuevoUsername) => {
+            setNegocios(prev => prev.map(n => (n.id === negocioEditando.id ? { ...n, propietario_username: nuevoUsername } : n)));
           }}
         />
       )}

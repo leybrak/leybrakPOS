@@ -374,6 +374,9 @@ export const crearTicket           = (data) => api.post('/tickets-soporte/', dat
 export const crearNegocioStaff     = (data) => api.post('/staff/negocios/crear/', data);
 export const listarNegociosStaff   = () => api.get('/negocios/');
 export const actualizarNegocioStaff = (id, data) => api.patch(`/negocios/${id}/`, data);
+// Cambiar usuario/contraseña de login del dueño — endpoint aparte porque
+// toca el modelo User, no el Negocio.
+export const actualizarCredencialesNegocioStaff = (id, data) => api.patch(`/staff/negocios/${id}/credenciales/`, data);
 
 // — Pagos manuales de suscripción (Yape/Plin/Transferencia) —
 export const getPagosPendientesStaff  = () => api.get('/staff/pagos-pendientes/');
