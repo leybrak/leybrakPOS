@@ -228,10 +228,16 @@ controla que el **bot** mencione/permita **canjear** (no la acumulación).
    ~150-250 usuarios concurrentes con buena latencia y hasta 400 sin errores (más lento, ~5s p95).
    A esa carga el cuello de botella pasa a ser CPU (~2.8 de 3 vCPU en uso), no RAM (~1.5GB de 4GB).
    Si se necesita más, el siguiente paso es PgBouncer (pooling) antes que un VPS más grande.
-   El bot de WhatsApp (Evolution API) es aparte: una instancia sin parear casi no pesa (~3MB), pero
-   una sesión de Baileys realmente conectada y sincronizada consume bastante más (no medido acá,
-   no se puede simular sin un teléfono real — estimar con margen, no con la cifra de "sin parear").
-   Rig reusable en `loadtest/` (`docker-compose.loadtest.yml` + `loadtest.js`, corre con k6+Docker).
+   El bot de WhatsApp (Evolution API) es aparte y va por su propio presupuesto de RAM: en reposo
+   (0 instancias) consume ~211MB fijos apenas se prende. Una instancia sin parear (esperando el
+   código de vinculación) casi no pesa (~3MB) — pero eso NO es el costo real. Medido parenado un
+   número real: una instancia CONECTADA y sincronizada (con `syncFullHistory=false`, que ya viene
+   por default) se estabiliza en ~200MB adicionales. Con eso, un droplet de 4GB da para ~9-10
+   negocios con bot activo simultáneo (dejando margen para el core + picos) antes de necesitar
+   separar Evolution API a otro servidor — que sigue siendo lo recomendado si el bot es una feature
+   central del producto, no solo opcional.
+   Rig reusable en `loadtest/` (`docker-compose.loadtest.yml` + `loadtest.js` para el core con k6;
+   `docker-compose.evotest.yml` para medir el costo de Evolution API parenado un número real).
 
 ## Deploy
 
