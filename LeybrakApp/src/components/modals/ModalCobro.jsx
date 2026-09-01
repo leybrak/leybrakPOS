@@ -57,6 +57,7 @@ export default function ModalCobro({
   const [comprobanteOrdenId, setComprobanteOrdenId] = useState(null);
   const cobroComprometidoRef = useRef(false);
   const ticketEnviadoRef = useRef(false);   // evita doble envío del ticket por WhatsApp
+  const autoEmitRef = useRef(false);   // evita doble emisión en modo automático
   // Emisión inline de boleta desde la pantalla de éxito
   const [dniBoleta, setDniBoleta]         = useState('');
   const [emitiendoComp, setEmitiendoComp] = useState(false);
@@ -87,6 +88,7 @@ export default function ModalCobro({
       setComprobanteOrdenId(null);
       cobroComprometidoRef.current = false;
       ticketEnviadoRef.current = false;
+      autoEmitRef.current = false;
       setDniBoleta('');
       setEmitiendoComp(false);
       setResultadoComp(null);
@@ -269,6 +271,19 @@ export default function ModalCobro({
     try { await comprometerCobro(); } catch { return; }
     setMostrarComprobante(true);
   };
+
+  // Modo AUTOMÁTICO: al llegar a la pantalla de éxito, emite la boleta sola
+  // (sin DNI). El dueño no decide nada; sólo ve el resultado y cierra.
+  // 🛡️ FIX: este efecto se perdió en un commit posterior (v4 de envío de
+  // tickets por WhatsApp) — sin él, "automático" se veía y se comportaba
+  // igual que "opcional" (requería el tap manual en "Finalizar y emitir
+  // boleta"), justo el caso que este mismo comentario ya advertía evitar.
+  useEffect(() => {
+    if (paso === 'exito' && facturacionEmision === 'automatico' && !autoEmitRef.current) {
+      autoEmitRef.current = true;
+      finalizarConBoleta();
+    }
+  }, [paso, facturacionEmision]);
 
   const metodosDisponibles = [
     { id: 'efectivo', nombre: 'Efectivo', icono: 'money',       color: '#10b981' },

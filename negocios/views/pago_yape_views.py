@@ -227,6 +227,14 @@ def confirmar_pago_yape(request):
     if not notificacion:
         return Response({'error': 'Notificación no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
+    # 🛡️ IDOR fix: no había ningún chequeo de que la notificación fuera del
+    # negocio de quien llama — cualquier negocio autenticado podía confirmar
+    # (y así "usar") la notificación de Yape/Plin de OTRO negocio contra su
+    # propia orden, marcándola pagada sin haber cobrado nada, y de paso
+    # inutilizando esa notificación para el negocio dueño real.
+    if not request.user.is_superuser and getattr(request.user, 'negocio', None) != notificacion.negocio:
+        return Response({'error': 'No tienes permiso sobre esta notificación.'}, status=status.HTTP_403_FORBIDDEN)
+
     if not notificacion.es_valida:
         return Response(
             {'error': 'Esta notificación ya fue usada o expiró (5 minutos).'},
@@ -265,10 +273,20 @@ def confirmar_pago_yape(request):
     notificacion.usado = True
     notificacion.save(update_fields=['usado'])
 
-    orden.estado_pago = 'pagado'
-    orden.save(update_fields=['estado_pago'])
+    # 🛡️ FIX: antes marcaba 'pagado' con solo ESTE pago creado, sin
+    # importar si cubría el total — un Yape parcial (ej. cuenta dividida)
+    # cerraba la orden entera. cobrar_orden() ve estado_pago=='pagado' y
+    # entra a la rama que YA NO procesa pagos_data, así que el resto de
+    # la cuenta (efectivo/tarjeta) que el cajero cobra después nunca se
+    # registraba — la plata entraba a caja pero no quedaba en ningún Pago.
+    from django.db.models import Sum
+    total_cubierto = (Pago.objects.filter(orden=orden, estado='confirmado')
+                       .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
+    if total_cubierto >= orden.total:
+        orden.estado_pago = 'pagado'
+        orden.save(update_fields=['estado_pago'])
 
-    return Response({'ok': True, 'orden_id': orden.id}, status=status.HTTP_200_OK)
+    return Response({'ok': True, 'orden_id': orden.id, 'pagado_completo': total_cubierto >= orden.total}, status=status.HTTP_200_OK)
 
 # ============================================================
 # ENDPOINT: El BOT valida un pago Yape/Plin contra la notificación REAL

@@ -180,6 +180,86 @@ class PagoConfirmadoPorAppSobreviveReintentoTest(BaseOrdenTest):
         self.assertEqual(orden.estado_pago, 'pagado')
 
 
+class ConfirmarPagoYapeTest(BaseOrdenTest):
+    """
+    /api/yape/confirmar/ — el cajero asocia una notificación de Yape/Plin
+    detectada por la app a una orden. Dos bugs reales encontrados y
+    corregidos: (1) marcaba la orden 'pagado' con solo ESE pago, sin
+    chequear si cubría el total — en una cuenta dividida (parte Yape,
+    parte efectivo) el resto nunca se registraba porque cobrar_orden()
+    ignora pagos_data una vez que estado_pago ya es 'pagado'; (2) no
+    validaba que la notificación fuera del negocio de quien llama —
+    cualquier negocio autenticado podía confirmar (y consumir) la
+    notificación de OTRO negocio.
+    """
+
+    def _notif(self, monto, negocio=None):
+        return NotificacionPago.objects.create(
+            negocio=negocio or self.negocio, tipo='YAPE', monto=Decimal(str(monto)), nombre_cliente='Cliente')
+
+    def test_yape_que_cubre_el_total_marca_pagado(self):
+        orden = self._crear_orden()  # 25.00
+        notif = self._notif('25.00')
+
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data['pagado_completo'])
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pagado')
+
+    def test_yape_parcial_no_marca_pagado_y_el_resto_se_cobra_despues(self):
+        orden = self._crear_orden(cantidad=2)  # 50.00
+        notif = self._notif('20.00')  # cuenta dividida: parte por Yape...
+
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertFalse(resp.data['pagado_completo'])
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pendiente')  # todavía no, falta cobrar el resto
+
+        # ...y el resto en efectivo, como en cualquier cobro normal.
+        resp = self.client.post(f'/api/ordenes/{orden.id}/cobrar_orden/', {
+            'pagos': [{'metodo': 'efectivo', 'monto': '30.00'}],
+            'sesion_caja_id': self.sesion_caja.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pagado')
+        # Los DOS pagos quedan registrados — antes el de efectivo se perdía.
+        self.assertEqual(Pago.objects.filter(orden=orden, estado='confirmado').count(), 2)
+        self.assertEqual(
+            Pago.objects.filter(orden=orden, metodo='yape', notificacion_origen=notif).count(), 1)
+        self.assertEqual(
+            Pago.objects.filter(orden=orden, metodo='efectivo', monto=Decimal('30.00')).count(), 1)
+
+    def test_no_puede_confirmar_notificacion_de_otro_negocio(self):
+        otro_user = User.objects.create_user(username='otro_dueno', password='x')
+        otro_negocio = Negocio.objects.create(
+            propietario=otro_user, nombre='Otro Negocio', fin_prueba=timezone.now() + timedelta(days=30))
+        notif_ajena = self._notif('25.00', negocio=otro_negocio)
+
+        orden = self._crear_orden()  # de MI negocio
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif_ajena.id, 'orden_id': orden.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+        notif_ajena.refresh_from_db()
+        self.assertFalse(notif_ajena.usado)  # no se consumió
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pendiente')
+
+
 class ProductoNoDisponibleTest(BaseOrdenTest):
 
     def test_no_se_puede_crear_orden_con_producto_agotado(self):

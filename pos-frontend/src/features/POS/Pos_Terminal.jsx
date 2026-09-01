@@ -390,17 +390,21 @@ export default function PosTerminal({ onIrAErp }) {
               idOrden = data.id;
             }
 
-            // ✅ Si el pago ya fue confirmado por WebSocket, no llamar cobrar_orden
-            const yaConfirmadoPorWS = datosCobro.pagos.some(p => p.yaConfirmado);
-            
-            if (!yaConfirmadoPorWS) {
-              const sesionCajaId = localStorage.getItem('sesion_caja_id');
-              await api.post(`/ordenes/${idOrden}/cobrar_orden/`, {
-                pagos: datosCobro.pagos,
-                telefono: datosCobro.telefono,
-                sesion_caja_id: sesionCajaId
-              });
-            }
+            // 🛡️ FIX: antes, si CUALQUIER pago del split venía confirmado por
+            // Yape/Plin (yaConfirmado), se saltaba cobrar_orden entero — en
+            // una cuenta dividida (parte Yape + parte efectivo/tarjeta) el
+            // resto de los pagos manuales y el teléfono (CRM) nunca se
+            // registraban. El backend (cobrar_orden) ya sabe deduplicar los
+            // pagos que vinieron por WS, así que siempre hay que llamarlo —
+            // solo se filtran acá los que ya están confirmados para no
+            // reenviarlos de más.
+            const sesionCajaId = localStorage.getItem('sesion_caja_id');
+            const pagosManuales = datosCobro.pagos.filter(p => !p.yaConfirmado);
+            await api.post(`/ordenes/${idOrden}/cobrar_orden/`, {
+              pagos: pagosManuales,
+              telefono: datosCobro.telefono,
+              sesion_caja_id: sesionCajaId
+            });
 
             // El cierre del modal lo hace onClose (Finalizar/Cerrar). Aquí solo
             // comiteamos y devolvemos el id real (para emitir el comprobante).
