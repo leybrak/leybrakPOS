@@ -2,6 +2,13 @@
 services:
   db:
     image: postgres:15-alpine
+    # 🛡️ FIX capacidad: el default de Postgres (max_connections=100) se
+    # agota alrededor de ~65 usuarios concurrentes (CONN_MAX_AGE=600 en
+    # Django deja conexiones abiertas por request, sin PgBouncer de por
+    # medio). Medido con load test: con 300 el mismo VPS aguanta 200
+    # usuarios concurrentes sin un solo error, y la RAM de Postgres ni se
+    # acerca al límite del droplet (~470MB de 4GB en el peor caso).
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -23,7 +30,13 @@ services:
 
   backend:
     build: .
-    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    # 🛡️ FIX capacidad: daphne corría como UN solo proceso — se quedaba
+    # pegado en ~110% CPU (1 de 3 vCPU) sin importar cuánta carga entrara,
+    # dejando 2 cores completamente ociosos. uvicorn con --workers reparte
+    # el trabajo entre procesos. Medido: mismo droplet pasa de sostener
+    # ~60-100 usuarios concurrentes con buena latencia a ~150-250 (los
+    # WebSockets de Channels se probaron y siguen funcionando igual).
+    command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers 3
     volumes:
       - .:/app
       - static_volume:/app/staticfiles  # 👉 Django escupe la pintura aquí

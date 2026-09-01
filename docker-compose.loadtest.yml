@@ -1,0 +1,45 @@
+# Stack aislado SOLO para el load test de capacidad del VPS (4GB/3vCPU).
+# No toca .env ni docker-compose.yml reales. Se baja y se borra al terminar
+# (docker compose -f docker-compose.loadtest.yml down -v).
+# Nombres de servicio SIN guion bajo a propósito: Django rechaza
+# "Host: nombre_con_guion_bajo" (split_domain_port no acepta '_', cae en
+# "Invalid HTTP_HOST ... RFC 1034/1035" sin importar ALLOWED_HOSTS).
+services:
+  ltdb:
+    image: postgres:15-alpine
+    command: postgres -c max_connections=500
+    environment:
+      POSTGRES_DB: loadtest
+      POSTGRES_USER: loadtest
+      POSTGRES_PASSWORD: loadtest_pw_local_only
+    networks: [loadtestnet]
+
+  ltredis:
+    image: redis:alpine
+    networks: [loadtestnet]
+
+  ltbackend:
+    build: .
+    command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers 3
+    environment:
+      - SECRET_KEY=loadtest-secret-key-not-for-prod
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
+      - DATABASE_URL=postgres://loadtest:loadtest_pw_local_only@ltdb:5432/loadtest
+      - REDIS_URL=redis://ltredis:6379/0
+      - USE_REDIS=True
+      - HTTPS_ENABLED=False
+      - FIELD_ENCRYPTION_KEY=qGiG2A-cI0pDAEKRjdUnmTHcUYDz6XRPyA7KjJV5-P8=
+    ports:
+      - "18000:8000"
+    depends_on: [ltdb, ltredis]
+    networks: [loadtestnet]
+    # Sin límites por contenedor a propósito — igual que docker-compose.yml
+    # real (no tiene mem_limit/cpus en ningún servicio). Lo que de verdad
+    # simula el VPS es que Docker Desktop en esta máquina está asignado a
+    # 3 CPU / ~4GB total, así que Postgres+Redis+backend compiten por ESE
+    # mismo techo, igual que en el droplet real.
+
+networks:
+  loadtestnet:
+    driver: bridge

@@ -19,6 +19,8 @@ COPY . .
 
 EXPOSE 8000
 
-# Usamos Daphne para soportar tus WebSockets y tu API HTTP al mismo tiempo
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "core.asgi:application"] 
-# ⚠️ CAMBIA "tu_proyecto" por el nombre real de la carpeta donde está tu asgi.py
+# uvicorn con varios workers soporta WebSockets (Channels) e HTTP igual que
+# Daphne, pero reparte el trabajo entre procesos — Daphne corre como uno
+# solo y se queda pegado a 1 CPU sin importar cuántos núcleos tenga el
+# servidor. docker-compose.yml sobreescribe este CMD con --workers 3.
+CMD ["uvicorn", "core.asgi:application", "--host", "0.0.0.0", "--port", "8000"]

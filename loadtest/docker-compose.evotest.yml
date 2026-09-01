@@ -1,0 +1,37 @@
+# Stack aislado para medir cuánta RAM consume Evolution API (bot de
+# WhatsApp) en reposo y por cada instancia creada, sin necesidad de
+# parear un teléfono real. No toca nada del proyecto real.
+services:
+  evodb:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution_pw_local_only
+    networks: [evonet]
+
+  evoredis:
+    image: redis:alpine
+    networks: [evonet]
+
+  evoapi:
+    image: evoapicloud/evolution-api:latest
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_TYPE=apikey
+      - AUTHENTICATION_API_KEY=evotest-local-key
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_pw_local_only@evodb:5432/evolution?schema=evolution
+      - REDIS_URI=redis://evoredis:6379/1
+      - REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evoredis:6379/1
+      - CACHE_REDIS_TTL=604800
+      - LOG_LEVEL=ERROR
+    ports:
+      - "18080:8080"
+    depends_on: [evodb, evoredis]
+    networks: [evonet]
+
+networks:
+  evonet:
+    driver: bridge

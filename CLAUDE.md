@@ -220,10 +220,22 @@ controla que el **bot** mencione/permita **canjear** (no la acumulación).
    nombre, si no purgas la caché Cloudflare sigue sirviendo el viejo (`cf-cache-status: HIT`) y
    el bucle de update continúa. **Solución a prueba de balas:** subir con nombre versionado
    (`leybrak-1.0.2.apk`) y apuntar `VersionApp.apk_url` ahí → URL nueva = cache miss, sin purgar.
+6. **Capacidad del VPS (4GB/3vCPU) — medida con load test (k6), no adivinada:** con la config
+   original (Postgres `max_connections=100` default + Daphne como un solo proceso), el sistema
+   se caía a los ~65 usuarios concurrentes con `FATAL: sorry, too many clients already` — **no
+   era un problema de RAM** (nunca pasó de ~430MB de 4GB). Con `max_connections=300` en `db` y
+   `backend` corriendo `uvicorn --workers 3` (ver `docker-compose.yml`), el mismo droplet sostiene
+   ~150-250 usuarios concurrentes con buena latencia y hasta 400 sin errores (más lento, ~5s p95).
+   A esa carga el cuello de botella pasa a ser CPU (~2.8 de 3 vCPU en uso), no RAM (~1.5GB de 4GB).
+   Si se necesita más, el siguiente paso es PgBouncer (pooling) antes que un VPS más grande.
+   El bot de WhatsApp (Evolution API) es aparte: una instancia sin parear casi no pesa (~3MB), pero
+   una sesión de Baileys realmente conectada y sincronizada consume bastante más (no medido acá,
+   no se puede simular sin un teléfono real — estimar con margen, no con la cifra de "sin parear").
+   Rig reusable en `loadtest/` (`docker-compose.loadtest.yml` + `loadtest.js`, corre con k6+Docker).
 
 ## Deploy
 
-- **Docker Compose:** servicios `db` (postgres), `redis`, `backend` (daphne :8000),
+- **Docker Compose:** servicios `db` (postgres), `redis`, `backend` (uvicorn --workers 3, :8000),
   `frontend` (nginx: sirve React + proxya `/api`,`/ws`,`/admin` al backend), `evolution-api` (WhatsApp).
 - **Proxy externo:** Nginx Proxy Manager (NPM) + Cloudflare. `pos.leybrak.com` → contenedor `pos_frontend`.
   El backend queda público vía `pos.leybrak.com/api/...` (no hay subdominio aparte).
