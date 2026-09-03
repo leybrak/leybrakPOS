@@ -1,3 +1,4 @@
+from django.db.models import ProtectedError
 from django.utils import timezone
 
 from rest_framework import serializers
@@ -233,32 +234,69 @@ class ProductoSerializer(serializers.ModelSerializer):
                 adicional += max(precios)
         return base + adicional
 
-    # 🚀 MAGIA 1 ACTUALIZADA (Soporta Recetas de Opciones)
+    # 🔧 Reconcilia grupos/opciones en vez de borrar-y-recrear todo: OpcionVariacion
+    # está protegida (on_delete=PROTECT) por DetalleOrdenOpcion, así que borrar una
+    # opción que ya se vendió alguna vez revienta con ProtectedError (500). Se usa
+    # tanto en create() (producto nuevo, sin nada que reconciliar) como en update().
+    def _guardar_grupos_variacion(self, producto, grupos_data):
+        grupos_ids_payload = set()
+        for grupo_data in grupos_data:
+            opciones_data = grupo_data.pop('opciones', [])
+            grupo_id = grupo_data.pop('id', None)
+            grupo = producto.grupos_variacion.filter(id=grupo_id).first() if grupo_id else None
+            if grupo:
+                for attr, value in grupo_data.items():
+                    setattr(grupo, attr, value)
+                grupo.save()
+            else:
+                grupo = GrupoVariacion.objects.create(producto=producto, **grupo_data)
+            grupos_ids_payload.add(grupo.id)
+
+            opciones_ids_payload = set()
+            for opcion_data in opciones_data:
+                ingredientes_data = opcion_data.pop('ingredientes', [])
+                opcion_id = opcion_data.pop('id', None)
+                opcion = grupo.opciones.filter(id=opcion_id).first() if opcion_id else None
+                if opcion:
+                    for attr, value in opcion_data.items():
+                        setattr(opcion, attr, value)
+                    opcion.save()
+                else:
+                    opcion = OpcionVariacion.objects.create(grupo=grupo, **opcion_data)
+                opciones_ids_payload.add(opcion.id)
+
+                # Las recetas de la opción (RecetaOpcion) no tienen ventas que las
+                # protejan, así que sí se pueden borrar y recrear sin problema.
+                opcion.ingredientes.all().delete()
+                for ing_data in ingredientes_data:
+                    RecetaOpcion.objects.create(
+                        opcion=opcion,
+                        insumo=ing_data.get('insumo'),
+                        cantidad_necesaria=ing_data.get('cantidad_necesaria'),
+                    )
+
+            for opcion_vieja in grupo.opciones.exclude(id__in=opciones_ids_payload):
+                try:
+                    opcion_vieja.delete()
+                except ProtectedError:
+                    raise serializers.ValidationError(
+                        f'No se puede quitar la opción "{opcion_vieja.nombre}": ya tiene ventas registradas.'
+                    )
+
+        for grupo_viejo in producto.grupos_variacion.exclude(id__in=grupos_ids_payload):
+            try:
+                grupo_viejo.delete()
+            except ProtectedError:
+                raise serializers.ValidationError(
+                    f'No se puede quitar el grupo "{grupo_viejo.nombre}": una de sus opciones ya tiene ventas registradas.'
+                )
+
     def create(self, validated_data):
         grupos_data = validated_data.pop('grupos_variacion', [])
         producto = Producto.objects.create(**validated_data)
-
-        for grupo_data in grupos_data:
-            opciones_data = grupo_data.pop('opciones', [])
-            grupo = GrupoVariacion.objects.create(producto=producto, **grupo_data)
-
-            for opcion_data in opciones_data:
-                # 👇 Sacamos los ingredientes antes de crear la opción
-                ingredientes_data = opcion_data.pop('ingredientes', [])
-                opcion = OpcionVariacion.objects.create(grupo=grupo, **opcion_data)
-
-                # 👇 Guardamos los ingredientes físicos (La carne, el rachi, etc.)
-                for ing_data in ingredientes_data:
-                    insumo_obj = ing_data.get('insumo')
-                    RecetaOpcion.objects.create(
-                        opcion=opcion,
-                        insumo=insumo_obj,
-                        cantidad_necesaria=ing_data.get('cantidad_necesaria')
-                    )
-
+        self._guardar_grupos_variacion(producto, grupos_data)
         return producto
 
-    # 🚀 MAGIA 2 ACTUALIZADA (Actualización segura)
     def update(self, instance, validated_data):
         grupos_data = validated_data.pop('grupos_variacion', None)
 
@@ -267,25 +305,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         instance.save()
 
         if grupos_data is not None:
-            instance.grupos_variacion.all().delete()
-
-            for grupo_data in grupos_data:
-                opciones_data = grupo_data.pop('opciones', [])
-                grupo_data.pop('id', None)
-                grupo = GrupoVariacion.objects.create(producto=instance, **grupo_data)
-
-                for opcion_data in opciones_data:
-                    ingredientes_data = opcion_data.pop('ingredientes', [])
-                    opcion_data.pop('id', None)
-                    opcion = OpcionVariacion.objects.create(grupo=grupo, **opcion_data)
-
-                    for ing_data in ingredientes_data:
-                        insumo_obj = ing_data.get('insumo')
-                        RecetaOpcion.objects.create(
-                            opcion=opcion,
-                            insumo=insumo_obj,
-                            cantidad_necesaria=ing_data.get('cantidad_necesaria')
-                        )
+            self._guardar_grupos_variacion(instance, grupos_data)
 
         return instance
 
