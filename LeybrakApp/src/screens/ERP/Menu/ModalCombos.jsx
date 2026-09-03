@@ -497,7 +497,7 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
       setVista('lista');
       setComboEditando(null);
     } catch (e) {
-      Alert.alert('Error', 'No se pudo guardar el combo. Verifica tu conexión.');
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo guardar el combo. Verifica tu conexión.');
     } finally {
       setGuardando(false);
     }
@@ -510,7 +510,7 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
         try {
           await api.patch(`/productos/${combo.id}/`, { activo: false });
           await cargar();
-        } catch { Alert.alert('Error', 'No se pudo eliminar el combo.'); }
+        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo eliminar el combo.'); }
       }},
     ]);
   };

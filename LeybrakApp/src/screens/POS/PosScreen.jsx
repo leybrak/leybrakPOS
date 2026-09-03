@@ -245,7 +245,7 @@ export default function PosScreen({ mesaId, onVolver }) {
       setMostrarExito(true);
       setTimeout(() => { setMostrarExito(false); onVolver(); }, 2000);
     } catch (e) {
-      Alert.alert('Error', 'No se pudo enviar a cocina.');
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo enviar a cocina.');
     } finally {
       setProcesando(false);
     }
@@ -268,7 +268,7 @@ export default function PosScreen({ mesaId, onVolver }) {
                 empleado_nombre: empleadoNombre || 'Staff',
               });
               setOrdenActiva(res.data.orden || res.data);
-            } catch { Alert.alert('Error', 'No se pudo anular.'); }
+            } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo anular.'); }
           },
         },
       ]
@@ -287,8 +287,8 @@ export default function PosScreen({ mesaId, onVolver }) {
       setCarrito([]);
       setCarritoAbierto(false);
       onVolver();
-    } catch {
-      Alert.alert('Error', 'No se pudo cobrar.');
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo cobrar.');
     }
   };
 
@@ -738,7 +738,7 @@ export default function PosScreen({ mesaId, onVolver }) {
             return { ordenId: ordenActiva.id };
           } catch (err) {
             console.error(err);
-            Alert.alert('Error', 'No se pudo registrar los datos del cierre.');
+            Alert.alert('Error', err?.response?.data?.error || 'No se pudo registrar los datos del cierre.');
             throw err; // evita avanzar a comprobante/cierre si el cobro falló
           }
         }}

@@ -401,8 +401,8 @@ export default function PersonalScreen() {
             try {
               await actualizarEmpleado(emp.id, { activo: !emp.activo });
               await cargar();
-            } catch {
-              Alert.alert('Error', 'No se pudo actualizar el estado.');
+            } catch (e) {
+              Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar el estado.');
             }
           },
         },

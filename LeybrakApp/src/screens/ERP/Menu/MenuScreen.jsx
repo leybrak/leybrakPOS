@@ -161,12 +161,12 @@ export default function MenuScreen() {
         p.id === plato.id ? { ...p, disponible: nuevo } : p
       ));
       await parchearProducto(plato.id, { disponible: nuevo });
-    } catch {
+    } catch (e) {
       // Revierte si falla
       setProductos(prev => prev.map(p =>
         p.id === plato.id ? { ...p, disponible: plato.disponible } : p
       ));
-      Alert.alert('Error', 'No se pudo actualizar la disponibilidad.');
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar la disponibilidad.');
     }
   };
 

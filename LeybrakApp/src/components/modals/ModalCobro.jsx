@@ -187,8 +187,8 @@ export default function ModalCobro({
       });
       setNotificaciones([]);
       registrarPago(parseFloat(notificacion.monto), 0, true);
-    } catch {
-      Alert.alert('Error', 'No se pudo confirmar el pago.');
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo confirmar el pago.');
       setNotificacionElegida(null);
     }
   };

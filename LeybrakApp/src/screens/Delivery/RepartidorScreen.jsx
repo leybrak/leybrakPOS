@@ -53,7 +53,7 @@ export default function RepartidorScreen({ onLogout }) {
       const res = await getPedidosDelivery();
       setPedidos(res.data?.pedidos || []);
     } catch (e) {
-      if (!silencioso) Alert.alert('Error', 'No se pudieron cargar los pedidos.');
+      if (!silencioso) Alert.alert('Error', e?.response?.data?.error || 'No se pudieron cargar los pedidos.');
     } finally {
       setCargando(false);
       setRefrescando(false);
@@ -88,7 +88,7 @@ export default function RepartidorScreen({ onLogout }) {
     setAccionando('ruta');
     try {
       for (const p of activos.filter(x => x.estado_delivery === 'asignado')) {
-        try { await actualizarEstadoDelivery(p.id, 'en_camino'); } catch (_) {}
+        try { await actualizarEstadoDelivery(p.id, 'en_camino'); } catch (e) { console.warn('No se pudo marcar en_camino el pedido', p.id, e?.response?.data?.error || e.message); }
       }
       const puntos = activos.map(p => `${p.latitud},${p.longitud}`);
       const destino = puntos[puntos.length - 1];
