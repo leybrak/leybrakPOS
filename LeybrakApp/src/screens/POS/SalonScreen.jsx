@@ -346,7 +346,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
           await actualizarMesa(mesa.id, { mesa_principal: mesaPrincipal });
           setModoUnir(false); setMesaPrincipal(null);
           cargar();
-        } catch { Alert.alert('Error', 'No se pudo unir las mesas.'); }
+        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo unir las mesas.'); }
       }
     } else {
       if (mesa.estado === 'libre' && wsRef.current) {
@@ -373,7 +373,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
         try {
           await actualizarOrden(id, { estado: 'cancelado', cancelado: true });
           cargar();
-        } catch { Alert.alert('Error', 'No se pudo cancelar.'); }
+        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
       }},
     ]);
   };

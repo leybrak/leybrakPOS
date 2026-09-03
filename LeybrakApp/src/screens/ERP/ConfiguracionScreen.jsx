@@ -578,7 +578,7 @@ export default function ConfiguracionScreen() {
         console.warn('✅ Device token seteado:', d.device_token);
       }
     } catch (e) {
-      Alert.alert('Error', 'No se pudo cargar la configuración.');
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo cargar la configuración.');
     } finally {
       setCargando(false);
     }
@@ -639,7 +639,7 @@ export default function ConfiguracionScreen() {
 
       Alert.alert('✅ Guardado', 'Configuración actualizada correctamente.');
     } catch (e) {
-      Alert.alert('Error', 'No se pudo guardar. Verifica tu conexión.');
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo guardar. Verifica tu conexión.');
     } finally {
       setGuardando(false);
     }
