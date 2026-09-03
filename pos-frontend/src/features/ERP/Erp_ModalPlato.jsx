@@ -41,30 +41,46 @@ export default function ModalFormularioPlato({
   const textoBotonGuardar = subiendoImagenPlato
     ? 'PROCESANDO IMAGEN...'
     : guardandoPlato
-      ? (formPlato.id ? 'ACTUALIZANDO...' : 'CREANDO...')
-      : (formPlato.id ? 'ACTUALIZAR PLATO' : 'GUARDAR PLATO');
+      ? (formPlato.id ? 'GUARDANDO...' : 'CREANDO...')
+      : (formPlato.id ? 'GUARDAR CAMBIOS' : 'CREAR PLATO');
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className={`border rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-fadeIn relative transition-colors ${tema === 'dark' ? 'bg-[#121212] border-[#333]' : 'bg-white border-gray-200'}`}>
-        
-        {/* Cabecera Fija */}
-        <div className={`p-6 border-b flex justify-between items-center sticky top-0 z-10 transition-colors ${tema === 'dark' ? 'border-[#222] bg-[#1a1a1a]' : 'border-gray-200 bg-gray-50'}`}>
-          <div className="flex items-center gap-3">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-0 sm:p-4 animate-fadeIn">
+      <div className={`w-full max-w-4xl h-full sm:h-[85vh] rounded-none sm:rounded-[2.5rem] shadow-2xl border overflow-hidden flex flex-col ${
+        tema === 'dark' ? 'bg-[#0d0d0d] border-[#222]' : 'bg-white border-gray-200'
+      }`}>
+
+        {/* Cabecera */}
+        <div className={`p-5 md:p-8 border-b flex justify-between items-center shrink-0 ${tema === 'dark' ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+          <div className="flex items-center gap-3 md:gap-4">
             {pasoModal === 2 && (
-              <button onClick={() => setPasoModal(1)} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${tema === 'dark' ? 'text-neutral-500 hover:text-white bg-[#222]' : 'text-gray-500 hover:text-gray-900 bg-gray-200'}`}>
-                ←
+              <button onClick={() => setPasoModal(1)} className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${tema === 'dark' ? 'text-neutral-500 hover:text-white bg-[#1a1a1a]' : 'text-gray-500 hover:text-gray-900 bg-gray-200'}`}>
+                <i className="fi fi-rr-angle-left"></i>
               </button>
             )}
-            <h3 className={`text-xl font-black ${tema === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              {formPlato.id ? 'Editar Plato' : 'Nuevo Plato'} 
-              {pasoModal === 2 && <span style={{ color: colorPrimario }}> - Presentaciones</span>}
-            </h3>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center shadow-lg shrink-0" style={{ backgroundColor: `${colorPrimario}15`, color: colorPrimario }}>
+              <i className="fi fi-rr-restaurant text-xl md:text-2xl mt-1"></i>
+            </div>
+            <div>
+              <h3 className={`text-lg md:text-2xl font-black tracking-tighter ${tema === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                {formPlato.id ? 'Editar Plato' : 'Nuevo Plato'}
+              </h3>
+              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mt-0.5 md:mt-1 text-neutral-500 line-clamp-1">
+                {pasoModal === 2 ? 'Presentaciones y opciones' : 'Datos básicos del plato'}
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className={`font-bold text-xl transition-colors ${tema === 'dark' ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'}`}>✕</button>
+          <button
+            onClick={onClose}
+            className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
+              tema === 'dark' ? 'border-[#333] text-neutral-500 hover:text-white hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <i className="fi fi-rr-cross-small"></i>
+          </button>
         </div>
-        
-        <div className="p-6 space-y-6">
+
+        <div className="p-6 space-y-6 flex-1 overflow-y-auto">
 
           {/* ======================= PANTALLA 1: DATOS BÁSICOS ======================= */}
           {pasoModal === 1 && (
@@ -412,7 +428,11 @@ export default function ModalFormularioPlato({
                   ? { backgroundColor: colorBotonGuardar, boxShadow: 'none', color: tema === 'dark' ? '#888' : '#6b7280' }
                   : { backgroundColor: colorPrimario, boxShadow: `0 4px 15px ${colorPrimario}4D` }}
               >
-                {subiendoImagenPlato ? 'PROCESANDO IMAGEN...' : guardandoPlato ? 'GUARDANDO...' : 'TERMINAR Y GUARDAR'}
+                {subiendoImagenPlato
+                  ? 'PROCESANDO IMAGEN...'
+                  : guardandoPlato
+                    ? (formPlato.id ? 'GUARDANDO...' : 'CREANDO...')
+                    : (formPlato.id ? 'GUARDAR CAMBIOS' : 'CREAR PLATO')}
               </button>
             </div>
           )}

@@ -1,8 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  X, Plus, Save, Search, ShoppingBag, Check,
-  Layers, Trash2, AlertCircle
-} from 'lucide-react';
 import api from '../../../api/api';
 
 // ============================================================
@@ -51,7 +47,7 @@ function ModalSeleccionOpcion({ producto, isDark, colorPrimario, onConfirmar, on
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCerrar} />
       <div className={`relative z-10 rounded-3xl w-full max-w-md shadow-2xl border ${isDark ? 'bg-[#111] border-[#2a2a2a]' : 'bg-white border-gray-200'}`}>
         <div className="p-6 border-b" style={{ borderColor: isDark ? '#222' : '#f0f0f0' }}>
@@ -60,7 +56,7 @@ function ModalSeleccionOpcion({ producto, isDark, colorPrimario, onConfirmar, on
               <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Elige presentación</p>
               <h3 className={`text-lg font-black mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>{producto.nombre}</h3>
             </div>
-            <button onClick={onCerrar} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button>
+            <button onClick={onCerrar} className="text-neutral-500 hover:text-white transition-colors"><i className="fi fi-rr-cross-small text-lg"></i></button>
           </div>
         </div>
         <div className="p-6 space-y-5 max-h-[50vh] overflow-y-auto">
@@ -128,7 +124,7 @@ function ModalVariaciones({ producto, isDark, colorPrimario, onConfirmar, onCerr
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCerrar} />
       <div className={`relative z-10 rounded-3xl w-full max-w-md shadow-2xl border ${isDark ? 'bg-[#111] border-[#2a2a2a]' : 'bg-white border-gray-200'}`}>
         <div className="p-6 border-b" style={{ borderColor: isDark ? '#222' : '#f0f0f0' }}>
@@ -137,7 +133,7 @@ function ModalVariaciones({ producto, isDark, colorPrimario, onConfirmar, onCerr
               <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Elige variación</p>
               <h3 className={`text-lg font-black mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>{producto.nombre}</h3>
             </div>
-            <button onClick={onCerrar} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button>
+            <button onClick={onCerrar} className="text-neutral-500 hover:text-white transition-colors"><i className="fi fi-rr-cross-small text-lg"></i></button>
           </div>
         </div>
         <div className="p-6 space-y-5 max-h-[50vh] overflow-y-auto">
@@ -191,11 +187,11 @@ function ProductCardSelector({ producto, isDark, colorPrimario, onClickCard, onC
         onClick={() => onClickCard(producto)}>
         {producto.imagen
           ? <img src={producto.imagen} alt={producto.nombre} className="w-full h-full object-cover" />
-          : <ShoppingBag size={20} className="opacity-20" />
+          : <i className="fi fi-rr-shopping-bag text-lg opacity-20"></i>
         }
         {yaAgregado && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: colorPrimario + '33' }}>
-            <Check size={18} style={{ color: colorPrimario }} strokeWidth={3} />
+            <i className="fi fi-rr-check text-lg" style={{ color: colorPrimario }}></i>
           </div>
         )}
       </div>
@@ -222,7 +218,7 @@ function ProductCardSelector({ producto, isDark, colorPrimario, onClickCard, onC
 }
 
 // ============================================================
-// SUBCOMPONENTE: Formulario de combo (vista dentro del drawer)
+// SUBCOMPONENTE: Formulario de combo (panel derecho)
 // ============================================================
 function FormularioCombo({ combo, isDark, colorPrimario, productosReales, categoriasReales, onGuardar, onCancelar, guardando }) {
   const [form, setForm] = useState({
@@ -321,22 +317,23 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
     }
     return total + precio * item.cantidad;
 }, 0);
+
+  const textoBoton = guardando
+    ? (combo ? 'Guardando...' : 'Creando...')
+    : (combo ? 'Guardar Cambios' : 'Crear Combo');
+
   return (
     <>
-      <div className="flex flex-col h-full overflow-hidden">
-        {/* Header formulario */}
-        <div className="px-5 py-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">{combo ? 'Editando combo' : 'Nuevo combo'}</p>
-            <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{form.nombre || 'Sin nombre'}</h3>
-          </div>
-          <button onClick={onCancelar} className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${isDark ? 'bg-[#1a1a1a] text-neutral-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-800'}`}>
-            Cancelar
-          </button>
+      <div className="flex flex-col h-full md:overflow-hidden">
+        {/* Título */}
+        <div className="px-1 md:px-2 pt-1 pb-4 shrink-0">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+            {combo ? `Editando: ${combo.nombre}` : 'Nuevo Combo'}
+          </h4>
         </div>
 
         {/* Campos nombre y precio */}
-        <div className="px-5 py-4 border-b shrink-0 space-y-3" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
+        <div className="px-1 md:px-2 pb-4 border-b shrink-0 space-y-3" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
             <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 block mb-1">Nombre *</label>
                 <input type="text" placeholder="Ej: Combo Familiar" value={form.nombre}
@@ -371,7 +368,10 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
                     ? 'bg-green-500/10 text-green-400'
                     : 'bg-red-500/10 text-red-400'
                 }`}>
-                <span>{parseFloat(form.precio) >= precioRealEstimado ? '✓ Precio con ganancia' : '⚠ Precio por debajo del costo'}</span>
+                <span className="flex items-center gap-1.5">
+                    <i className={`fi ${parseFloat(form.precio) >= precioRealEstimado ? 'fi-rr-check' : 'fi-rr-exclamation'}`}></i>
+                    {parseFloat(form.precio) >= precioRealEstimado ? 'Precio con ganancia' : 'Precio por debajo del costo'}
+                </span>
                 <span>
                     {parseFloat(form.precio) >= precioRealEstimado ? '+' : ''}
                     S/ {(parseFloat(form.precio) - precioRealEstimado).toFixed(2)}
@@ -381,14 +381,14 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
             </div>
 
         {/* Items seleccionados */}
-        <div className="px-5 py-3 border-b shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
+        <div className="px-1 md:px-2 py-3 border-b shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
           <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
             Productos del combo ({form.items.length})
           </p>
           {form.items.length === 0 ? (
             <p className={`text-xs italic ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>Sin productos aún</p>
           ) : (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {form.items.map((item, idx) => (
                 <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${isDark ? 'bg-[#111] border-[#222]' : 'bg-gray-50 border-gray-200'}`}>
                   <span className={`text-xs font-bold flex-1 truncate ${isDark ? 'text-white' : 'text-gray-800'}`}>{item._nombre}</span>
@@ -397,7 +397,7 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
                     <span className={`text-xs font-black w-4 text-center ${isDark ? 'text-white' : 'text-gray-800'}`}>{item.cantidad}</span>
                     <button onClick={() => cambiarCantidad(idx, 1)} className={`w-5 h-5 rounded font-black text-[10px] ${isDark ? 'bg-[#222] text-white' : 'bg-gray-200 text-gray-700'}`}>+</button>
                   </div>
-                  <button onClick={() => quitarItem(idx)} className="text-red-400 hover:text-red-300 shrink-0"><X size={12} /></button>
+                  <button onClick={() => quitarItem(idx)} className="text-red-400 hover:text-red-300 shrink-0"><i className="fi fi-rr-cross-small"></i></button>
                 </div>
               ))}
             </div>
@@ -405,11 +405,11 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
         </div>
 
         {/* Selector de productos */}
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 md:overflow-hidden">
           {/* Búsqueda */}
-          <div className="px-5 py-3 space-y-2 border-b shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
+          <div className="px-1 md:px-2 py-3 space-y-2 border-b shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${isDark ? 'bg-[#111] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
-              <Search size={12} className="text-neutral-500 shrink-0" />
+              <i className="fi fi-rr-search text-xs text-neutral-500 shrink-0"></i>
               <input type="text" placeholder="Buscar producto..." value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-xs font-bold placeholder:text-neutral-600"
@@ -433,14 +433,14 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
           </div>
 
           {/* Grid productos */}
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="flex-1 md:overflow-y-auto py-3">
             {productosFiltrados.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <AlertCircle size={24} className="opacity-20 mb-2" />
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <i className={`fi fi-rr-exclamation text-2xl opacity-20 mb-2 ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}></i>
                 <p className={`text-xs font-bold ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>Sin productos</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {productosFiltrados.map(p => {
                   const yaAgregado = form.items.some(it => String(it.producto_hijo_id) === String(p.id));
                   return (
@@ -461,17 +461,28 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
         </div>
 
         {/* Footer guardar */}
-        <div className="px-5 py-4 border-t shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
+        <div className="pt-4 shrink-0">
           <button onClick={handleGuardar} disabled={guardando}
             className="w-full py-3 rounded-xl font-black text-sm text-white flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40"
             style={{ backgroundColor: colorPrimario }}>
-            <Save size={15} strokeWidth={3} />
-            {guardando ? 'Guardando...' : combo ? 'Actualizar combo' : 'Guardar combo'}
+            <i className={`fi ${combo ? 'fi-rr-disk' : 'fi-rr-add'}`}></i>
+            {textoBoton}
           </button>
+
+          {combo && (
+            <button
+              onClick={onCancelar}
+              className={`w-full py-3 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${
+                isDark ? 'bg-[#1a1a1a] border-[#333] text-neutral-400 hover:bg-[#222]' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <i className="fi fi-rr-cross-small"></i> Cancelar
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Modales sobre el drawer */}
+      {/* Modales sobre el formulario */}
       {modalOpcion && (
         <ModalSeleccionOpcion producto={modalOpcion} isDark={isDark} colorPrimario={colorPrimario}
           onConfirmar={(extras) => agregarProducto(modalOpcion, extras)}
@@ -487,13 +498,12 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
 }
 
 // ============================================================
-// COMPONENTE PRINCIPAL: Drawer
+// COMPONENTE PRINCIPAL: Modal de Combos (dos columnas, estilo Modificadores)
 // ============================================================
 export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPrimario, productosReales = [], categoriasReales = [] }) {
   const [combos, setCombos] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [vista, setVista] = useState('lista'); // 'lista' | 'formulario'
   const [comboEditando, setComboEditando] = useState(null);
   const [busquedaCombo, setBusquedaCombo] = useState('');
 
@@ -511,8 +521,10 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
   }, []);
 
   useEffect(() => {
-    if (isOpen) { cargarCombos(); setVista('lista'); setComboEditando(null); setBusquedaCombo(''); }
+    if (isOpen) { cargarCombos(); setComboEditando(null); setBusquedaCombo(''); }
   }, [isOpen, cargarCombos]);
+
+  if (!isOpen) return null;
 
   const combosFiltrados = combos.filter(c => c.nombre.toLowerCase().includes(busquedaCombo.trim().toLowerCase()));
 
@@ -547,8 +559,10 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
       }
 
       await cargarCombos();
-      setVista('lista');
       setComboEditando(null);
+      if (window.innerWidth < 768) {
+        document.getElementById('contenedor-scroll-combo')?.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } catch (err) {
       console.error('Error guardando combo normal:', err);
       alert('Error al guardar el combo. Revisa la consola.');
@@ -561,138 +575,163 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
     if (!window.confirm('¿Eliminar este combo?')) return;
     try {
       await api.patch(`/productos/${id}/`, { activo: false });
+      if (comboEditando?.id === id) setComboEditando(null);
       await cargarCombos();
     } catch (err) {
       console.error('Error eliminando combo:', err);
     }
   };
 
-  const abrirNuevo = () => { setComboEditando(null); setVista('formulario'); };
-  const abrirEdicion = (combo) => { setComboEditando(combo); setVista('formulario'); };
-  
+  const abrirNuevo = () => {
+    setComboEditando(null);
+    if (window.innerWidth < 768) {
+      document.getElementById('form-combo')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const abrirEdicion = (combo) => {
+    setComboEditando(combo);
+    if (window.innerWidth < 768) {
+      document.getElementById('form-combo')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <>
-      {/* Overlay */}
-      {isOpen && (
-        <div 
-            className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm" 
-            onClick={onClose} 
-        />
-        )}
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-0 sm:p-4 animate-fadeIn">
+      <div className={`w-full max-w-4xl h-full sm:h-[85vh] rounded-none sm:rounded-[2.5rem] shadow-2xl border overflow-hidden flex flex-col ${
+        isDark ? 'bg-[#0d0d0d] border-[#222]' : 'bg-white border-gray-200'
+      }`}>
 
-      {/* Drawer */}
-      <div className={`fixed top-0 right-0 h-screen z-[60] w-full md:w-1/2 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : 'translate-x-full'
-        } ${isDark ? 'bg-[#0d0d0d] border-l border-[#1e1e1e]' : 'bg-white border-l border-gray-200'}`}>
-
-        {/* Header del drawer */}
-        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: isDark ? '#1e1e1e' : '#f0f0f0' }}>
-          <div className="flex items-center gap-3">
-            {vista === 'formulario' && (
-              <button onClick={() => { setVista('lista'); setComboEditando(null); }}
-                className="text-neutral-500 hover:text-white transition-colors">
-                ← 
-              </button>
-            )}
+        {/* CABECERA */}
+        <div className={`p-5 md:p-8 border-b flex justify-between items-center shrink-0 ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center shadow-lg shrink-0" style={{ backgroundColor: `${colorPrimario}15`, color: colorPrimario }}>
+              <i className="fi fi-rr-layers text-xl md:text-2xl mt-1"></i>
+            </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Módulo de menú</p>
-              <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {vista === 'lista' ? 'Combos del Menú' : comboEditando ? 'Editar Combo' : 'Nuevo Combo'}
+              <h2 className={`text-lg md:text-2xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Combos del Menú
               </h2>
+              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mt-0.5 md:mt-1 text-neutral-500 line-clamp-1">
+                Arma promociones con tus platos
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {vista === 'lista' && (
-              <button onClick={abrirNuevo}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-xs text-white active:scale-95 transition-all"
-                style={{ backgroundColor: colorPrimario }}>
-                <Plus size={14} strokeWidth={3} /> Nuevo combo
-              </button>
-            )}
-            <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors ml-1">
-              <X size={20} />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
+              isDark ? 'border-[#333] text-neutral-500 hover:text-white hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <i className="fi fi-rr-cross-small"></i>
+          </button>
         </div>
 
-        {/* Contenido */}
-        <div className="flex-1 overflow-hidden">
-          {vista === 'lista' ? (
-            <div className="h-full overflow-y-auto p-5">
-              {combos.length > 0 && (
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mb-4 ${isDark ? 'bg-[#111] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
-                  <Search size={12} className="text-neutral-500 shrink-0" />
-                  <input type="text" placeholder="Buscar combo..." value={busquedaCombo}
-                    onChange={e => setBusquedaCombo(e.target.value)}
-                    className="flex-1 bg-transparent outline-none text-xs font-bold placeholder:text-neutral-600"
-                    style={{ color: isDark ? 'white' : '#111' }} />
-                  {busquedaCombo && (
-                    <button onClick={() => setBusquedaCombo('')} className="text-neutral-500 hover:text-white transition-colors">
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              )}
-              {cargando ? (
-                <div className="flex items-center justify-center py-20">
-                  <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: colorPrimario }} />
-                </div>
-              ) : combos.length === 0 ? (
-                <div className={`text-center py-16 border-2 border-dashed rounded-3xl ${isDark ? 'border-[#2a2a2a] text-neutral-500' : 'border-gray-200 text-gray-400'}`}>
-                  <Layers size={36} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-bold mb-1">Sin combos creados.</p>
-                  <p className="text-xs">Crea tu primer combo del menú.</p>
-                </div>
-              ) : combosFiltrados.length === 0 ? (
-                <div className={`text-center py-16 border-2 border-dashed rounded-3xl ${isDark ? 'border-[#2a2a2a] text-neutral-500' : 'border-gray-200 text-gray-400'}`}>
-                  <Search size={28} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-bold">Sin resultados para "{busquedaCombo}"</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {combosFiltrados.map(combo => (
-                    <div key={combo.id} className={`rounded-2xl border overflow-hidden ${isDark ? 'bg-[#111] border-[#2a2a2a]' : 'bg-gray-50 border-gray-200'}`}>
-                      <div className={`h-20 flex items-center justify-center ${isDark ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+        <div id="contenedor-scroll-combo" className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+
+          {/* LISTADO IZQUIERDA */}
+          <div className={`w-full md:w-1/2 p-5 md:p-6 border-b md:border-b-0 md:border-r md:overflow-y-auto shrink-0 md:shrink ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+            <div className="flex justify-between items-center mb-4 px-1 md:px-2">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                Existentes ({combos.length})
+              </h4>
+              <button
+                onClick={abrirNuevo}
+                disabled={!comboEditando}
+                style={comboEditando ? { backgroundColor: colorPrimario } : {}}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                  comboEditando
+                    ? 'text-white shadow-md hover:scale-105'
+                    : `cursor-not-allowed ${isDark ? 'bg-[#1a1a1a] text-neutral-600' : 'bg-gray-100 text-gray-400'}`
+                }`}
+              >
+                <i className="fi fi-rr-add"></i> Nuevo
+              </button>
+            </div>
+
+            {combos.length > 0 && (
+              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-3 ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
+                <i className="fi fi-rr-search text-xs text-neutral-500 shrink-0"></i>
+                <input type="text" placeholder="Buscar combo..." value={busquedaCombo}
+                  onChange={e => setBusquedaCombo(e.target.value)}
+                  className={`flex-1 bg-transparent outline-none text-sm font-bold ${isDark ? 'text-white placeholder:text-neutral-600' : 'text-gray-900 placeholder:text-gray-400'}`} />
+                {busquedaCombo && (
+                  <button onClick={() => setBusquedaCombo('')} className={isDark ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}>
+                    <i className="fi fi-rr-cross-small"></i>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {cargando ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: colorPrimario }} />
+              </div>
+            ) : combos.length === 0 ? (
+              <div className={`p-6 md:p-8 text-center rounded-2xl border ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
+                <i className={`fi fi-rr-layers text-3xl mb-3 block ${isDark ? 'text-neutral-600' : 'text-gray-300'}`}></i>
+                <p className={`text-sm font-bold ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>Sin combos creados</p>
+                <p className={`text-xs mt-1 ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>Crea el primero completando el formulario de la derecha</p>
+              </div>
+            ) : combosFiltrados.length === 0 ? (
+              <div className={`p-6 md:p-8 text-center rounded-2xl border ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
+                <p className={`text-sm font-bold ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>Sin resultados para "{busquedaCombo}"</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {combosFiltrados.map(combo => {
+                  const seleccionado = comboEditando?.id === combo.id;
+                  return (
+                    <div
+                      key={combo.id}
+                      onClick={() => abrirEdicion(combo)}
+                      className={`rounded-2xl border overflow-hidden cursor-pointer transition-all ${
+                        seleccionado ? '' : isDark ? 'bg-[#141414] border-[#222] hover:border-[#444]' : 'bg-gray-50 border-gray-100 hover:border-gray-200'
+                      }`}
+                      style={seleccionado ? { borderColor: colorPrimario, backgroundColor: `${colorPrimario}0d` } : {}}
+                    >
+                      <div className={`h-20 flex items-center justify-center relative ${isDark ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
                         {combo.imagen
                           ? <img src={combo.imagen} alt={combo.nombre} className="w-full h-full object-cover" />
-                          : <Layers size={24} className="opacity-20" />
+                          : <i className="fi fi-rr-layers text-2xl opacity-20"></i>
                         }
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEliminar(combo.id); }}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/50 text-white/80 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                          title="Eliminar combo"
+                        >
+                          <i className="fi fi-rr-trash text-[10px]"></i>
+                        </button>
                       </div>
-                      <div className="p-3">
-                        <p className={`font-black text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{combo.nombre}</p>
-                        <p className="text-xs font-black mt-0.5" style={{ color: colorPrimario }}>
+                      <div className="p-2.5">
+                        <p className={`font-bold text-xs truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{combo.nombre}</p>
+                        <p className="text-[11px] font-black mt-0.5" style={{ color: colorPrimario }}>
                           S/ {parseFloat(combo.precio_base).toFixed(2)}
                         </p>
-                        <div className="flex gap-1.5 mt-3">
-                          <button onClick={() => abrirEdicion(combo)}
-                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-colors ${isDark ? 'bg-[#1a1a1a] text-white hover:bg-[#222]' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                            Editar
-                          </button>
-                          <button onClick={() => handleEliminar(combo.id)}
-                            className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* FORMULARIO DERECHA */}
+          <div id="form-combo" className="w-full md:w-1/2 p-5 md:p-6 md:overflow-hidden shrink-0 md:shrink flex flex-col min-h-0">
             <FormularioCombo
+              key={comboEditando?.id ?? 'nuevo'}
               combo={comboEditando}
               isDark={isDark}
               colorPrimario={colorPrimario}
               productosReales={productosReales}
               categoriasReales={categoriasReales}
               onGuardar={handleGuardar}
-              onCancelar={() => { setVista('lista'); setComboEditando(null); }}
+              onCancelar={abrirNuevo}
               guardando={guardando}
             />
-          )}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

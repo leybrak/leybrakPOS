@@ -27,8 +27,20 @@ export default function Erp_ModalCategorias({
         
         {/* Cabecera */}
         <div className={`p-6 border-b flex justify-between items-center transition-colors ${tema === 'dark' ? 'border-[#222] bg-[#1a1a1a]' : 'border-gray-200 bg-gray-50'}`}>
-          <h3 className={`text-xl font-black ${tema === 'dark' ? 'text-white' : 'text-gray-900'}`}>Categorías del Menú</h3>
-          <button onClick={onClose} className={`font-bold text-xl transition-colors ${tema === 'dark' ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'}`}>✕</button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg shrink-0" style={{ backgroundColor: `${colorPrimario}15`, color: colorPrimario }}>
+              <i className="fi fi-rr-folder text-lg mt-1"></i>
+            </div>
+            <h3 className={`text-xl font-black ${tema === 'dark' ? 'text-white' : 'text-gray-900'}`}>Categorías del Menú</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
+              tema === 'dark' ? 'border-[#333] text-neutral-500 hover:text-white hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <i className="fi fi-rr-cross-small"></i>
+          </button>
         </div>
         
         <div className="p-6 space-y-6">
@@ -46,13 +58,13 @@ export default function Erp_ModalCategorias({
               onBlur={(e) => e.target.style.borderColor = tema === 'dark' ? '#333' : '#d1d5db'}
               placeholder="Ej. Bebidas, Postres..." 
             />
-            <button 
+            <button
               onClick={manejarCrearCategoria}
               disabled={!nombreNuevaCat.trim()}
-              className="text-white px-6 font-bold rounded-xl disabled:opacity-50 transition-all hover:brightness-110 active:scale-95 shadow-md"
+              className="text-white px-6 font-bold rounded-xl disabled:opacity-50 transition-all hover:brightness-110 active:scale-95 shadow-md flex items-center gap-2"
               style={{ backgroundColor: colorPrimario }}
             >
-              Agregar
+              <i className="fi fi-rr-add"></i> Agregar
             </button>
           </div>
 
@@ -92,7 +104,7 @@ export default function Erp_ModalCategorias({
                     className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:text-red-500 hover:bg-red-500/10 ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-400'}`}
                     title="Eliminar categoría"
                   >
-                    🗑️
+                    <i className="fi fi-rr-trash"></i>
                   </button>
                 </div>
               ))
