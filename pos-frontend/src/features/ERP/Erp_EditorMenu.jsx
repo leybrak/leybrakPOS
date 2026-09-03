@@ -228,13 +228,17 @@ export default function EditorMenu({
                         {/* Toggle disponibilidad */}
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggleDisponibilidad(plato); }}
-                          className={`w-14 h-8 rounded-full border p-1 flex items-center transition-all ${
+                          className={`relative w-14 h-8 rounded-full border p-1 shadow-inner transition-colors duration-300 ease-in-out ${
                             plato.disponible
-                              ? 'bg-green-500/10 border-green-500/30 justify-end shadow-inner'
-                              : `justify-start shadow-inner ${isDark ? 'bg-[#222] border-[#333]' : 'bg-gray-100 border-gray-200'}`
+                              ? 'bg-green-500/10 border-green-500/30'
+                              : isDark ? 'bg-[#222] border-[#333]' : 'bg-gray-100 border-gray-200'
                           }`}
                           title={`Marcar como ${plato.disponible ? 'Agotado' : 'Disponible'}`}>
-                          <div className={`w-6 h-6 rounded-full transition-all shadow-md ${plato.disponible ? 'bg-green-500' : isDark ? 'bg-neutral-600' : 'bg-gray-300'}`} />
+                          <div className={`w-6 h-6 rounded-full shadow-md transition-all duration-300 ease-in-out ${
+                            plato.disponible
+                              ? 'translate-x-6 bg-green-500'
+                              : `translate-x-0 ${isDark ? 'bg-neutral-600' : 'bg-gray-300'}`
+                          }`} />
                         </button>
 
                         {/* ✨ FIX: botón receta O variaciones según tipo */}
