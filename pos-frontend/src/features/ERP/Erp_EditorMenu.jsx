@@ -49,7 +49,7 @@ export default function EditorMenu({
   };
 
   return (
-    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 px-3 sm:px-4 pb-24 h-full flex flex-col">
+    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 px-3 sm:px-4 pb-24 min-h-full flex flex-col">
       
       {/* CABECERA */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-6 pt-2 pb-6 border-b" style={{ borderColor: isDark ? '#222' : '#e5e7eb' }}>
