@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { getCatalogoGlobal, guardarReceta, getReceta } from '../../api/api';
+import { useToast } from '../../context/ToastContext';
 
 export default function ModalConfigurarReceta({ isOpen, onClose, producto, config }) {
   const isDark = (config?.temaFondo || config?.tema_fondo || 'dark') === 'dark';
   const colorPrimario = config?.colorPrimario || config?.color_primario || '#ff5a1f';
+  const toast = useToast();
 
   const [catalogo, setCatalogo] = useState([]);
   const [ingredientes, setIngredientes] = useState([]);
@@ -55,10 +57,11 @@ export default function ModalConfigurarReceta({ isOpen, onClose, producto, confi
     setGuardando(true);
     try {
       await guardarReceta(producto.id, { ingredientes });
+      toast.success('Receta guardada correctamente.');
       onClose();
     } catch (err) {
       console.error('Error del servidor al guardar receta:', err);
-      alert('Error al guardar la receta.');
+      toast.error('Error al guardar la receta.');
     } finally {
       setGuardando(false);
     }

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../api/api';
+import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 // ============================================================
 // HELPERS
@@ -221,6 +223,7 @@ function ProductCardSelector({ producto, isDark, colorPrimario, onClickCard, onC
 // SUBCOMPONENTE: Formulario de combo (panel derecho)
 // ============================================================
 function FormularioCombo({ combo, isDark, colorPrimario, productosReales, categoriasReales, onGuardar, onCancelar, guardando }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     nombre: combo?.nombre ?? '',
     precio: combo?.precio_base ?? '',
@@ -300,9 +303,9 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
     setForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, cantidad: Math.max(1, it.cantidad + delta) } : it) }));
 
   const handleGuardar = () => {
-    if (!form.nombre.trim()) return alert('El nombre es obligatorio.');
-    if (!form.precio || parseFloat(form.precio) <= 0) return alert('El precio debe ser mayor a 0.');
-    if (form.items.length === 0) return alert('Agrega al menos un producto al combo.');
+    if (!form.nombre.trim()) return toast.warning('El nombre es obligatorio.');
+    if (!form.precio || parseFloat(form.precio) <= 0) return toast.warning('El precio debe ser mayor a 0.');
+    if (form.items.length === 0) return toast.warning('Agrega al menos un producto al combo.');
     onGuardar({ nombre: form.nombre, precio: parseFloat(form.precio), items: form.items });
   };
   const precioRealEstimado = form.items.reduce((total, item) => {
@@ -501,6 +504,8 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
 // COMPONENTE PRINCIPAL: Modal de Combos (dos columnas, estilo Modificadores)
 // ============================================================
 export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPrimario, productosReales = [], categoriasReales = [] }) {
+  const toast = useToast();
+  const confirmar = useConfirm();
   const [combos, setCombos] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -559,26 +564,28 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
       }
 
       await cargarCombos();
+      toast.success(comboEditando ? 'Combo actualizado correctamente.' : 'Combo creado correctamente.');
       setComboEditando(null);
       if (window.innerWidth < 768) {
         document.getElementById('contenedor-scroll-combo')?.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (err) {
       console.error('Error guardando combo normal:', err);
-      alert('Error al guardar el combo. Revisa la consola.');
+      toast.error('Error al guardar el combo.');
     } finally {
       setGuardando(false);
     }
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar este combo?')) return;
+    if (!(await confirmar('¿Eliminar este combo del menú?'))) return;
     try {
       await api.patch(`/productos/${id}/`, { activo: false });
       if (comboEditando?.id === id) setComboEditando(null);
       await cargarCombos();
     } catch (err) {
       console.error('Error eliminando combo:', err);
+      toast.error('Error al eliminar el combo.');
     }
   };
 

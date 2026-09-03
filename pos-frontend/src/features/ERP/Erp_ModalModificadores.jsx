@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../../context/ToastContext';
 
-export default function ModalModificadores({ 
-  isOpen, 
-  onClose, 
-  categorias = [], 
-  modificadores = [], 
-  onGuardar, 
-  tema, 
+export default function ModalModificadores({
+  isOpen,
+  onClose,
+  categorias = [],
+  modificadores = [],
+  onGuardar,
+  tema,
   colorPrimario,
-  onRecargar 
+  onRecargar
 }) {
   const isDark = tema === 'dark';
+  const toast = useToast();
   const [editando, setEditando] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [formData, setFormData] = useState({
@@ -68,12 +70,12 @@ export default function ModalModificadores({
 
   const validarYGuardar = async () => {
     if (!formData.nombre.trim()) {
-      alert('El nombre del modificador es obligatorio');
+      toast.warning('El nombre del modificador es obligatorio.');
       return;
     }
 
     if (formData.categorias_aplicables.length === 0) {
-      alert('Debes seleccionar al menos una categoría');
+      toast.warning('Debes seleccionar al menos una categoría.');
       return;
     }
 
@@ -81,7 +83,7 @@ export default function ModalModificadores({
     const precioNum = parseFloat(precioParaEnviar);
 
     if (isNaN(precioNum) || precioNum < 0) {
-      alert('El precio debe ser un número válido mayor o igual a 0');
+      toast.warning('El precio debe ser un número válido mayor o igual a 0.');
       return;
     }
 

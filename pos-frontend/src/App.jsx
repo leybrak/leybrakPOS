@@ -1,4 +1,5 @@
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import { cerrarSesionGlobal } from '../src/api/api';
 import { verificarSesionEmpleado, generarPagoSuscripcion, refrescarSesion } from '../src/api/api';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -282,25 +283,27 @@ const VistaInternaPOS = () => {
 export default function App() {
   return (
     <ToastProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<VistaInternaPOS />} />
-          <Route path="/menu/:negocioId/:sedeId/:mesaId" element={<PublicMenu />} />
-          <Route path="*" element={
-            <div className="h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-6">
-              <span className="text-8xl mb-4">🏮</span>
-              <h1 className="text-4xl font-black text-white mb-2">404</h1>
-              <p className="text-neutral-500 font-bold mb-6">Parece que este local no existe o se movió de sitio.</p>
-              <button
-                onClick={() => window.location.href = '/'}
-                className="px-8 py-3 rounded-2xl bg-[#ff5a1f] text-white font-black uppercase tracking-widest shadow-lg shadow-orange-900/20 active:scale-95 transition-all"
-              >
-                Volver al Inicio
-              </button>
-            </div>
-          } />
-        </Routes>
-      </BrowserRouter>
+      <ConfirmProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<VistaInternaPOS />} />
+            <Route path="/menu/:negocioId/:sedeId/:mesaId" element={<PublicMenu />} />
+            <Route path="*" element={
+              <div className="h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-center p-6">
+                <span className="text-8xl mb-4">🏮</span>
+                <h1 className="text-4xl font-black text-white mb-2">404</h1>
+                <p className="text-neutral-500 font-bold mb-6">Parece que este local no existe o se movió de sitio.</p>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="px-8 py-3 rounded-2xl bg-[#ff5a1f] text-white font-black uppercase tracking-widest shadow-lg shadow-orange-900/20 active:scale-95 transition-all"
+                >
+                  Volver al Inicio
+                </button>
+              </div>
+            } />
+          </Routes>
+        </BrowserRouter>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
