@@ -577,10 +577,29 @@ export const useErpDashboard = () => {
   };
 
   const toggleDisponibilidad = async (plato) => {
+    const nuevoValor = !plato.disponible;
+    // Optimistic UI: reflejamos el cambio de inmediato, antes de esperar la respuesta del server
+    setProductosReales(prev => prev.map(p => p.id === plato.id ? { ...p, disponible: nuevoValor } : p));
     try {
-      await parchearProducto(plato.id, { disponible: !plato.disponible });
-      setProductosReales(prev => prev.map(p => p.id === plato.id ? { ...p, disponible: !p.disponible } : p));
-    } catch (error) { alert("Error al cambiar estado."); }
+      await parchearProducto(plato.id, { disponible: nuevoValor });
+    } catch (error) {
+      // Revertimos si el server falló
+      setProductosReales(prev => prev.map(p => p.id === plato.id ? { ...p, disponible: !nuevoValor } : p));
+      alert("Error al cambiar estado.");
+    }
+  };
+
+  const eliminarProductoLocal = async (plato) => {
+    if (!window.confirm(`¿Eliminar "${plato.nombre}" del catálogo? No se borrará el historial de ventas, solo dejará de mostrarse.`)) return;
+    // Optimistic UI: lo quitamos del panel de inmediato
+    setProductosReales(prev => prev.filter(p => p.id !== plato.id));
+    try {
+      await parchearProducto(plato.id, { activo: false });
+    } catch (error) {
+      // Revertimos si el server falló
+      setProductosReales(prev => [...prev, plato]);
+      alert("Error al eliminar el producto.");
+    }
   };
 
   const abrirModalEditar = (plato) => {
@@ -633,6 +652,6 @@ export const useErpDashboard = () => {
     cambiarSedeFiltro, manejarCambioVista, descartarCambios, guardarYCambiarVista,
     cancelarCambioVista, manejarGuardarConfig, abrirModalEdicion, toggleActivo,
     manejarGuardarEmpleado, manejarGuardarPlato, manejarCrearCategoria,
-    eliminarCategoriaLocal, toggleDisponibilidad, abrirModalEditar, cerrarModalPlato, recargarSedes
+    eliminarCategoriaLocal, toggleDisponibilidad, eliminarProductoLocal, abrirModalEditar, cerrarModalPlato, recargarSedes
   };
 };

@@ -12,20 +12,24 @@ export default function ModalModificadores({
 }) {
   const isDark = tema === 'dark';
   const [editando, setEditando] = useState(null);
-  const [formData, setFormData] = useState({ 
-    nombre: '', 
-    precio: '', 
-    categorias_aplicables: [] 
+  const [busqueda, setBusqueda] = useState('');
+  const [formData, setFormData] = useState({
+    nombre: '',
+    precio: '',
+    categorias_aplicables: []
   });
 
   useEffect(() => {
     if (!isOpen) {
       setEditando(null);
+      setBusqueda('');
       setFormData({ nombre: '', precio: '', categorias_aplicables: [] });
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const modificadoresFiltrados = modificadores.filter(m => m.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
 
   const manejarSeleccionCategoria = (catId) => {
     setFormData(prev => ({
@@ -151,6 +155,24 @@ export default function ModalModificadores({
               </button>
             </div>
 
+            {modificadores.length > 0 && (
+              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border mb-3 ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
+                <i className={`fi fi-rr-search text-xs ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}></i>
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar modificador..."
+                  className={`flex-1 bg-transparent outline-none text-sm font-bold ${isDark ? 'text-white placeholder:text-neutral-600' : 'text-gray-900 placeholder:text-gray-400'}`}
+                />
+                {busqueda && (
+                  <button onClick={() => setBusqueda('')} className={isDark ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}>
+                    <i className="fi fi-rr-cross-small"></i>
+                  </button>
+                )}
+              </div>
+            )}
+
             {modificadores.length === 0 ? (
               <div className={`p-6 md:p-8 text-center rounded-2xl border ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="text-4xl mb-3">🔧</div>
@@ -161,9 +183,15 @@ export default function ModalModificadores({
                   Crea el primero usando el botón "+ Nuevo"
                 </p>
               </div>
+            ) : modificadoresFiltrados.length === 0 ? (
+              <div className={`p-6 md:p-8 text-center rounded-2xl border ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
+                <p className={`text-sm font-bold ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>
+                  Sin resultados para "{busqueda}"
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {modificadores.map(mod => (
+                {modificadoresFiltrados.map(mod => (
                   <button 
                     key={mod.id}
                     onClick={() => manejarEditar(mod)}

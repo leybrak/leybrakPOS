@@ -9,6 +9,7 @@ export default function EditorMenu({
   onOpenPlatoNuevo, 
   onEditPlato, 
   onToggleDisponibilidad,
+  onEliminarPlato,
   onOpenReceta,
   onOpenVariaciones,
   onOpenModificadores,
@@ -24,9 +25,18 @@ export default function EditorMenu({
 
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [drawerCombosAbierto, setDrawerCombosAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   // Solo platos normales (sin combos) en el grid principal
   const platosNormales = productosReales.filter(p => !p.es_combo);
+
+  const platosFiltrados = platosNormales
+    .filter(plato => {
+      if (categoriaSeleccionada === 'Todos') return true;
+      const nombreCat = categorias.find(c => c.id === plato.categoria)?.nombre || plato.categoria;
+      return nombreCat === categoriaSeleccionada;
+    })
+    .filter(plato => plato.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
 
   // Determina si un plato debe abrir variaciones o receta
   const handleBotonRecetaOVariacion = (e, plato) => {
@@ -39,7 +49,7 @@ export default function EditorMenu({
   };
 
   return (
-    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 pb-24 h-full flex flex-col">
+    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 px-3 sm:px-4 pb-24 h-full flex flex-col">
       
       {/* CABECERA */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-6 pt-2 pb-6 border-b" style={{ borderColor: isDark ? '#222' : '#e5e7eb' }}>
@@ -59,16 +69,16 @@ export default function EditorMenu({
         </div>
 
         {esDueño && (
-          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-end gap-3 shrink-0">
             <button onClick={onOpenModificadores}
-              className={`px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
+              className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 whitespace-nowrap ${
                 isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-neutral-300 border-[#333]' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
               }`}>
               <i className="fi fi-rr-settings-sliders text-sm"></i> Modificadores
             </button>
 
             <button onClick={onOpenCategorias}
-              className={`px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
+              className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 whitespace-nowrap ${
                 isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-neutral-300 border-[#333]' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
               }`}>
               <i className="fi fi-rr-folder text-sm"></i> Categorías
@@ -76,15 +86,15 @@ export default function EditorMenu({
 
             {/* ✨ NUEVO: Botón combos */}
             <button onClick={() => onOpenCombos(true)}
-              className={`px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
+              className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 whitespace-nowrap ${
                 isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-purple-400 border-purple-500/20' : 'bg-purple-50 hover:bg-purple-100 text-purple-600 border-purple-200'
               }`}>
               <i className="fi fi-rr-layers text-sm"></i> Combos
             </button>
-            
+
             <button onClick={onOpenPlatoNuevo}
               style={{ backgroundColor: colorPrimario }}
-              className="px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2">
+              className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap">
               <i className="fi fi-rr-add text-sm"></i> Nuevo Plato
             </button>
           </div>
@@ -126,13 +136,39 @@ export default function EditorMenu({
 
         {/* Grid de platos (solo platos normales, sin combos) */}
         <div className="flex-1 w-full min-w-0">
+
+          {/* Buscador de productos */}
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border mb-5 ${
+            isDark ? 'bg-[#141414] border-[#222]' : 'bg-white border-gray-200 shadow-sm'
+          }`}>
+            <i className={`fi fi-rr-search text-sm ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}></i>
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar producto por nombre..."
+              className={`flex-1 bg-transparent outline-none text-sm font-bold ${
+                isDark ? 'text-white placeholder:text-neutral-600' : 'text-gray-900 placeholder:text-gray-400'
+              }`}
+            />
+            {busqueda && (
+              <button onClick={() => setBusqueda('')}
+                className={`text-xs font-black ${isDark ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}>
+                ✕
+              </button>
+            )}
+          </div>
+
+          {platosFiltrados.length === 0 ? (
+            <div className={`text-center py-16 border-2 border-dashed rounded-3xl ${isDark ? 'border-[#2a2a2a] text-neutral-500' : 'border-gray-200 text-gray-400'}`}>
+              <i className="fi fi-rr-search text-3xl opacity-30 mb-3 block"></i>
+              <p className="text-sm font-bold">
+                {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay productos en esta categoría.'}
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-            {platosNormales
-              .filter(plato => {
-                if (categoriaSeleccionada === 'Todos') return true;
-                const nombreCat = categorias.find(c => c.id === plato.categoria)?.nombre || plato.categoria;
-                return nombreCat === categoriaSeleccionada;
-              })
+            {platosFiltrados
               .map((plato) => {
                 const nombreCategoriaMuestra = categorias.find(c => c.id === plato.categoria)?.nombre || plato.categoria || 'Sin categoría';
                 const esVariable = parseFloat(plato.precio_base) <= 0;
@@ -214,12 +250,25 @@ export default function EditorMenu({
                             <i className={`fi ${necesitaVariaciones ? 'fi-rr-list' : 'fi-rr-book-alt'} mt-0.5`}></i>
                           </button>
                         )}
+
+                        {/* Eliminar (soft delete: deja de mostrarse, no se borra de BD) */}
+                        {esDueño && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEliminarPlato(plato); }}
+                            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors border text-sm ${
+                              isDark ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-500 hover:bg-red-100'
+                            }`}
+                            title="Eliminar plato del catálogo">
+                            <i className="fi fi-rr-trash mt-0.5"></i>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 );
               })}
           </div>
+          )}
         </div>
       </div>
 

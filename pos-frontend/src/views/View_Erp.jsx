@@ -178,7 +178,7 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
     manejarCambioVista, descartarCambios, guardarYCambiarVista,
     cancelarCambioVista, manejarGuardarConfig, abrirModalEdicion, toggleActivo,
     manejarGuardarEmpleado, manejarGuardarPlato, manejarCrearCategoria,
-    eliminarCategoriaLocal, toggleDisponibilidad, abrirModalEditar, cerrarModalPlato, modificadoresReales, setModificadoresReales
+    eliminarCategoriaLocal, toggleDisponibilidad, eliminarProductoLocal, abrirModalEditar, cerrarModalPlato, modificadoresReales, setModificadoresReales
   } = useErpDashboard();
   
   // ✅ Estado local para controlar el modal
@@ -247,8 +247,9 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
               onOpenCategorias={() => setModalCategorias(true)} 
               onOpenPlatoNuevo={() => { cerrarModalPlato(); setModalPlato(true); }} 
               onEditPlato={abrirModalEditar} 
-              onToggleDisponibilidad={toggleDisponibilidad} 
-              onOpenReceta={(plato) => { setProductoParaReceta(plato); setModalRecetaOpen(true); }} 
+              onToggleDisponibilidad={toggleDisponibilidad}
+              onEliminarPlato={eliminarProductoLocal}
+              onOpenReceta={(plato) => { setProductoParaReceta(plato); setModalRecetaOpen(true); }}
               onOpenVariaciones={(plato) => { setProductoParaVariaciones(plato); setModalVariacionesOpen(true); }} 
               onOpenModificadores={handleOpenModificadores} 
               onOpenCombos={() => setDrawerCombosAbierto(true)}

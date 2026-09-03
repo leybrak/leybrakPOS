@@ -495,6 +495,7 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
   const [guardando, setGuardando] = useState(false);
   const [vista, setVista] = useState('lista'); // 'lista' | 'formulario'
   const [comboEditando, setComboEditando] = useState(null);
+  const [busquedaCombo, setBusquedaCombo] = useState('');
 
   const cargarCombos = useCallback(async () => {
     try {
@@ -510,8 +511,10 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
   }, []);
 
   useEffect(() => {
-    if (isOpen) { cargarCombos(); setVista('lista'); setComboEditando(null); }
+    if (isOpen) { cargarCombos(); setVista('lista'); setComboEditando(null); setBusquedaCombo(''); }
   }, [isOpen, cargarCombos]);
+
+  const combosFiltrados = combos.filter(c => c.nombre.toLowerCase().includes(busquedaCombo.trim().toLowerCase()));
 
   const handleGuardar = async (formData) => {
     try {
@@ -616,6 +619,20 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
         <div className="flex-1 overflow-hidden">
           {vista === 'lista' ? (
             <div className="h-full overflow-y-auto p-5">
+              {combos.length > 0 && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border mb-4 ${isDark ? 'bg-[#111] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
+                  <Search size={12} className="text-neutral-500 shrink-0" />
+                  <input type="text" placeholder="Buscar combo..." value={busquedaCombo}
+                    onChange={e => setBusquedaCombo(e.target.value)}
+                    className="flex-1 bg-transparent outline-none text-xs font-bold placeholder:text-neutral-600"
+                    style={{ color: isDark ? 'white' : '#111' }} />
+                  {busquedaCombo && (
+                    <button onClick={() => setBusquedaCombo('')} className="text-neutral-500 hover:text-white transition-colors">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
               {cargando ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: colorPrimario }} />
@@ -626,9 +643,14 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
                   <p className="text-sm font-bold mb-1">Sin combos creados.</p>
                   <p className="text-xs">Crea tu primer combo del menú.</p>
                 </div>
+              ) : combosFiltrados.length === 0 ? (
+                <div className={`text-center py-16 border-2 border-dashed rounded-3xl ${isDark ? 'border-[#2a2a2a] text-neutral-500' : 'border-gray-200 text-gray-400'}`}>
+                  <Search size={28} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-bold">Sin resultados para "{busquedaCombo}"</p>
+                </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {combos.map(combo => (
+                  {combosFiltrados.map(combo => (
                     <div key={combo.id} className={`rounded-2xl border overflow-hidden ${isDark ? 'bg-[#111] border-[#2a2a2a]' : 'bg-gray-50 border-gray-200'}`}>
                       <div className={`h-20 flex items-center justify-center ${isDark ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
                         {combo.imagen

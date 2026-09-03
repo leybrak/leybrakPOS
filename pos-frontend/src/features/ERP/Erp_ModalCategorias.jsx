@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Erp_ModalCategorias({
   isOpen,
@@ -11,7 +11,15 @@ export default function Erp_ModalCategorias({
   categorias,
   eliminarCategoriaLocal
 }) {
+  const [busqueda, setBusqueda] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) setBusqueda('');
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const categoriasFiltradas = categorias.filter(c => c.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -50,12 +58,33 @@ export default function Erp_ModalCategorias({
 
           <div className={`h-px w-full ${tema === 'dark' ? 'bg-[#222]' : 'bg-gray-200'}`}></div>
 
+          {/* BUSCADOR DE CATEGORÍAS */}
+          {categorias.length > 0 && (
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${tema === 'dark' ? 'bg-[#1a1a1a] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
+              <i className={`fi fi-rr-search text-xs ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-400'}`}></i>
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar categoría..."
+                className={`flex-1 bg-transparent outline-none text-sm font-bold ${tema === 'dark' ? 'text-white placeholder:text-neutral-600' : 'text-gray-900 placeholder:text-gray-400'}`}
+              />
+              {busqueda && (
+                <button onClick={() => setBusqueda('')} className={tema === 'dark' ? 'text-neutral-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}>
+                  <i className="fi fi-rr-cross-small"></i>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* LISTA DE CATEGORÍAS ACTUALES */}
           <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2">
             {categorias.length === 0 ? (
               <p className={`text-center text-sm py-4 ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-500'}`}>No hay categorías creadas aún.</p>
+            ) : categoriasFiltradas.length === 0 ? (
+              <p className={`text-center text-sm py-4 ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-500'}`}>Sin resultados para "{busqueda}"</p>
             ) : (
-              categorias.map(cat => (
+              categoriasFiltradas.map(cat => (
                 <div key={cat.id} className={`flex justify-between items-center p-3 rounded-xl border transition-colors ${tema === 'dark' ? 'bg-[#1a1a1a] border-[#222]' : 'bg-gray-50 border-gray-200'}`}>
                   <span className={`font-bold ${tema === 'dark' ? 'text-white' : 'text-gray-800'}`}>{cat.nombre}</span>
                   <button 
