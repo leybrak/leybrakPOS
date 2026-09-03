@@ -4,31 +4,53 @@ from django.db.models import F
 from django.db import transaction
 from django.core.mail import EmailMultiAlternatives, send_mail
 from core import settings # ✨ 1. Importamos la transacción
-from .models import Empleado, HorarioVisibilidad, Negocio, Pago, InsumoSede, PagoSuscripcion, Producto, RecetaDetalle, RecetaOpcion, ReglaNegocio
+from .models import Empleado, HorarioVisibilidad, Negocio, Pago, InsumoSede, PagoSuscripcion, Producto, RecetaDetalle, RecetaOpcion, ReglaNegocio, ComponenteCombo
 
 @receiver(post_save, sender=Pago)
 def procesar_descuento_stock(sender, instance, created, **kwargs):
     """
-    Cuando se crea un Pago, recorremos la orden y descontamos el stock 
+    Cuando se crea un Pago, recorremos la orden y descontamos el stock
     de la receta base Y de las opciones extras elegidas.
     """
-    if created: 
+    if created:
         orden = instance.orden
         sede = orden.sede
-        
+
         with transaction.atomic():
             for detalle in orden.detalles.all():
                 producto = detalle.producto
                 cantidad_vendida = detalle.cantidad
-                
-                # 🔪 1. DESCONTAMOS LA RECETA BASE DEL PLATO
-                recetas_base = RecetaDetalle.objects.filter(producto=producto)
-                for receta in recetas_base:
-                    gasto_total = float(receta.cantidad_necesaria) * float(cantidad_vendida)
-                    InsumoSede.objects.filter(
-                        sede=sede, insumo_base=receta.insumo
-                    ).update(stock_actual=F('stock_actual') - gasto_total)
-                    
+
+                # 🔪 1. DESCONTAMOS LA RECETA BASE DEL PLATO. Si es un Combo
+                # Normal (es_combo=True), el combo casi nunca tiene receta
+                # propia — lo que hay que descontar es la receta de cada
+                # producto real que lo compone (ComponenteCombo).
+                componentes = ComponenteCombo.objects.filter(combo=producto) if producto.es_combo else []
+
+                if componentes:
+                    for comp in componentes:
+                        gasto_unidades = float(comp.cantidad) * float(cantidad_vendida)
+                        for receta in RecetaDetalle.objects.filter(producto=comp.producto_hijo):
+                            gasto_total = float(receta.cantidad_necesaria) * gasto_unidades
+                            InsumoSede.objects.filter(
+                                sede=sede, insumo_base=receta.insumo
+                            ).update(stock_actual=F('stock_actual') - gasto_total)
+                        # Si el componente preseleccionó una opción (ej. "Papas Grandes"
+                        # dentro del combo), también descontamos la receta de esa opción.
+                        if comp.opcion_seleccionada_id:
+                            for receta_opc in RecetaOpcion.objects.filter(opcion=comp.opcion_seleccionada):
+                                gasto_total_opcion = float(receta_opc.cantidad_necesaria) * gasto_unidades
+                                InsumoSede.objects.filter(
+                                    sede=sede, insumo_base=receta_opc.insumo
+                                ).update(stock_actual=F('stock_actual') - gasto_total_opcion)
+                else:
+                    recetas_base = RecetaDetalle.objects.filter(producto=producto)
+                    for receta in recetas_base:
+                        gasto_total = float(receta.cantidad_necesaria) * float(cantidad_vendida)
+                        InsumoSede.objects.filter(
+                            sede=sede, insumo_base=receta.insumo
+                        ).update(stock_actual=F('stock_actual') - gasto_total)
+
                 # 🔪 2. ✨ NUEVO: DESCONTAMOS LAS VARIACIONES Y EXTRAS
                 # Recorremos qué opciones eligió el cliente (Ej: Tamaño Familiar, Extra Rachi)
                 for opcion_seleccionada in detalle.opciones_seleccionadas.all():
