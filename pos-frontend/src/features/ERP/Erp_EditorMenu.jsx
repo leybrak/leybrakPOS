@@ -49,7 +49,7 @@ export default function EditorMenu({
   };
 
   return (
-    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 px-3 sm:px-4 pb-24 h-full flex flex-col">
+    <div className="animate-fadeIn space-y-8 max-w-7xl mx-auto min-w-0 px-3 sm:px-4 pb-24 min-h-full flex flex-col">
       
       {/* CABECERA */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-6 pt-2 pb-6 border-b" style={{ borderColor: isDark ? '#222' : '#e5e7eb' }}>
@@ -228,13 +228,17 @@ export default function EditorMenu({
                         {/* Toggle disponibilidad */}
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggleDisponibilidad(plato); }}
-                          className={`w-14 h-8 rounded-full border p-1 flex items-center transition-all ${
+                          className={`relative w-14 h-8 rounded-full border p-1 shadow-inner transition-colors duration-300 ease-in-out ${
                             plato.disponible
-                              ? 'bg-green-500/10 border-green-500/30 justify-end shadow-inner'
-                              : `justify-start shadow-inner ${isDark ? 'bg-[#222] border-[#333]' : 'bg-gray-100 border-gray-200'}`
+                              ? 'bg-green-500/10 border-green-500/30'
+                              : isDark ? 'bg-[#222] border-[#333]' : 'bg-gray-100 border-gray-200'
                           }`}
                           title={`Marcar como ${plato.disponible ? 'Agotado' : 'Disponible'}`}>
-                          <div className={`w-6 h-6 rounded-full transition-all shadow-md ${plato.disponible ? 'bg-green-500' : isDark ? 'bg-neutral-600' : 'bg-gray-300'}`} />
+                          <div className={`w-6 h-6 rounded-full shadow-md transition-all duration-300 ease-in-out ${
+                            plato.disponible
+                              ? 'translate-x-6 bg-green-500'
+                              : `translate-x-0 ${isDark ? 'bg-neutral-600' : 'bg-gray-300'}`
+                          }`} />
                         </button>
 
                         {/* ✨ FIX: botón receta O variaciones según tipo */}

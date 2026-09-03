@@ -68,20 +68,20 @@ export default function ModalModificadores({
 
   const validarYGuardar = async () => {
     if (!formData.nombre.trim()) {
-      alert('⚠️ El nombre del modificador es obligatorio');
+      alert('El nombre del modificador es obligatorio');
       return;
     }
 
     if (formData.categorias_aplicables.length === 0) {
-      alert('⚠️ Debes seleccionar al menos una categoría');
+      alert('Debes seleccionar al menos una categoría');
       return;
     }
 
     const precioParaEnviar = formData.precio.trim() === '' ? '0.00' : formData.precio;
     const precioNum = parseFloat(precioParaEnviar);
-    
+
     if (isNaN(precioNum) || precioNum < 0) {
-      alert('⚠️ El precio debe ser un número válido mayor o igual a 0');
+      alert('El precio debe ser un número válido mayor o igual a 0');
       return;
     }
 
@@ -146,12 +146,17 @@ export default function ModalModificadores({
               <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
                 Existentes ({modificadores.length})
               </h4>
-              <button 
+              <button
                 onClick={manejarNuevo}
-                style={{ backgroundColor: colorPrimario }}
-                className="px-3 py-1.5 rounded-lg text-white text-[9px] font-black uppercase tracking-wider shadow-md hover:scale-105 transition-transform"
+                disabled={!editando}
+                style={editando ? { backgroundColor: colorPrimario } : {}}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                  editando
+                    ? 'text-white shadow-md hover:scale-105'
+                    : `cursor-not-allowed ${isDark ? 'bg-[#1a1a1a] text-neutral-600' : 'bg-gray-100 text-gray-400'}`
+                }`}
               >
-                + Nuevo
+                <i className="fi fi-rr-add"></i> Nuevo
               </button>
             </div>
 
@@ -175,12 +180,12 @@ export default function ModalModificadores({
 
             {modificadores.length === 0 ? (
               <div className={`p-6 md:p-8 text-center rounded-2xl border ${isDark ? 'bg-[#141414] border-[#222]' : 'bg-gray-50 border-gray-100'}`}>
-                <div className="text-4xl mb-3">🔧</div>
+                <i className={`fi fi-rr-settings-sliders text-3xl mb-3 block ${isDark ? 'text-neutral-600' : 'text-gray-300'}`}></i>
                 <p className={`text-sm font-bold ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>
                   Aún no hay modificadores
                 </p>
                 <p className={`text-xs mt-1 ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>
-                  Crea el primero usando el botón "+ Nuevo"
+                  Crea el primero completando el formulario de la derecha
                 </p>
               </div>
             ) : modificadoresFiltrados.length === 0 ? (
@@ -260,8 +265,8 @@ export default function ModalModificadores({
                   placeholder="0.00" 
                   className="w-full rounded-2xl py-3.5 md:py-4 px-4 md:px-5 font-black font-mono text-xl md:text-2xl outline-none border-2 bg-emerald-500/5 border-emerald-500/20 text-emerald-500 focus:border-emerald-500/40 transition-all placeholder:text-emerald-500/30"
                 />
-                <p className="text-[9px] text-neutral-500 mt-2 px-1 md:px-2 leading-relaxed">
-                  💡 Si dejas vacío, se guardará como S/ 0.00 (sin costo adicional)
+                <p className="text-[9px] text-neutral-500 mt-2 px-1 md:px-2 leading-relaxed flex items-start gap-1">
+                  <i className="fi fi-rr-info mt-0.5"></i> Si dejas vacío, se guardará como S/ 0.00 (sin costo adicional)
                 </p>
               </div>
 
@@ -270,9 +275,10 @@ export default function ModalModificadores({
                   ¿A qué categorías aplica? *
                 </label>
                 {categorias.length === 0 ? (
-                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#1a1a1a] border-[#333]' : 'bg-white border-gray-200'}`}>
+                  <div className={`p-4 rounded-xl border flex items-start gap-2 ${isDark ? 'bg-[#1a1a1a] border-[#333]' : 'bg-white border-gray-200'}`}>
+                    <i className="fi fi-rr-exclamation text-amber-500 mt-0.5"></i>
                     <p className="text-xs text-neutral-500">
-                      ⚠️ No hay categorías disponibles. Crea categorías primero en el menú.
+                      No hay categorías disponibles. Crea categorías primero en el menú.
                     </p>
                   </div>
                 ) : (
@@ -299,24 +305,25 @@ export default function ModalModificadores({
               </div>
 
               <div className="pt-2 pb-6 md:pb-0">
-                <button 
+                <button
                   onClick={validarYGuardar}
                   style={{ backgroundColor: colorPrimario }}
-                  className="w-full py-4 md:py-5 rounded-xl md:rounded-2xl text-white text-sm md:text-base font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
+                  className="w-full py-4 md:py-5 rounded-xl md:rounded-2xl text-white text-sm md:text-base font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
-                  {editando ? '💾 Actualizar' : '✨ Guardar'}
+                  <i className={`fi ${editando ? 'fi-rr-disk' : 'fi-rr-add'}`}></i>
+                  {editando ? 'Guardar Cambios' : 'Crear Modificador'}
                 </button>
 
                 {editando && (
-                  <button 
+                  <button
                     onClick={manejarNuevo}
-                    className={`w-full py-3.5 md:py-4 mt-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold uppercase tracking-wider border transition-all ${
-                      isDark 
-                        ? 'bg-[#1a1a1a] border-[#333] text-neutral-400 hover:bg-[#222]' 
+                    className={`w-full py-3.5 md:py-4 mt-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${
+                      isDark
+                        ? 'bg-[#1a1a1a] border-[#333] text-neutral-400 hover:bg-[#222]'
                         : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    ✖ Cancelar
+                    <i className="fi fi-rr-cross-small"></i> Cancelar
                   </button>
                 )}
               </div>

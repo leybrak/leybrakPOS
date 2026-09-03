@@ -74,10 +74,13 @@ export const useErpDashboard = () => {
   const [modificadoresReales, setModificadoresReales] = useState([]);
   const [modalPlato, setModalPlato] = useState(false);
   const [pasoModal, setPasoModal] = useState(1);
-  const [formPlato, setFormPlato] = useState({ 
+  const [formPlato, setFormPlato] = useState({
     id: null, nombre: '', precio_base: '', categoria_id: '', es_venta_rapida: true,
-    requiere_seleccion: false, tiene_variaciones: false, disponible: true, grupos_variacion: []
+    requiere_seleccion: false, tiene_variaciones: false, disponible: true, grupos_variacion: [],
+    imagenFile: null, imagenPreview: null, mejorarConIA: false
   });
+  const [subiendoImagenPlato, setSubiendoImagenPlato] = useState(false);
+  const [guardandoPlato, setGuardandoPlato] = useState(false);
   const [empleadosReales, setEmpleadosReales] = useState([]);
   const [rolesReales, setRolesReales] = useState([]);
   const [sedesReales, setSedesReales] = useState([]);
@@ -536,6 +539,7 @@ export const useErpDashboard = () => {
 
   const manejarGuardarPlato = async () => {
     if (!formPlato.nombre) return alert("Obligatorio.");
+    if (guardandoPlato) return; // evita doble click mientras ya se está guardando
     const negocioId = localStorage.getItem('negocio_id') || 1;
     const gruposLimpios = formPlato.grupos_variacion.map(g => ({
       ...g,
@@ -547,14 +551,40 @@ export const useErpDashboard = () => {
       tiene_variaciones: formPlato.tiene_variaciones, disponible: formPlato.disponible,
       categoria: formPlato.categoria_id || null, grupos_variacion: gruposLimpios
     };
+    setGuardandoPlato(true);
     try {
-      if (formPlato.id) await actualizarProducto(formPlato.id, payload);
-      else await crearProducto(payload);
+      let productoId = formPlato.id;
+      if (productoId) await actualizarProducto(productoId, payload);
+      else {
+        const res = await crearProducto(payload);
+        productoId = res.data.id;
+      }
+
+      // Imagen opcional: recién se puede subir con el producto ya creado (necesita su ID)
+      if (formPlato.imagenFile) {
+        setSubiendoImagenPlato(true);
+        try {
+          const form = new FormData();
+          form.append('imagen', formPlato.imagenFile);
+          await api.post(`/productos/${productoId}/subir_imagen/`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+          if (formPlato.mejorarConIA) {
+            const resMejora = await api.post(`/productos/${productoId}/mejorar_imagen/`, { modo: 'ia' });
+            await api.post(`/productos/${productoId}/aplicar_imagen/`, { imagen_base64: resMejora.data.preview });
+          }
+        } catch (imgError) {
+          alert("El plato se guardó, pero hubo un problema con la imagen. Puedes subirla luego desde Carta QR → Fotos Platos.");
+        } finally {
+          setSubiendoImagenPlato(false);
+        }
+      }
+
       setModalPlato(false); setPasoModal(1);
       const res = await getProductos({ sede_id: sedeFiltroIdActivo });
       setProductosReales(res.data);
       alert("✅ Guardado");
     } catch (error) { alert("Error al guardar."); }
+    finally { setGuardandoPlato(false); }
   };
 
   const manejarCrearCategoria = async () => {
@@ -615,7 +645,8 @@ export const useErpDashboard = () => {
       id: plato.id, nombre: plato.nombre, precio_base: plato.precio_base,
       categoria_id: plato.categoria || '', es_venta_rapida: plato.es_venta_rapida || false,
       requiere_seleccion: plato.requiere_seleccion || false, tiene_variaciones: plato.tiene_variaciones || false,
-      disponible: plato.disponible, grupos_variacion: grp
+      disponible: plato.disponible, grupos_variacion: grp,
+      imagenFile: null, imagenPreview: plato.imagen || null, mejorarConIA: false
     });
     setPasoModal(1);
     setModalPlato(true);
@@ -625,7 +656,8 @@ export const useErpDashboard = () => {
     setModalPlato(false); setPasoModal(1);
     setFormPlato({
       id: null, nombre: '', precio_base: '', categoria_id: '', es_venta_rapida: false,
-      requiere_seleccion: false, tiene_variaciones: false, disponible: true, grupos_variacion: []
+      requiere_seleccion: false, tiene_variaciones: false, disponible: true, grupos_variacion: [],
+      imagenFile: null, imagenPreview: null, mejorarConIA: false
     });
   };
 
@@ -642,7 +674,7 @@ export const useErpDashboard = () => {
     isCollapsed, setIsCollapsed,
     modalEmpleado, setModalEmpleado, modalVariacionesOpen, setModalVariacionesOpen,
     productoParaVariaciones, setProductoParaVariaciones, categorias, setCategorias,
-    guardandoConfig, setGuardandoConfig, productosReales, setProductosReales,
+    guardandoConfig, setGuardandoConfig, productosReales, setProductosReales, subiendoImagenPlato, guardandoPlato,
     modalPlato, setModalPlato, pasoModal, setPasoModal, formPlato, setFormPlato,
     empleadosReales, setEmpleadosReales, rolesReales, setRolesReales, sedesReales, setSedesReales,
     formEmpleado, setFormEmpleado, metricas, setMetricas, modalCategorias, setModalCategorias,
