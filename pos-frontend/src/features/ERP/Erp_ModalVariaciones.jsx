@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import usePosStore from '../../store/usePosStore';
 import { getCatalogoGlobal, actualizarVariacionesProducto } from '../../api/api';
+import { useToast } from '../../context/ToastContext';
 
 // ============================================================
 // SUBCOMPONENTE: buscador de insumos para agregar a una opción
@@ -68,6 +69,7 @@ export default function ModalVariaciones({ isOpen, onClose, producto, config }) 
   const { configuracionGlobal } = usePosStore();
   const isDark = (config?.temaFondo || config?.tema_fondo || configuracionGlobal?.temaFondo || 'dark') === 'dark';
   const colorPrimario = config?.colorPrimario || config?.color_primario || configuracionGlobal?.colorPrimario || '#ff5a1f';
+  const toast = useToast();
 
   const [catalogo, setCatalogo] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -124,10 +126,11 @@ export default function ModalVariaciones({ isOpen, onClose, producto, config }) 
     setCargando(true);
     try {
       await actualizarVariacionesProducto(producto.id, grupos);
+      toast.success('Recetas de variaciones guardadas correctamente.');
       onClose();
     } catch (error) {
       console.error(error);
-      alert('Hubo un error al guardar las variaciones.');
+      toast.error('Hubo un error al guardar las variaciones.');
     } finally {
       setCargando(false);
     }

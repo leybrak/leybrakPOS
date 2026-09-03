@@ -7,9 +7,13 @@ import {
 } from '../../api/api';
 import api from '../../api/api';
 import usePosStore from '../../store/usePosStore';
+import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export const useErpDashboard = () => {
   const { configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const toast = useToast();
+  const confirmar = useConfirm();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
@@ -538,7 +542,7 @@ export const useErpDashboard = () => {
   };
 
   const manejarGuardarPlato = async () => {
-    if (!formPlato.nombre) return alert("Obligatorio.");
+    if (!formPlato.nombre) return toast.warning("El nombre del plato es obligatorio.");
     if (guardandoPlato) return; // evita doble click mientras ya se está guardando
     const negocioId = localStorage.getItem('negocio_id') || 1;
     const gruposLimpios = formPlato.grupos_variacion.map(g => ({
@@ -573,7 +577,7 @@ export const useErpDashboard = () => {
             await api.post(`/productos/${productoId}/aplicar_imagen/`, { imagen_base64: resMejora.data.preview });
           }
         } catch (imgError) {
-          alert("El plato se guardó, pero hubo un problema con la imagen. Puedes subirla luego desde Carta QR → Fotos Platos.");
+          toast.warning("El plato se guardó, pero hubo un problema con la imagen. Puedes subirla luego desde Carta QR → Fotos Platos.");
         } finally {
           setSubiendoImagenPlato(false);
         }
@@ -582,8 +586,8 @@ export const useErpDashboard = () => {
       setModalPlato(false); setPasoModal(1);
       const res = await getProductos({ sede_id: sedeFiltroIdActivo });
       setProductosReales(res.data);
-      alert("✅ Guardado");
-    } catch (error) { alert("Error al guardar."); }
+      toast.success("Plato guardado correctamente.");
+    } catch (error) { toast.error("Error al guardar el plato."); }
     finally { setGuardandoPlato(false); }
   };
 
@@ -595,15 +599,15 @@ export const useErpDashboard = () => {
       });
       setCategorias([...categorias, res.data]);
       setNombreNuevaCat('');
-    } catch (error) { alert("Error al crear categoría."); }
+    } catch (error) { toast.error("Error al crear la categoría."); }
   };
 
   const eliminarCategoriaLocal = async (id) => {
-    if (!window.confirm("¿Seguro?")) return;
+    if (!(await confirmar('¿Eliminar esta categoría del menú?'))) return;
     try {
       await parchearCategoria(id, { activo: false });
       setCategorias(categorias.filter(c => c.id !== id));
-    } catch (error) {}
+    } catch (error) { toast.error("Error al eliminar la categoría."); }
   };
 
   const toggleDisponibilidad = async (plato) => {
@@ -615,12 +619,12 @@ export const useErpDashboard = () => {
     } catch (error) {
       // Revertimos si el server falló
       setProductosReales(prev => prev.map(p => p.id === plato.id ? { ...p, disponible: !nuevoValor } : p));
-      alert("Error al cambiar estado.");
+      toast.error("Error al cambiar el estado del plato.");
     }
   };
 
   const eliminarProductoLocal = async (plato) => {
-    if (!window.confirm(`¿Eliminar "${plato.nombre}" del catálogo? No se borrará el historial de ventas, solo dejará de mostrarse.`)) return;
+    if (!(await confirmar(`¿Eliminar "${plato.nombre}" del catálogo? No se borrará el historial de ventas, solo dejará de mostrarse.`))) return;
     // Optimistic UI: lo quitamos del panel de inmediato
     setProductosReales(prev => prev.filter(p => p.id !== plato.id));
     try {
@@ -628,7 +632,7 @@ export const useErpDashboard = () => {
     } catch (error) {
       // Revertimos si el server falló
       setProductosReales(prev => [...prev, plato]);
-      alert("Error al eliminar el producto.");
+      toast.error("Error al eliminar el producto.");
     }
   };
 
