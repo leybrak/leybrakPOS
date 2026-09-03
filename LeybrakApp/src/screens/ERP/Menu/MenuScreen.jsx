@@ -15,6 +15,8 @@ import useAppStore from '../../../store/useAppStore';
 import ModalCategorias from './ModalCategorias';
 import ModalPlato      from './ModalPlato';
 import ModalCombos from './ModalCombos';
+import ModalReceta from './ModalReceta';
+import ModalVariaciones from './ModalVariaciones';
 // ─── Hook de tema ─────────────────────────────────────────────
 const useTema = () => {
   const { configuracionGlobal } = useAppStore();
@@ -34,7 +36,7 @@ const useTema = () => {
   };
 };
 // ─── Tarjeta de plato ─────────────────────────────────────────
-function TarjetaPlato({ plato, categoria, t, esDueno, onToggle, onEditar }) {
+function TarjetaPlato({ plato, categoria, t, esDueno, onToggle, onEditar, onConfigurar }) {
   const esVariable  = parseFloat(plato.precio_base) <= 0;
   const necesitaVar = plato.requiere_seleccion || plato.tiene_variaciones;
 
@@ -100,7 +102,7 @@ function TarjetaPlato({ plato, categoria, t, esDueno, onToggle, onEditar }) {
               ? { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.2)' }
               : { backgroundColor: t.bgCard2, borderColor: t.border2 }
             ]}
-            onPress={() => Alert.alert('Próximamente', necesitaVar ? 'Variaciones' : 'Receta')}
+            onPress={() => onConfigurar(plato, necesitaVar)}
             activeOpacity={0.8}
           >
             <Icon
@@ -126,6 +128,8 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing]   = useState(false);
   const [rolUsuario, setRolUsuario]   = useState('');
   const [modalCombosVisible, setModalCombosVisible] = useState(false);
+  const [platoConfigurar, setPlatoConfigurar] = useState(null);
+  const [tipoConfigurar, setTipoConfigurar] = useState(null); // 'variaciones' | 'receta'
   const esDueno = ['dueño', 'admin', 'administrador'].includes(rolUsuario.toLowerCase());
 
   const cargar = useCallback(async () => {
@@ -314,7 +318,11 @@ export default function MenuScreen() {
               t={t}
               esDueno={esDueno}
               onToggle={handleToggle}
-              onEditar={(p) => { setPlatoEditar(p); setModalPlatoVisible(true); }} 
+              onEditar={(p) => { setPlatoEditar(p); setModalPlatoVisible(true); }}
+              onConfigurar={(p, necesitaVar) => {
+                setPlatoConfigurar(p);
+                setTipoConfigurar(necesitaVar ? 'variaciones' : 'receta');
+              }}
             />
           ))
         )}
@@ -342,6 +350,18 @@ export default function MenuScreen() {
         categorias={categorias}
         t={t}
         onCerrar={() => setModalCombosVisible(false)}
+      />
+      <ModalReceta
+        visible={tipoConfigurar === 'receta'}
+        plato={platoConfigurar}
+        t={t}
+        onCerrar={() => { setPlatoConfigurar(null); setTipoConfigurar(null); cargar(); }}
+      />
+      <ModalVariaciones
+        visible={tipoConfigurar === 'variaciones'}
+        plato={platoConfigurar}
+        t={t}
+        onCerrar={() => { setPlatoConfigurar(null); setTipoConfigurar(null); cargar(); }}
       />
     </View>
   );
