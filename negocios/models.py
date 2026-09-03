@@ -739,10 +739,18 @@ class GrupoVariacion(models.Model):
         return f"{self.nombre} - {self.producto.nombre}"
 
 class OpcionVariacion(models.Model):
+    MODO_STOCK_CHOICES = [
+        ('receta', 'Receta (insumos y cantidades)'),
+        ('unidad', 'Por unidad'),
+    ]
     grupo = models.ForeignKey(GrupoVariacion, related_name='opciones', on_delete=models.CASCADE)
     nombre = models.CharField(max_length=50)
     # Cuánto suma al precio_base del producto. Si la Pizza Hawaiana base cuesta 0, la opción Familiar suma 35.
-    precio_adicional = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) 
+    precio_adicional = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # 'receta' = descuenta insumos con cantidad (gramos/ml/etc, vía RecetaOpcion).
+    # 'unidad' = descuenta 1 insumo entero (unidad_medida='unidades'), sin armar receta.
+    # Ambos modos usan la misma tabla RecetaOpcion; 'unidad' solo restringe a 1 fila desde el frontend.
+    modo_stock = models.CharField(max_length=10, choices=MODO_STOCK_CHOICES, default='receta')
 
     def __str__(self):
         return f"{self.nombre} (+S/ {self.precio_adicional})"

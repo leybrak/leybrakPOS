@@ -169,7 +169,7 @@ class OpcionVariacionSerializer(serializers.ModelSerializer):
     ingredientes = RecetaOpcionSerializer(many=True, required=False)
     class Meta:
         model = OpcionVariacion
-        fields = ['id', 'nombre', 'precio_adicional', 'ingredientes']
+        fields = ['id', 'nombre', 'precio_adicional', 'modo_stock', 'ingredientes']
         # 👇 Esto evita errores cuando actualizamos opciones que ya existen
         extra_kwargs = {'id': {'read_only': False, 'required': False}}
 
