@@ -1,23 +1,48 @@
-import React, { useState } from 'react';
-import usePosStore from '../../store/usePosStore'; 
+import React, { useState, useRef } from 'react';
+import usePosStore from '../../store/usePosStore';
 
-export default function ModalFormularioPlato({ 
-  isOpen, 
-  onClose, 
-  formPlato, 
-  setFormPlato, 
-  pasoModal, 
-  setPasoModal, 
-  categorias, 
-  manejarGuardarPlato 
+export default function ModalFormularioPlato({
+  isOpen,
+  onClose,
+  formPlato,
+  setFormPlato,
+  pasoModal,
+  setPasoModal,
+  categorias,
+  manejarGuardarPlato,
+  subiendoImagenPlato,
+  guardandoPlato
 }) {
   const { configuracionGlobal } = usePosStore();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
   const [dropdownCatModalAbierto, setDropdownCatModalAbierto] = useState(false);
+  const inputImagenRef = useRef(null);
 
   if (!isOpen) return null;
+
+  const hayImagen = !!(formPlato.imagenFile || formPlato.imagenPreview);
+
+  const onSeleccionarImagen = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFormPlato({ ...formPlato, imagenFile: file, imagenPreview: URL.createObjectURL(file) });
+  };
+
+  const onQuitarImagen = () => {
+    setFormPlato({ ...formPlato, imagenFile: null, imagenPreview: null, mejorarConIA: false });
+    if (inputImagenRef.current) inputImagenRef.current.value = '';
+  };
+
+  // Estado combinado para bloquear el botón de guardar y evitar múltiples clicks
+  const procesando = guardandoPlato || subiendoImagenPlato;
+  const colorBotonGuardar = tema === 'dark' ? '#3a3a3a' : '#d1d5db';
+  const textoBotonGuardar = subiendoImagenPlato
+    ? 'PROCESANDO IMAGEN...'
+    : guardandoPlato
+      ? (formPlato.id ? 'ACTUALIZANDO...' : 'CREANDO...')
+      : (formPlato.id ? 'ACTUALIZAR PLATO' : 'GUARDAR PLATO');
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -130,6 +155,66 @@ export default function ModalFormularioPlato({
                 </div>
               </div>
 
+              {/* Foto del plato (opcional) */}
+              <div className={`border rounded-2xl p-4 space-y-3 ${tema === 'dark' ? 'bg-[#1a1a1a] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
+                <h4 className={`font-bold text-sm border-b pb-2 ${tema === 'dark' ? 'text-white border-[#333]' : 'text-gray-900 border-gray-200'}`}>Foto del Plato (opcional)</h4>
+
+                <div className="flex items-center gap-4">
+                  <div className={`w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden shrink-0 ${tema === 'dark' ? 'border-[#444] bg-[#111]' : 'border-gray-300 bg-white'}`}>
+                    {formPlato.imagenPreview
+                      ? <img src={formPlato.imagenPreview} alt="Vista previa" className="w-full h-full object-cover" />
+                      : <i className="fi fi-rr-picture text-2xl text-gray-400"></i>
+                    }
+                  </div>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => inputImagenRef.current.click()}
+                        className="px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all"
+                        style={{ borderColor: colorPrimario, color: colorPrimario }}
+                      >
+                        {hayImagen ? 'Cambiar Foto' : 'Subir Foto'}
+                      </button>
+                      {hayImagen && (
+                        <button
+                          type="button"
+                          onClick={onQuitarImagen}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${tema === 'dark' ? 'border-[#333] text-neutral-400 hover:border-red-500 hover:text-red-500' : 'border-gray-200 text-gray-500 hover:border-red-500 hover:text-red-500'}`}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                    <input ref={inputImagenRef} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={onSeleccionarImagen} />
+                    <p className={`text-[11px] ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-500'}`}>
+                      Puedes agregarla ahora o después desde Carta QR → Fotos Platos.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Mejorar con IA (solo tiene sentido si hay una foto para procesar) */}
+                {formPlato.imagenFile && (
+                  <label className="flex items-center gap-3 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={formPlato.mejorarConIA}
+                      onChange={(e) => setFormPlato({ ...formPlato, mejorarConIA: e.target.checked })}
+                    />
+                    <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tema === 'dark' ? 'bg-[#333]' : 'bg-gray-300'}`} style={formPlato.mejorarConIA ? { backgroundColor: '#a855f7' } : {}}>
+                      <div className={`absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 shadow-md transition-transform duration-300 ease-in-out ${formPlato.mejorarConIA ? 'translate-x-full' : ''}`}></div>
+                    </div>
+                    <div>
+                      <p className={`font-bold text-sm flex items-center gap-1.5 ${tema === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                        <i className="fi fi-rr-magic-wand" style={{ color: '#a855f7' }}></i> Mejorar automáticamente con IA
+                      </p>
+                      <p className={`text-[11px] ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-500'}`}>La IA reilumina la foto tipo estudio al guardar.</p>
+                    </div>
+                  </label>
+                )}
+              </div>
+
               {/* Comportamiento (Switches) - ✨ LÓGICA DE NEGOCIO CORREGIDA ✨ */}
               <div className={`border rounded-2xl p-4 space-y-4 ${tema === 'dark' ? 'bg-[#1a1a1a] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
                 <h4 className={`font-bold text-sm mb-2 border-b pb-2 ${tema === 'dark' ? 'text-white border-[#333]' : 'text-gray-900 border-gray-200'}`}>Comportamiento en POS</h4>
@@ -222,8 +307,15 @@ export default function ModalFormularioPlato({
                   {formPlato.id ? 'EDITAR OPCIONES / PRECIOS →' : 'SIGUIENTE: DEFINIR OPCIONES →'}
                 </button>
               ) : (
-                <button onClick={manejarGuardarPlato} disabled={!formPlato.nombre || !formPlato.precio_base} className="w-full text-white py-4 rounded-xl font-black shadow-lg disabled:opacity-50 transition-all active:scale-[0.98]" style={{ backgroundColor: colorPrimario, boxShadow: `0 4px 15px ${colorPrimario}4D` }}>
-                  {formPlato.id ? 'ACTUALIZAR PLATO' : 'GUARDAR PLATO'}
+                <button
+                  onClick={manejarGuardarPlato}
+                  disabled={!formPlato.nombre || !formPlato.precio_base || procesando}
+                  className="w-full text-white py-4 rounded-xl font-black shadow-lg disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                  style={procesando
+                    ? { backgroundColor: colorBotonGuardar, boxShadow: 'none', color: tema === 'dark' ? '#888' : '#6b7280' }
+                    : { backgroundColor: colorPrimario, boxShadow: `0 4px 15px ${colorPrimario}4D` }}
+                >
+                  {textoBotonGuardar}
                 </button>
               )}
             </div>
@@ -312,8 +404,15 @@ export default function ModalFormularioPlato({
               </div>
 
               {/* BOTÓN FINAL DE GUARDAR */}
-              <button onClick={manejarGuardarPlato} className="w-full text-white py-4 rounded-xl font-black shadow-lg mt-8 transition-all active:scale-[0.98]" style={{ backgroundColor: colorPrimario, boxShadow: `0 4px 15px ${colorPrimario}4D` }}>
-                TERMINAR Y GUARDAR
+              <button
+                onClick={manejarGuardarPlato}
+                disabled={procesando}
+                className="w-full text-white py-4 rounded-xl font-black shadow-lg mt-8 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+                style={procesando
+                  ? { backgroundColor: colorBotonGuardar, boxShadow: 'none', color: tema === 'dark' ? '#888' : '#6b7280' }
+                  : { backgroundColor: colorPrimario, boxShadow: `0 4px 15px ${colorPrimario}4D` }}
+              >
+                {subiendoImagenPlato ? 'PROCESANDO IMAGEN...' : guardandoPlato ? 'GUARDANDO...' : 'TERMINAR Y GUARDAR'}
               </button>
             </div>
           )}

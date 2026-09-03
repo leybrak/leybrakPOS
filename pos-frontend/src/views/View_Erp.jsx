@@ -168,7 +168,7 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
     sedeFiltro, cambiarSedeFiltro, sedeFiltroId, setSedeFiltroId, 
     menuAbierto, setMenuAbierto, isCollapsed, setIsCollapsed, modalEmpleado, setModalEmpleado, 
     modalVariacionesOpen, setModalVariacionesOpen, productoParaVariaciones, setProductoParaVariaciones, 
-    categorias, guardandoConfig, productosReales, 
+    categorias, guardandoConfig, productosReales, subiendoImagenPlato, guardandoPlato,
     modalPlato, setModalPlato, pasoModal, setPasoModal, formPlato, setFormPlato,
     empleadosReales, sedesReales, formEmpleado, setFormEmpleado, metricas, 
     modalCategorias, setModalCategorias, nombreNuevaCat, setNombreNuevaCat, 
@@ -299,7 +299,7 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
       {/* ========================================== */}
       
       <Erp_ModalEmpleado isOpen={modalEmpleado} config={config} formEmpleado={formEmpleado} setFormEmpleado={setFormEmpleado} rolesFiltrados={rolesFiltrados} sedesReales={sedesReales} onGuardar={manejarGuardarEmpleado} onClose={() => { setModalEmpleado(false); setFormEmpleado({ id: null, nombre: '', pin: '', rol: rolesFiltrados[0]?.id || '', sede: sedesReales[0]?.id || '' }); }} />
-      <Erp_ModalPlato isOpen={modalPlato} onClose={cerrarModalPlato} formPlato={formPlato} setFormPlato={setFormPlato} pasoModal={pasoModal} setPasoModal={setPasoModal} categorias={categorias} manejarGuardarPlato={manejarGuardarPlato} />
+      <Erp_ModalPlato isOpen={modalPlato} onClose={cerrarModalPlato} formPlato={formPlato} setFormPlato={setFormPlato} pasoModal={pasoModal} setPasoModal={setPasoModal} categorias={categorias} manejarGuardarPlato={manejarGuardarPlato} subiendoImagenPlato={subiendoImagenPlato} guardandoPlato={guardandoPlato} />
       <Erp_ModalCategorias isOpen={modalCategorias} onClose={() => setModalCategorias(false)} tema={tema} colorPrimario={colorPrimario} nombreNuevaCat={nombreNuevaCat} setNombreNuevaCat={setNombreNuevaCat} manejarCrearCategoria={manejarCrearCategoria} categorias={categorias} eliminarCategoriaLocal={eliminarCategoriaLocal} />
       <Erp_ModalCambios isOpen={modalCambiosPendientes} config={config} onGuardar={guardarYCambiarVista} onDescartar={descartarCambios} onCancelar={cancelarCambioVista} />
       <Erp_ModalReceta isOpen={modalRecetaOpen} onClose={() => setModalRecetaOpen(false)} producto={productoParaReceta} config={config} />
