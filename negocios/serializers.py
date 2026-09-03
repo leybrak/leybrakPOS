@@ -155,6 +155,9 @@ class RecetaOpcionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RecetaOpcion
         fields = ['id', 'opcion', 'insumo', 'nombre_insumo', 'unidad_medida', 'cantidad_necesaria']
+        # 'opcion' se asigna en el backend al crear la opción (ver ProductoSerializer.create/update);
+        # el frontend nunca lo manda porque la opción todavía no existe al armar el payload.
+        extra_kwargs = {'opcion': {'required': False}}
 
 class ModificadorRapidoSerializer(serializers.ModelSerializer):
     class Meta:

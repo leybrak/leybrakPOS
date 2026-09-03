@@ -202,6 +202,13 @@ export const getCatalogoGlobal      = (params) => api.get('/insumo-base/', { par
 export const getInsumosSede         = (params) => api.get('/insumo-sede/', { params });
 export const registrarIngresoMasivo = (data)   => api.post('/insumo-sede/ingreso_masivo/', data);
 
+// ─── Recetas y variaciones de productos ────────────────────────
+export const getReceta = (productoId) => api.get(`/productos/${productoId}/obtener_receta/`);
+export const guardarReceta = (productoId, datosReceta) =>
+  api.post(`/productos/${productoId}/configurar_receta/`, datosReceta);
+export const actualizarVariacionesProducto = (productoId, gruposData) =>
+  api.patch(`/productos/${productoId}/`, { grupos_variacion: gruposData });
+
 // ─── CRM (clientes) ───────────────────────────────────────────
 export const getClientes = (params) => api.get('/clientes/', { params });
 
