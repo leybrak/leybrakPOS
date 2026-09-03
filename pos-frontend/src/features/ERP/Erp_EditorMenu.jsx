@@ -207,7 +207,7 @@ export default function EditorMenu({
                     </div>
 
                     {/* Pie */}
-                    <div className={`mt-auto flex items-end justify-between pt-5 border-t ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+                    <div className={`mt-auto flex flex-wrap items-end justify-between gap-y-3 pt-5 border-t ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
                       <div>
                         <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}>
                           Precio Base
@@ -224,7 +224,7 @@ export default function EditorMenu({
                         )}
                       </div>
 
-                      <div className="flex gap-2.5 shrink-0 z-10">
+                      <div className="flex gap-2.5 shrink-0 z-10 ml-auto">
                         {/* Toggle disponibilidad */}
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggleDisponibilidad(plato); }}
