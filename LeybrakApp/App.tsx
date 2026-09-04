@@ -8,6 +8,8 @@ import useAppStore from './src/store/useAppStore';
 import { StatusBar, View, ActivityIndicator,NativeModules } from 'react-native';
 import useActualizacionForzada from './src/hooks/useActualizacionForzada';
 import PantallaActualizacion from './src/screens/PantallaActualizacion';
+import { ToastProvider } from './src/context/ToastContext';
+import { ConfirmProvider } from './src/context/ConfirmContext';
 
 export default function App() {
   const [sesion, setSesion] = useState<any>(null);
@@ -148,7 +150,11 @@ export default function App() {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
-      <AppNavigator sesion={sesion} onLogout={handleLogout} />
+      <ToastProvider>
+        <ConfirmProvider>
+          <AppNavigator sesion={sesion} onLogout={handleLogout} />
+        </ConfirmProvider>
+      </ToastProvider>
     </>
   );
 }
