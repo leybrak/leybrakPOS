@@ -6,7 +6,7 @@ from .models import (
     ComboPromocional, ComponenteCombo, InsumoBase, InsumoSede, ItemComboPromocional, Negocio, PagoSuscripcion, PlanSaaS, ReglaNegocio, Sede, Mesa, Producto, Orden, DetalleOrden, Pago,
     ModificadorRapido, GrupoVariacion, OpcionVariacion, Rol, Empleado, SesionCaja,
     DetalleOrdenOpcion , Categoria, RecetaOpcion, Cliente, VariacionProducto, ZonaDelivery, HorarioVisibilidad,
-    ModuloGlobal, TicketSoporte, DatosPagoPlataforma
+    ModuloGlobal, TicketSoporte, DatosPagoPlataforma, Proveedor, OrdenCompra, OrdenCompraDetalle
 )
 
 
@@ -406,6 +406,73 @@ class InsumoSedeSerializer(serializers.ModelSerializer):
             'id', 'insumo_base', 'nombre_insumo', 'unidad_medida',
             'sede', 'stock_actual', 'stock_minimo', 'costo_unitario',
         ]
+
+class ProveedorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Proveedor
+        fields = [
+            'id', 'nombre', 'contacto_nombre', 'telefono', 'email',
+            'ruc', 'direccion', 'notas', 'activo', 'creado_en',
+        ]
+
+
+class OrdenCompraDetalleSerializer(serializers.ModelSerializer):
+    nombre_insumo = serializers.ReadOnlyField(source='insumo_base.nombre')
+    unidad_medida = serializers.ReadOnlyField(source='insumo_base.unidad_medida')
+
+    class Meta:
+        model = OrdenCompraDetalle
+        fields = [
+            'id', 'insumo_base', 'nombre_insumo', 'unidad_medida',
+            'cantidad_pedida', 'cantidad_recibida', 'costo_unitario_referencial',
+        ]
+
+
+class OrdenCompraSerializer(serializers.ModelSerializer):
+    # El campo se llama "lineas" de cara a la API (payload/response); internamente
+    # mapea al related_name real del modelo, `detalles`.
+    lineas = OrdenCompraDetalleSerializer(many=True, source='detalles')
+    nombre_proveedor = serializers.ReadOnlyField(source='proveedor.nombre')
+    nombre_sede_destino = serializers.ReadOnlyField(source='sede_destino.nombre')
+    nombre_sede_solicitante = serializers.ReadOnlyField(source='sede_solicitante.nombre')
+    nombre_creado_por = serializers.ReadOnlyField(source='creado_por.nombre')
+
+    class Meta:
+        model = OrdenCompra
+        fields = [
+            'id', 'origen', 'proveedor', 'nombre_proveedor',
+            'sede_destino', 'nombre_sede_destino', 'sede_solicitante', 'nombre_sede_solicitante',
+            'creado_por', 'nombre_creado_por', 'estado',
+            'fecha_pedido', 'fecha_estimada', 'fecha_recepcion', 'notas',
+            'whatsapp_enviado', 'whatsapp_enviado_en',
+            'creado_en', 'actualizado_en', 'lineas',
+        ]
+        read_only_fields = [
+            'estado', 'fecha_pedido', 'fecha_recepcion',
+            'whatsapp_enviado', 'whatsapp_enviado_en',
+        ]
+
+    def create(self, validated_data):
+        detalles_data = validated_data.pop('detalles', [])
+        validated_data['negocio'] = self.context['request'].user.negocio
+        orden = OrdenCompra.objects.create(**validated_data)
+        for detalle_data in detalles_data:
+            OrdenCompraDetalle.objects.create(orden=orden, **detalle_data)
+        return orden
+
+    def update(self, instance, validated_data):
+        if instance.estado != 'borrador':
+            raise serializers.ValidationError('Solo se puede editar un pedido en borrador.')
+        detalles_data = validated_data.pop('detalles', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if detalles_data is not None:
+            instance.detalles.all().delete()
+            for detalle_data in detalles_data:
+                OrdenCompraDetalle.objects.create(orden=instance, **detalle_data)
+        return instance
+
 
 class ClienteSerializer(serializers.ModelSerializer):
     # ✨ Campo calculado: el bot solo lee un Booleano y sabe si saludar o no

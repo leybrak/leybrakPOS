@@ -48,6 +48,11 @@ from .inventario_views import (
     registrar_ingreso_maestro,
 )
 
+from .compras_views import (
+    ProveedorViewSet,
+    OrdenCompraViewSet,
+)
+
 from .cliente_views import (
     ClienteViewSet,
     ZonaDeliveryViewSet,

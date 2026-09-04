@@ -318,6 +318,25 @@ export const registrarIngresoMasivo  = (data)   => api.post('/insumo-sede/ingres
 // ============================================================
 export const getInsumosSede      = (params) => api.get('/insumo-sede/', { params });
 export const vincularInsumoASede = (data)   => api.post('/insumo-sede/', data);
+export const getAlertasBajoStock = (params) => api.get('/insumo-sede/alertas_bajo_stock/', { params });
+
+// ============================================================
+// PEDIDOS / COMPRAS (Proveedores + reabastecimiento interno)
+// ============================================================
+export const getProveedores        = (params)   => api.get('/proveedores/', { params });
+export const crearProveedor        = (data)     => api.post('/proveedores/', data);
+export const actualizarProveedor   = (id, data) => api.patch(`/proveedores/${id}/`, data);
+
+export const getOrdenesCompra      = (params)   => api.get('/ordenes-compra/', { params });
+export const getOrdenCompra        = (id)       => api.get(`/ordenes-compra/${id}/`);
+export const crearOrdenCompra      = (data)     => api.post('/ordenes-compra/', data);
+export const actualizarOrdenCompra = (id, data) => api.patch(`/ordenes-compra/${id}/`, data);
+export const solicitarOrdenCompra  = (id)       => api.post(`/ordenes-compra/${id}/solicitar/`);
+export const confirmarOrdenCompra  = (id, data) => api.post(`/ordenes-compra/${id}/confirmar/`, data);
+export const enCaminoOrdenCompra   = (id)       => api.post(`/ordenes-compra/${id}/marcar_en_camino/`);
+export const recibirOrdenCompra    = (id, data) => api.post(`/ordenes-compra/${id}/recibir/`, data);
+export const cancelarOrdenCompra   = (id, data) => api.post(`/ordenes-compra/${id}/cancelar/`, data);
+export const avisarProveedorWsp    = (id, data) => api.post(`/ordenes-compra/${id}/avisar_proveedor/`, data);
 
 // ============================================================
 // ENDPOINTS PÚBLICOS — Carta QR (sin token)

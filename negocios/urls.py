@@ -44,6 +44,8 @@ router.register(r'ordenes',               views.OrdenViewSet,            basenam
 router.register(r'empleados',             views.EmpleadoViewSet,         basename='empleado')
 router.register(r'insumo-base',           views.InsumoBaseViewSet,       basename='insumobase')
 router.register(r'insumo-sede',           views.InsumoSedeViewSet,       basename='insumosede')
+router.register(r'proveedores',           views.ProveedorViewSet,        basename='proveedor')
+router.register(r'ordenes-compra',        views.OrdenCompraViewSet,      basename='ordencompra')
 router.register(r'modificadores-rapidos', views.ModificadorRapidoViewSet, basename='modificadorrapido')
 router.register(r'grupos-variacion',      views.GrupoVariacionViewSet,   basename='grupovariacion')
 router.register(r'opciones-variacion',    views.OpcionVariacionViewSet,  basename='opcionvariacion')

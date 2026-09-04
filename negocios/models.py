@@ -877,7 +877,100 @@ class RecetaOpcion(models.Model):
 
     def __str__(self):
         return f"{self.cantidad_necesaria} {self.insumo.unidad_medida} de {self.insumo.nombre} para opción {self.opcion.nombre}"
-    
+
+
+class Proveedor(models.Model):
+    """Proveedor externo al que el negocio le compra mercadería (insumos)."""
+    negocio = models.ForeignKey('Negocio', on_delete=models.CASCADE, related_name='proveedores')
+    nombre = models.CharField(max_length=150)
+    contacto_nombre = models.CharField(max_length=150, null=True, blank=True)
+    telefono = models.CharField(max_length=20, null=True, blank=True, help_text="WhatsApp del proveedor")
+    email = models.EmailField(null=True, blank=True)
+    ruc = models.CharField(max_length=11, null=True, blank=True)
+    direccion = models.CharField(max_length=255, null=True, blank=True)
+    notas = models.TextField(null=True, blank=True)
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.nombre
+
+
+class OrdenCompra(models.Model):
+    """
+    Pedido de mercadería con estados. Sirve para dos casos según `origen`:
+    - 'proveedor': el negocio le compra a un Proveedor externo.
+    - 'interno': una sede pide reabastecimiento al almacén central (Matriz).
+    El stock SOLO se actualiza al recibir (ver views/compras_views.py).
+    """
+    ORIGENES = [
+        ('proveedor', 'Compra a Proveedor'),
+        ('interno', 'Reabastecimiento Interno'),
+    ]
+    ESTADOS = [
+        ('borrador', 'Borrador'),
+        ('solicitado', 'Solicitado'),
+        ('confirmado', 'Confirmado'),
+        ('en_camino', 'En Camino'),
+        ('recibido_parcial', 'Recibido Parcial'),
+        ('recibido', 'Recibido'),
+        ('cancelado', 'Cancelado'),
+    ]
+
+    negocio = models.ForeignKey('Negocio', on_delete=models.CASCADE, related_name='ordenes_compra')
+    origen = models.CharField(max_length=12, choices=ORIGENES)
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name='ordenes_compra')
+
+    # NULL = el stock recibido se queda en la Matriz (InsumoBase.stock_general).
+    sede_destino = models.ForeignKey('Sede', on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name='ordenes_compra_recibidas')
+    # Solo aplica a origen='interno': qué sede generó el pedido (trazabilidad de "quién pidió").
+    sede_solicitante = models.ForeignKey('Sede', on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='ordenes_compra_solicitadas')
+
+    creado_por = models.ForeignKey('Empleado', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='ordenes_compra_creadas')
+
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
+
+    fecha_pedido = models.DateTimeField(null=True, blank=True)
+    fecha_estimada = models.DateField(null=True, blank=True)
+    fecha_recepcion = models.DateTimeField(null=True, blank=True)
+    notas = models.TextField(null=True, blank=True)
+
+    whatsapp_enviado = models.BooleanField(default=False)
+    whatsapp_enviado_en = models.DateTimeField(null=True, blank=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['negocio', 'estado']),
+            models.Index(fields=['sede_destino', 'estado']),
+        ]
+
+    @property
+    def sede(self):
+        """Duck-typing para reusar enviar_mensaje_whatsapp(orden, ...) sin tocarlo."""
+        return self.sede_destino or self.negocio.sedes.filter(activo=True).first()
+
+    def __str__(self):
+        return f"OC-{self.id} ({self.get_estado_display()})"
+
+
+class OrdenCompraDetalle(models.Model):
+    orden = models.ForeignKey(OrdenCompra, on_delete=models.CASCADE, related_name='detalles')
+    insumo_base = models.ForeignKey(InsumoBase, on_delete=models.PROTECT, related_name='lineas_orden_compra')
+    cantidad_pedida = models.DecimalField(max_digits=10, decimal_places=3, validators=[MinValueValidator(0)])
+    cantidad_recibida = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    costo_unitario_referencial = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.cantidad_pedida} {self.insumo_base.unidad_medida} de {self.insumo_base.nombre}"
+
+
 class RegistroAuditoria(models.Model):
     """
     EL OJO QUE TODO LO VE (Log de Seguridad)

@@ -92,6 +92,20 @@ class InsumoSedeViewSet(viewsets.ModelViewSet):
             logger.error("Error en ingreso_masivo para insumo %s", insumo_base_id, exc_info=True)
             return Response({"error": "Ocurrió un error interno en el servidor."}, status=500)
 
+    @action(detail=False, methods=['get'])
+    def alertas_bajo_stock(self, request):
+        """Insumos con stock_actual <= stock_minimo, para armar un pedido sugerido."""
+        if not hasattr(request.user, 'negocio'):
+            return Response([])
+        qs = InsumoSede.objects.filter(
+            sede__negocio=request.user.negocio,
+            stock_actual__lte=F('stock_minimo'),
+        ).select_related('insumo_base', 'sede')
+        sede_id = request.query_params.get('sede_id')
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return Response(InsumoSedeSerializer(qs, many=True).data)
+
 
 # ============================================================
 # FUNCIÓN AUXILIAR DE INVENTARIO
