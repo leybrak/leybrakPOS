@@ -28,17 +28,24 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 
 Write-Host "== 1/6: Subiendo versionCode/versionName ($VersionCode / $VersionName) ==" -ForegroundColor Cyan
 
+# NOTA: Get-Content/Set-Content en Windows PowerShell 5.1 rompen archivos UTF-8
+# sin BOM (leen con la codepage del sistema y -Encoding utf8 en Set-Content
+# agrega un BOM que Gradle no acepta -> "Unexpected character: '?'"). Usamos
+# System.IO.File directo con UTF8Encoding($false) para leer/escribir UTF-8
+# real sin BOM y no corromper los acentos/cajas de los comentarios.
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
 $versionJsPath = Join-Path $repoRoot "LeybrakApp\src\config\version.js"
-(Get-Content $versionJsPath -Raw) `
+$versionJsContent = [System.IO.File]::ReadAllText($versionJsPath, [System.Text.Encoding]::UTF8) `
     -replace 'APP_VERSION_CODE = \d+', "APP_VERSION_CODE = $VersionCode" `
-    -replace "APP_VERSION_NAME = '[^']+'", "APP_VERSION_NAME = '$VersionName'" `
-    | Set-Content $versionJsPath -Encoding utf8 -NoNewline
+    -replace "APP_VERSION_NAME = '[^']+'", "APP_VERSION_NAME = '$VersionName'"
+[System.IO.File]::WriteAllText($versionJsPath, $versionJsContent, $utf8NoBom)
 
 $buildGradlePath = Join-Path $repoRoot "LeybrakApp\android\app\build.gradle"
-(Get-Content $buildGradlePath -Raw) `
+$buildGradleContent = [System.IO.File]::ReadAllText($buildGradlePath, [System.Text.Encoding]::UTF8) `
     -replace 'versionCode \d+', "versionCode $VersionCode" `
-    -replace 'versionName "[^"]+"', "versionName `"$VersionName`"" `
-    | Set-Content $buildGradlePath -Encoding utf8 -NoNewline
+    -replace 'versionName "[^"]+"', "versionName `"$VersionName`""
+[System.IO.File]::WriteAllText($buildGradlePath, $buildGradleContent, $utf8NoBom)
 
 Write-Host "== 2/6: Compilando APK release (assembleRelease) ==" -ForegroundColor Cyan
 & C:\LB\android\gradlew.bat -p C:\LB\android assembleRelease --no-daemon
