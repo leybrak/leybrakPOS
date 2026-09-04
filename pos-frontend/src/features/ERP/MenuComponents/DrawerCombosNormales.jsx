@@ -184,32 +184,32 @@ function ProductCardSelector({ producto, isDark, colorPrimario, onClickCard, onC
       yaAgregado ? 'ring-2' : isDark ? 'border-[#2a2a2a] hover:border-[#444]' : 'border-gray-200 hover:border-gray-300'
     }`} style={yaAgregado ? { borderColor: colorPrimario } : {}}>
 
-      <div className="w-full h-16 flex items-center justify-center relative cursor-pointer"
+      <div className="w-full h-24 flex items-center justify-center relative cursor-pointer"
         style={{ backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5' }}
         onClick={() => onClickCard(producto)}>
         {producto.imagen
           ? <img src={producto.imagen} alt={producto.nombre} className="w-full h-full object-cover" />
-          : <i className="fi fi-rr-shopping-bag text-lg opacity-20"></i>
+          : <i className="fi fi-rr-shopping-bag text-2xl opacity-20"></i>
         }
         {yaAgregado && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: colorPrimario + '33' }}>
-            <i className="fi fi-rr-check text-lg" style={{ color: colorPrimario }}></i>
+            <i className="fi fi-rr-check text-2xl" style={{ color: colorPrimario }}></i>
           </div>
         )}
       </div>
 
-      <div className="p-1.5 cursor-pointer" onClick={() => onClickCard(producto)}>
-        <p className={`text-[10px] font-bold leading-tight truncate ${isDark ? 'text-white' : 'text-gray-800'}`}>{producto.nombre}</p>
-        <p className="text-[9px] font-bold mt-0.5" style={{ color: colorPrimario }}>{getPrecioMostrado(producto)}</p>
+      <div className="p-2.5 cursor-pointer" onClick={() => onClickCard(producto)}>
+        <p className={`text-xs font-bold leading-tight line-clamp-2 ${isDark ? 'text-white' : 'text-gray-800'}`}>{producto.nombre}</p>
+        <p className="text-[11px] font-black mt-1" style={{ color: colorPrimario }}>{getPrecioMostrado(producto)}</p>
         {producto.requiere_seleccion && producto.grupos_variacion?.length > 0 && (
-          <span className="text-[8px] text-blue-400 font-bold">Elige presentación</span>
+          <span className="text-[10px] text-blue-400 font-bold">Elige presentación</span>
         )}
       </div>
 
       {esConVariaciones && (
         <button
           onClick={(e) => { e.stopPropagation(); onClickVariaciones(producto); }}
-          className={`w-full text-[8px] font-black uppercase tracking-widest py-1 border-t transition-colors ${
+          className={`w-full text-[10px] font-black uppercase tracking-widest py-1.5 border-t transition-colors ${
             isDark ? 'border-[#2a2a2a] text-purple-400 hover:bg-[#222]' : 'border-gray-100 text-purple-500 hover:bg-purple-50'
           }`}>
           Variaciones ↕
@@ -443,7 +443,7 @@ function FormularioCombo({ combo, isDark, colorPrimario, productosReales, catego
                 <p className={`text-xs font-bold ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>Sin productos</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {productosFiltrados.map(p => {
                   const yaAgregado = form.items.some(it => String(it.producto_hijo_id) === String(p.id));
                   return (
@@ -605,7 +605,7 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-0 sm:p-4 animate-fadeIn">
-      <div className={`w-full max-w-4xl h-full sm:h-[85vh] rounded-none sm:rounded-[2.5rem] shadow-2xl border overflow-hidden flex flex-col ${
+      <div className={`w-full max-w-6xl h-full sm:h-[88vh] rounded-none sm:rounded-[2.5rem] shadow-2xl border overflow-hidden flex flex-col ${
         isDark ? 'bg-[#0d0d0d] border-[#222]' : 'bg-white border-gray-200'
       }`}>
 
@@ -637,7 +637,7 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
         <div id="contenedor-scroll-combo" className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
 
           {/* LISTADO IZQUIERDA */}
-          <div className={`w-full md:w-1/2 p-5 md:p-6 border-b md:border-b-0 md:border-r md:overflow-y-auto shrink-0 md:shrink ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+          <div className={`w-full md:w-2/5 p-5 md:p-6 border-b md:border-b-0 md:border-r md:overflow-y-auto shrink-0 md:shrink ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
             <div className="flex justify-between items-center mb-4 px-1 md:px-2">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
                 Existentes ({combos.length})
@@ -724,7 +724,7 @@ export default function DrawerCombosNormales({ isOpen, onClose, isDark, colorPri
           </div>
 
           {/* FORMULARIO DERECHA */}
-          <div id="form-combo" className="w-full md:w-1/2 p-5 md:p-6 md:overflow-hidden shrink-0 md:shrink flex flex-col min-h-0">
+          <div id="form-combo" className="w-full md:w-3/5 p-5 md:p-6 md:overflow-hidden shrink-0 md:shrink flex flex-col min-h-0">
             <FormularioCombo
               key={comboEditando?.id ?? 'nuevo'}
               combo={comboEditando}
