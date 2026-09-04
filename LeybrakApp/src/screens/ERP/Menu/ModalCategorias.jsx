@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Modal, ScrollView, ActivityIndicator, Alert,
+  Modal, ScrollView, ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 export default function ModalCategorias({ visible, categorias, t, onCrear, onEliminar, onCerrar }) {
+  const toast = useToast();
+  const confirmar = useConfirm();
   const [nombre, setNombre]     = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -15,22 +19,23 @@ export default function ModalCategorias({ visible, categorias, t, onCrear, onEli
     try {
       await onCrear(nombre.trim());
       setNombre('');
+      toast.success('Categoría creada correctamente.');
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.error || 'No se pudo crear la categoría.');
+      toast.error(e?.response?.data?.error || 'No se pudo crear la categoría.');
     } finally {
       setGuardando(false);
     }
   };
 
-  const handleEliminar = (cat) => {
-    Alert.alert(
-      'Eliminar categoría',
-      `¿Eliminar "${cat.nombre}"? Los platos de esta categoría quedarán sin categoría.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => onEliminar(cat.id) },
-      ]
-    );
+  const handleEliminar = async (cat) => {
+    const ok = await confirmar(`¿Eliminar "${cat.nombre}"? Los platos de esta categoría quedarán sin categoría.`);
+    if (!ok) return;
+    try {
+      await onEliminar(cat.id);
+      toast.success('Categoría eliminada.');
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'No se pudo eliminar la categoría.');
+    }
   };
 
   return (
@@ -40,7 +45,12 @@ export default function ModalCategorias({ visible, categorias, t, onCrear, onEli
 
           {/* Header */}
           <View style={[s.header, { borderBottomColor: t.border, backgroundColor: t.bgCard2 }]}>
-            <Text style={[s.titulo, { color: t.textPrim }]}>Categorías del Menú</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
+                <Icon name="folder" size={16} color={t.color} />
+              </View>
+              <Text style={[s.titulo, { color: t.textPrim }]}>Categorías del Menú</Text>
+            </View>
             <TouchableOpacity
               onPress={onCerrar}
               style={[s.closeBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}
@@ -116,6 +126,7 @@ const s = StyleSheet.create({
   overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   modal:         { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: '80%' },
   header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
+  headerIcono:   { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   titulo:        { fontSize: 18, fontWeight: '900' },
   closeBtn:      { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   body:          { padding: 20 },

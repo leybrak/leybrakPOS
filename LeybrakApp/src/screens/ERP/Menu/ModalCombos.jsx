@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Modal, ScrollView, ActivityIndicator, Alert, Image,
+  Modal, ScrollView, ActivityIndicator, Image,
   Platform, StatusBar, KeyboardAvoidingView, RefreshControl
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import api from '../../../api/api';
+import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 // ─── Helper precio ────────────────────────────────────────────
 const getPrecio = (producto) => {
@@ -148,6 +150,7 @@ const mo = StyleSheet.create({
 
 // ─── Formulario combo ─────────────────────────────────────────
 function FormularioCombo({ combo, productos, categorias, t, onGuardar, guardando }) {
+  const toast = useToast();
   const [form, setForm] = useState({ nombre: '', precio: '', items: [] });
   const [busqueda, setBusqueda] = useState('');
   const [catFiltro, setCatFiltro] = useState('todas');
@@ -234,9 +237,9 @@ function FormularioCombo({ combo, productos, categorias, t, onGuardar, guardando
     }));
 
   const handleGuardar = () => {
-    if (!form.nombre.trim()) { Alert.alert('Error', 'El nombre es obligatorio.'); return; }
-    if (!form.precio || parseFloat(form.precio) <= 0) { Alert.alert('Error', 'El precio debe ser mayor a 0.'); return; }
-    if (form.items.length === 0) { Alert.alert('Error', 'Agrega al menos un producto al combo.'); return; }
+    if (!form.nombre.trim()) { toast.warning('El nombre es obligatorio.'); return; }
+    if (!form.precio || parseFloat(form.precio) <= 0) { toast.warning('El precio debe ser mayor a 0.'); return; }
+    if (form.items.length === 0) { toast.warning('Agrega al menos un producto al combo.'); return; }
     onGuardar({ nombre: form.nombre, precio: parseFloat(form.precio), items: form.items });
   };
 
@@ -283,11 +286,16 @@ function FormularioCombo({ combo, productos, categorias, t, onGuardar, guardando
 
         {/* Indicador margen */}
         {precioReal > 0 && parseFloat(form.precio) > 0 && (
-          <View style={[fc.margenBadge, {
+          <View style={[fc.margenBadge, { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center',
             backgroundColor: parseFloat(form.precio) >= precioReal ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'
           }]}>
+            <Icon
+              name={parseFloat(form.precio) >= precioReal ? 'check' : 'exclamation-triangle'}
+              size={11}
+              color={parseFloat(form.precio) >= precioReal ? '#10b981' : '#ef4444'}
+            />
             <Text style={{ color: parseFloat(form.precio) >= precioReal ? '#10b981' : '#ef4444', fontSize: 11, fontWeight: '800' }}>
-              {parseFloat(form.precio) >= precioReal ? '✓ Precio con ganancia' : '⚠ Precio por debajo del costo'}
+              {parseFloat(form.precio) >= precioReal ? 'Precio con ganancia' : 'Precio por debajo del costo'}
               {' · '}S/ {Math.abs(parseFloat(form.precio) - precioReal).toFixed(2)}
             </Text>
           </View>
@@ -404,8 +412,8 @@ function FormularioCombo({ combo, productos, categorias, t, onGuardar, guardando
           {guardando
             ? <ActivityIndicator size="small" color="#fff" />
             : <>
-                <Icon name="save" size={16} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={fc.btnGuardarText}>{combo ? 'ACTUALIZAR COMBO' : 'GUARDAR COMBO'}</Text>
+                <Icon name="floppy-o" size={16} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={fc.btnGuardarText}>{combo ? 'GUARDAR CAMBIOS' : 'CREAR COMBO'}</Text>
               </>
           }
         </TouchableOpacity>
@@ -453,6 +461,8 @@ const fc = StyleSheet.create({
 
 // ─── Modal principal Combos ───────────────────────────────────
 export default function ModalCombos({ visible, productos, categorias, t, onCerrar }) {
+  const toast = useToast();
+  const confirmar = useConfirm();
   const [combos, setCombos]           = useState([]);
   const [cargando, setCargando]       = useState(false);
   const [refrescando, setRefrescando] = useState(false);
@@ -488,31 +498,32 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
         await api.patch(`/productos/${comboEditando.id}/`, { nombre: formData.nombre, precio_base: formData.precio });
         await api.post(`/productos/${comboEditando.id}/actualizar_items_combo/`, { items: formData.items });
       } else {
-        const { data: nuevo } = await api.post('/productos/', { 
-          negocio: negocioId, nombre: formData.nombre, precio_base: formData.precio, es_combo: true, disponible: true 
+        const { data: nuevo } = await api.post('/productos/', {
+          negocio: negocioId, nombre: formData.nombre, precio_base: formData.precio, es_combo: true, disponible: true
         });
         await api.post(`/productos/${nuevo.id}/actualizar_items_combo/`, { items: formData.items });
       }
       await cargar();
+      toast.success(comboEditando ? 'Combo actualizado correctamente.' : 'Combo creado correctamente.');
       setVista('lista');
       setComboEditando(null);
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.error || 'No se pudo guardar el combo. Verifica tu conexión.');
+      toast.error(e?.response?.data?.error || 'No se pudo guardar el combo.');
     } finally {
       setGuardando(false);
     }
   };
 
-  const handleEliminar = (combo) => {
-    Alert.alert('Eliminar combo', `¿Estás seguro de eliminar "${combo.nombre}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        try {
-          await api.patch(`/productos/${combo.id}/`, { activo: false });
-          await cargar();
-        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo eliminar el combo.'); }
-      }},
-    ]);
+  const handleEliminar = async (combo) => {
+    const ok = await confirmar(`¿Eliminar el combo "${combo.nombre}" del menú?`);
+    if (!ok) return;
+    try {
+      await api.patch(`/productos/${combo.id}/`, { activo: false });
+      await cargar();
+      toast.success('Combo eliminado.');
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'No se pudo eliminar el combo.');
+    }
   };
 
   return (
@@ -531,6 +542,9 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
                 <Icon name="chevron-left" size={16} color={t.textSec} />
               </TouchableOpacity>
             )}
+            <View style={[mc.headerIcono, { backgroundColor: `${t.color}15` }]}>
+              <Icon name="th-large" size={16} color={t.color} />
+            </View>
             <View>
               <Text style={[mc.headerSub, { color: t.textMuted }]}>MÓDULO DE MENÚ</Text>
               <Text style={[mc.headerTitulo, { color: t.textPrim }]}>
@@ -629,6 +643,7 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
 const mc = StyleSheet.create({
   container:    { flex: 1 },
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 16, borderBottomWidth: 1 },
+  headerIcono:  { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 2, marginBottom: 2 },
   headerTitulo: { fontSize: 20, fontWeight: '900' },
   backBtn:      { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

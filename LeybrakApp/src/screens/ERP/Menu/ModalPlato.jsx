@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Modal, ScrollView, ActivityIndicator, Alert, Switch,
+  Modal, ScrollView, ActivityIndicator, Switch,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 export default function ModalPlato({ visible, plato, categorias, t, onGuardar, onCerrar }) {
+  const toast = useToast();
+  const confirmar = useConfirm();
   const [paso, setPaso]           = useState(1);
   const [form, setForm]           = useState({});
   const [guardando, setGuardando] = useState(false);
@@ -32,19 +36,20 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
 
   const handleGuardar = async () => {
     if (!form.nombre.trim()) {
-      Alert.alert('Error', 'El nombre es obligatorio.');
+      toast.warning('El nombre del plato es obligatorio.');
       return;
     }
     if (!form.requiere_seleccion && !form.tiene_variaciones && !form.precio_base) {
-      Alert.alert('Error', 'El precio es obligatorio.');
+      toast.warning('El precio es obligatorio.');
       return;
     }
     setGuardando(true);
     try {
       await onGuardar(form);
+      toast.success(form.id ? 'Plato actualizado correctamente.' : 'Plato creado correctamente.');
       onCerrar();
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.error || 'No se pudo guardar.');
+      toast.error(e?.response?.data?.error || 'No se pudo guardar el plato.');
     } finally {
       setGuardando(false);
     }
@@ -76,7 +81,9 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
     });
   };
 
-  const eliminarGrupo = (gi) => {
+  const eliminarGrupo = async (gi) => {
+    const ok = await confirmar('¿Eliminar este grupo?');
+    if (!ok) return;
     setForm({ ...form, grupos_variacion: form.grupos_variacion.filter((_, i) => i !== gi) });
   };
 
@@ -120,6 +127,9 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
                   <Icon name="arrow-left" size={14} color={t.textSec} />
                 </TouchableOpacity>
               )}
+              <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
+                <Icon name="cutlery" size={16} color={t.color} />
+              </View>
               <View>
                 <Text style={[s.titulo, { color: t.textPrim }]}>
                   {form.id ? 'Editar Plato' : 'Nuevo Plato'}
@@ -295,7 +305,7 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
                   >
                     {guardando
                       ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={s.btnPrimarioText}>{form.id ? 'ACTUALIZAR PLATO' : 'GUARDAR PLATO'}</Text>
+                      : <Text style={s.btnPrimarioText}>{form.id ? 'GUARDAR CAMBIOS' : 'CREAR PLATO'}</Text>
                     }
                   </TouchableOpacity>
                 )}
@@ -332,10 +342,7 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
                         placeholderTextColor={t.textMuted}
                       />
                       <TouchableOpacity
-                        onPress={() => Alert.alert('Eliminar grupo', '¿Eliminar este grupo?', [
-                          { text: 'Cancelar', style: 'cancel' },
-                          { text: 'Eliminar', style: 'destructive', onPress: () => eliminarGrupo(gi) },
-                        ])}
+                        onPress={() => eliminarGrupo(gi)}
                         style={[s.btnEliminar, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.2)' }]}
                       >
                         <Icon name="trash" size={13} color="#ef4444" />
@@ -398,7 +405,7 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
                 >
                   {guardando
                     ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={s.btnPrimarioText}>TERMINAR Y GUARDAR</Text>
+                    : <Text style={s.btnPrimarioText}>{form.id ? 'GUARDAR CAMBIOS' : 'CREAR PLATO'}</Text>
                   }
                 </TouchableOpacity>
 
@@ -419,6 +426,7 @@ const s = StyleSheet.create({
   titulo:           { fontSize: 18, fontWeight: '900' },
   subtitulo:        { fontSize: 11, fontWeight: '700', marginTop: 2 },
   backBtn:          { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  headerIcono:      { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   closeBtn:         { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   body:             { padding: 20, paddingBottom: 40 },
 
