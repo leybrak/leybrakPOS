@@ -533,7 +533,7 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
 
         {/* Header */}
         <View style={[mc.header, { backgroundColor: t.bgCard, borderBottomColor: t.border }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, flexShrink: 1, marginRight: 12 }}>
             {vista === 'formulario' && (
               <TouchableOpacity
                 onPress={() => { setVista('lista'); setComboEditando(null); }}
@@ -545,14 +545,14 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
             <View style={[mc.headerIcono, { backgroundColor: `${t.color}15` }]}>
               <Icon name="th-large" size={16} color={t.color} />
             </View>
-            <View>
-              <Text style={[mc.headerSub, { color: t.textMuted }]}>MÓDULO DE MENÚ</Text>
-              <Text style={[mc.headerTitulo, { color: t.textPrim }]}>
+            <View style={{ flex: 1, flexShrink: 1 }}>
+              <Text style={[mc.headerSub, { color: t.textMuted }]} numberOfLines={1}>MÓDULO DE MENÚ</Text>
+              <Text style={[mc.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
                 {vista === 'lista' ? 'Combos del Menú' : comboEditando ? 'Editar Combo' : 'Nuevo Combo'}
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', flexShrink: 0 }}>
             {vista === 'lista' && (
               <TouchableOpacity
                 style={[mc.btnNuevo, { backgroundColor: t.color }]}
