@@ -430,6 +430,29 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
   const numColumnas    = sedeActualInfo?.columnas_salon || 3;
   const anchoCelda     = `${Math.floor(100 / numColumnas) - 3}%`;
 
+  // 🛠️ Antes solo ordenaba las mesas por posicion_x/posicion_y y las renderizaba
+  // en fila — respetaba las columnas pero no la posición real (huecos, mesas
+  // movidas). Igual que MesasGrid.jsx en la web: arma un "plano" con huecos
+  // vacíos en las posiciones sin mesa, usando posicion_x como índice de casilla.
+  const { mapaMesas, totalCasillas } = useMemo(() => {
+    let maxPos = 0;
+    const mapa = {};
+    mesasAgrupadas.forEach(mesa => {
+      let pos = mesa.posicion_x;
+      if (pos === undefined || pos === null || mapa[pos] !== undefined) {
+        pos = 0;
+        while (mapa[pos] !== undefined) pos++;
+      }
+      mapa[pos] = mesa;
+      if (pos > maxPos) maxPos = pos;
+    });
+    const baseCasillas = Math.max(maxPos + 1, mesasAgrupadas.length, 12);
+    const total = Math.ceil(baseCasillas / numColumnas) * numColumnas;
+    return { mapaMesas: mapa, totalCasillas: total };
+  }, [mesasAgrupadas, numColumnas]);
+
+  const casillas = Array.from({ length: totalCasillas }, (_, i) => i);
+
   if (vistaLocal === null || cargando) {
     return (
       <View style={[s.loader, { backgroundColor: t.bg }]}>
@@ -601,9 +624,12 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
             )}
 
             <View style={s.mesasGrid}>
-              {mesasAgrupadas
-                .sort((a, b) => a.posicion_y !== b.posicion_y ? a.posicion_y - b.posicion_y : a.posicion_x - b.posicion_x)
-                .map(mesa => (
+              {casillas.map(i => {
+                const mesa = mapaMesas[i];
+                if (!mesa) {
+                  return <View key={`hueco-${i}`} style={{ width: anchoCelda, height: 128 }} pointerEvents="none" />;
+                }
+                return (
                   <TarjetaMesa
                     key={mesa.id}
                     mesa={mesa}
@@ -614,7 +640,8 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                     seleccionada={mesaPrincipal === mesa.id}
                     modoUnir={modoUnir}
                   />
-                ))}
+                );
+              })}
             </View>
           </>
         )}
