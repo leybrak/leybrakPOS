@@ -283,7 +283,7 @@ export default function PosTerminal({ onIrAErp }) {
         <p className="text-neutral-500 mb-8 max-w-md">El salón y delivery están desactivados. Usa la Venta Rápida.</p>
         <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">⚡ INICIAR VENTA RÁPIDA</button>
         <DrawerVentaRapida isOpen={drawerVentaRapidaAbierto} onClose={() => setDrawerVentaRapidaAbierto(false)} onProcederPago={(carrito, total) => { setOrdenACobrar({ id: 'venta_rapida', es_venta_rapida: true, total, detalles: carrito.map((c) => ({ producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad })) }); setDrawerVentaRapidaAbierto(false); }} />
-        <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
+        <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
       </div>
     );
   }
@@ -334,10 +334,11 @@ export default function PosTerminal({ onIrAErp }) {
           )}
         </div>
 
-        <TerminalSidebar 
-          mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada} 
-          setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas} 
-          setVistaLocal={setVistaLocal} mesas={mesas} tema={tema} colorPrimario={colorPrimario} 
+        <TerminalSidebar
+          mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada}
+          setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas}
+          mesas={mesas} tema={tema} colorPrimario={colorPrimario}
+          setOrdenACobrar={setOrdenACobrar}
         />
       </div>
 
@@ -372,7 +373,7 @@ export default function PosTerminal({ onIrAErp }) {
         isOpen={!!ordenACobrar} 
         onClose={() => setOrdenACobrar(null)}
         total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0}
-        carrito={ordenACobrar ? ordenACobrar.detalles.map((d) => ({ id: d.producto, nombre: d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) : []}
+        carrito={ordenACobrar ? ordenACobrar.detalles.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) : []}
         esVentaRapida={ordenACobrar?.es_venta_rapida || false}
         onCobroExitoso={async (datosCobro) => {
           try {

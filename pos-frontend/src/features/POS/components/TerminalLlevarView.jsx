@@ -59,17 +59,28 @@ export default function TerminalLlevarView({
                     {estaPagado ? 'PAGADO' : 'PENDIENTE PAGO'}
                   </span>
                   
-                  <span 
-                    className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border ${estaListo ? (isDark ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-200') : (isDark ? 'bg-[#1a1a1a] text-neutral-400 border-[#333]' : 'bg-gray-100 text-gray-500 border-gray-200')}`} 
+                  <span
+                    className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border ${estaListo ? (isDark ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-200') : (isDark ? 'bg-[#1a1a1a] text-neutral-400 border-[#333]' : 'bg-gray-100 text-gray-500 border-gray-200')}`}
                     style={!estaListo && isDark ? { backgroundColor: `${colorPrimario}15`, color: colorPrimario, borderColor: `${colorPrimario}30` } : (!estaListo ? { backgroundColor: `${colorPrimario}10`, color: colorPrimario, borderColor: `${colorPrimario}30` } : {})}
                   >
                     {estaListo ? 'LISTO' : 'EN COCINA'}
                   </span>
+
+                  {orden.tipo === 'delivery' && (
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border ${isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                      🛵 DELIVERY
+                    </span>
+                  )}
                 </div>
-                
+
                 <p className={`text-xs font-bold uppercase tracking-widest flex items-center gap-1.5 ${isDark ? 'text-neutral-400' : 'text-gray-500'}`}>
-                  <i className="fi fi-rr-user text-[10px] mt-0.5"></i> {orden.cliente_nombre}
+                  <i className="fi fi-rr-user text-[10px] mt-0.5"></i> {orden.cliente_nombre || 'Cliente sin nombre'}
                 </p>
+                {orden.tipo === 'delivery' && orden.direccion_entrega && (
+                  <p className={`text-[10px] mt-0.5 flex items-center gap-1.5 ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}>
+                    <i className="fi fi-rr-marker text-[10px] mt-0.5"></i> {orden.direccion_entrega}
+                  </p>
+                )}
               </div>
               
               {/* Botones de Acción */}
