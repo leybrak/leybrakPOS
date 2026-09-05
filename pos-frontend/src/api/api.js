@@ -284,6 +284,7 @@ export const actualizarVariacionesProducto = (productoId, gruposData) =>
 // ============================================================
 export const getNegocio        = (id)       => api.get(`/negocios/${id}/`);
 export const actualizarNegocio = (id, data) => api.patch(`/negocios/${id}/`, data);
+export const getAlertasNegocio = ()         => api.get('/negocios/alertas/');
 
 // ============================================================
 // MESAS

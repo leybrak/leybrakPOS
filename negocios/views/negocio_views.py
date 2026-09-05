@@ -3,10 +3,12 @@ from urllib import response
 import requests
 import logging
 import os                    # ✨ NUEVO
+from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
 from django.core.files.storage import default_storage   # ✨ NUEVO
 from django.core.files.base import ContentFile          # ✨ NUEVO
+from django.db.models import F
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 
-from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede
+from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede, Orden, InsumoSede, Comprobante
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
 from ..services import precargar_modulos_por_plan
 from ..permissions import EsSuperUsuario
@@ -196,6 +198,94 @@ class NegocioViewSet(viewsets.ModelViewSet):
         user.set_password(password_nueva)
         user.save()
         return Response({'detail': 'Contraseña actualizada correctamente.'})
+
+    # ==========================================
+    # 🔔 ALERTAS — para la campana de notificaciones del topbar (ERP)
+    # ==========================================
+    # Ruta: GET /api/negocios/alertas/
+    # Calculadas al vuelo (sin tabla propia): suscripción, stock bajo,
+    # delivery sin repartidor y comprobantes SUNAT rechazados.
+    @action(detail=False, methods=['get'], url_path='alertas', permission_classes=[IsAuthenticated])
+    def alertas(self, request):
+        try:
+            negocio = request.user.negocio
+        except Negocio.DoesNotExist:
+            return Response([])
+
+        alertas = []
+
+        # 1. Suscripción por vencer / vencida / bloqueada
+        info = negocio.estado_suscripcion_info()
+        estado_sus = info['estado']
+        dias = info['dias_restantes']
+        if estado_sus == 'bloqueado':
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'danger',
+                'titulo': 'Cuenta bloqueada',
+                'mensaje': 'Tu negocio está bloqueado por falta de pago. Regulariza tu suscripción para seguir operando.',
+                'vista': 'negocio',
+            })
+        elif estado_sus == 'vencido':
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'danger',
+                'titulo': 'Suscripción vencida',
+                'mensaje': 'Tu suscripción venció. Realiza el pago para evitar el bloqueo de tu cuenta.',
+                'vista': 'negocio',
+            })
+        elif estado_sus in ('prueba', 'activo') and dias <= 3:
+            etiqueta = 'de prueba' if estado_sus == 'prueba' else 'de tu plan actual'
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'warning',
+                'titulo': f'Quedan {dias} día{"s" if dias != 1 else ""} {etiqueta}',
+                'mensaje': 'Renueva pronto para no perder acceso al sistema.',
+                'vista': 'negocio',
+            })
+
+        # 2. Stock bajo (si el módulo inventario está activo)
+        if negocio.mod_inventario_activo:
+            insumos_bajos = InsumoSede.objects.filter(
+                sede__negocio=negocio, stock_actual__lte=F('stock_minimo')
+            ).select_related('insumo_base')
+            n = insumos_bajos.count()
+            if n > 0:
+                nombres = ', '.join(i.insumo_base.nombre for i in insumos_bajos[:3])
+                extra = f' y {n - 3} más' if n > 3 else ''
+                alertas.append({
+                    'tipo': 'stock_bajo', 'nivel': 'warning',
+                    'titulo': f'{n} insumo{"s" if n != 1 else ""} con stock bajo',
+                    'mensaje': f'{nombres}{extra}.',
+                    'vista': 'inventario',
+                })
+
+        # 3. Pedidos de delivery sin repartidor asignado
+        if negocio.mod_delivery_activo:
+            n = (Orden.objects
+                 .filter(sede__negocio=negocio, tipo='delivery', estado_delivery='pendiente')
+                 .exclude(estado='cancelado')
+                 .count())
+            if n > 0:
+                alertas.append({
+                    'tipo': 'delivery_pendiente', 'nivel': 'warning',
+                    'titulo': f'{n} pedido{"s" if n != 1 else ""} de delivery sin repartidor',
+                    'mensaje': 'Hay pedidos de delivery esperando que un repartidor los tome.',
+                    'vista': None,
+                })
+
+        # 4. Comprobantes SUNAT rechazados (últimos 7 días)
+        if negocio.mod_facturacion_activo and negocio.facturacion_emision != 'desactivado':
+            desde = timezone.now() - timedelta(days=7)
+            n = Comprobante.objects.filter(
+                negocio=negocio, estado_sunat='rechazado', creado_en__gte=desde
+            ).count()
+            if n > 0:
+                alertas.append({
+                    'tipo': 'comprobante_error', 'nivel': 'danger',
+                    'titulo': f'{n} comprobante{"s" if n != 1 else ""} con error SUNAT',
+                    'mensaje': 'Revisa los comprobantes rechazados en Facturación SUNAT.',
+                    'vista': 'facturacion',
+                })
+
+        return Response(alertas)
 
     # ============================================================
     # El resto de los métodos no cambia

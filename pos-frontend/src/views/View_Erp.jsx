@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useErpDashboard } from '../features/ERP/useErpDashboard';
 import { useToast } from '../context/ToastContext';
-import { cerrarSesionGlobal } from '../api/api';
+import { cerrarSesionGlobal, getAlertasNegocio } from '../api/api';
 import Erp_ModalPerfil from '../features/ERP/Erp_ModalPerfil';
 
 // ==========================================
@@ -32,7 +32,12 @@ import DrawerCombosNormales from '../features/ERP/MenuComponents/DrawerCombosNor
 // ==========================================
 // 🌟 COMPONENTE HEADER INTEGRADOR (TOPBAR)
 // ==========================================
-const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario }) => {
+const NIVEL_ESTILO = {
+  danger:  { icono: 'fi-rr-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+  warning: { icono: 'fi-rr-clock',       color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+};
+
+const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario, manejarCambioVista }) => {
   const isDark = tema === 'dark';
 
   // Extraemos la data real de la sesión activa
@@ -45,10 +50,27 @@ const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario }) => {
   const [modalPerfilAbierto, setModalPerfilAbierto] = React.useState(false);
   const menuPerfilRef = React.useRef(null);
 
+  const [alertas, setAlertas] = React.useState([]);
+  const [menuAlertasAbierto, setMenuAlertasAbierto] = React.useState(false);
+  const menuAlertasRef = React.useRef(null);
+
+  const cargarAlertas = React.useCallback(() => {
+    getAlertasNegocio().then(res => setAlertas(res.data || [])).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    cargarAlertas();
+    const timer = setInterval(cargarAlertas, 5 * 60000);
+    return () => clearInterval(timer);
+  }, [cargarAlertas]);
+
   React.useEffect(() => {
     const handleClickFuera = (e) => {
       if (menuPerfilRef.current && !menuPerfilRef.current.contains(e.target)) {
         setMenuPerfilAbierto(false);
+      }
+      if (menuAlertasRef.current && !menuAlertasRef.current.contains(e.target)) {
+        setMenuAlertasAbierto(false);
       }
     };
     document.addEventListener('mousedown', handleClickFuera);
@@ -111,19 +133,76 @@ const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario }) => {
           </span>
         </div>
 
-        {/* Campana de Notificaciones con Efecto Ping */}
-        <button 
-          className={`relative w-11 h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
-            isDark ? 'bg-[#141414] border-[#333] text-neutral-400 hover:text-white hover:border-neutral-500' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300'
-          }`}
-          title="Notificaciones"
-        >
-          <i className="fi fi-rr-bell text-lg mt-0.5"></i>
-          <span className="absolute top-2.5 right-3 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: colorPrimario }}></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: colorPrimario }}></span>
-          </span>
-        </button>
+        {/* Campana de Notificaciones — alertas reales del negocio */}
+        <div className="relative" ref={menuAlertasRef}>
+          <button
+            onClick={() => setMenuAlertasAbierto(v => !v)}
+            className={`relative w-11 h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
+              isDark ? 'bg-[#141414] border-[#333] text-neutral-400 hover:text-white hover:border-neutral-500' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300'
+            }`}
+            title="Notificaciones"
+          >
+            <i className="fi fi-rr-bell text-lg mt-0.5"></i>
+            {alertas.length > 0 && (
+              <span className="absolute top-2.5 right-3 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: colorPrimario }}></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: colorPrimario }}></span>
+              </span>
+            )}
+          </button>
+
+          {menuAlertasAbierto && (
+            <div className={`absolute right-0 top-[calc(100%+10px)] w-80 rounded-2xl border shadow-2xl overflow-hidden z-40 animate-fadeIn ${
+              isDark ? 'bg-[#141414] border-[#2a2a2a]' : 'bg-white border-gray-200'
+            }`}>
+              <div className={`px-4 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+                <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-neutral-300' : 'text-gray-700'}`}>
+                  Notificaciones
+                </p>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto">
+                {alertas.length === 0 ? (
+                  <p className={`px-4 py-8 text-center text-xs font-bold ${isDark ? 'text-neutral-600' : 'text-gray-400'}`}>
+                    No tienes notificaciones pendientes.
+                  </p>
+                ) : (
+                  alertas.map((alerta, i) => {
+                    const estilo = NIVEL_ESTILO[alerta.nivel] || NIVEL_ESTILO.warning;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (alerta.vista && manejarCambioVista) manejarCambioVista(alerta.vista);
+                          setMenuAlertasAbierto(false);
+                        }}
+                        disabled={!alerta.vista}
+                        className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b last:border-0 transition-colors ${
+                          isDark ? 'border-[#1e1e1e]' : 'border-gray-50'
+                        } ${alerta.vista ? (isDark ? 'hover:bg-[#1e1e1e] cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                          style={{ backgroundColor: estilo.bg, color: estilo.color }}
+                        >
+                          <i className={`fi ${estilo.icono} text-xs`}></i>
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-xs font-black leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {alerta.titulo}
+                          </p>
+                          <p className={`text-[11px] mt-1 leading-snug ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
+                            {alerta.mensaje}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className={`w-px h-8 hidden sm:block ${isDark ? 'bg-[#333]' : 'bg-gray-200'}`}></div>
 
@@ -306,11 +385,12 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
       <div className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:ml-20' : 'md:ml-72'}`}>
         
         {/* ✨ CABECERA PROFESIONAL APLICADA AQUÍ */}
-        <Topbar 
-          vistaActiva={vistaActiva} 
-          setMenuAbierto={setMenuAbierto} 
-          tema={tema} 
-          colorPrimario={colorPrimario} 
+        <Topbar
+          vistaActiva={vistaActiva}
+          setMenuAbierto={setMenuAbierto}
+          tema={tema}
+          colorPrimario={colorPrimario}
+          manejarCambioVista={manejarCambioVista}
         />
 
         {/* 🖥️ ÁREA PRINCIPAL DE RENDERIZADO */}
