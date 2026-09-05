@@ -97,8 +97,8 @@ android {
         applicationId "com.leybrakapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 31
-        versionName "1.0.30"
+        versionCode 32
+        versionName "1.0.31"
     }
     signingConfigs {
         debug {
