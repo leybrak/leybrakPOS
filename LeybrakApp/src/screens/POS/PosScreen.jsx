@@ -105,6 +105,74 @@ export default function PosScreen({ mesaId, onVolver }) {
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
 
+  // ─── WebSocket del salón: avisa a la web (y a otras tablets) que esta
+  // mesa está "pidiendo"/"cobrando" mientras el mesero trabaja acá, igual
+  // que hace View_Pos.jsx en la web. ──────────────────────────────────
+  const wsRef = useRef(null);
+  const estadoMesaRef = useRef('libre');
+  const [wsListo, setWsListo] = useState(false);
+
+  useEffect(() => {
+    if (esParaLlevar || !mesaIdReal || !sedeId) return;
+
+    let ws = null;
+    let unmounted = false;
+    let reconnectTimeout = null;
+
+    const conectar = async () => {
+      if (unmounted) return;
+      try {
+        const res = await api.get('/verificar-sesion/');
+        const token = res.data.ws_token;
+        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/?token=${token}`);
+        wsRef.current = ws;
+
+        ws.onopen = () => setWsListo(true);
+        ws.onclose = () => {
+          setWsListo(false);
+          if (!unmounted) reconnectTimeout = setTimeout(conectar, 3000);
+        };
+        ws.onerror = () => ws.close();
+      } catch {
+        if (!unmounted) reconnectTimeout = setTimeout(conectar, 3000);
+      }
+    };
+
+    conectar();
+
+    return () => {
+      unmounted = true;
+      clearTimeout(reconnectTimeout);
+      // Al salir, restauramos el estado "de reposo" de la mesa (libre u ocupada)
+      // para que no se quede mostrando "pidiendo"/"cobrando" en las demás pantallas.
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado: estadoMesaRef.current, total: 0 }));
+      }
+      ws?.close();
+    };
+  }, [mesaIdReal, sedeId, esParaLlevar]);
+
+  const notificarEstadoMesa = (estado, total = 0) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN && !esParaLlevar) {
+      ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado, total }));
+    }
+  };
+
+  useEffect(() => {
+    if (cargando || !wsListo) return;
+
+    if (ordenActiva) {
+      estadoMesaRef.current = 'ocupada';
+      const estadoActual = carrito.length > 0 ? 'pidiendo' : 'cobrando';
+      notificarEstadoMesa(estadoActual, parseFloat(ordenActiva.total || 0));
+    } else {
+      estadoMesaRef.current = 'libre';
+      notificarEstadoMesa('pidiendo', 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando, ordenActiva, carrito.length, wsListo]);
+
   useEffect(() => {
     const subscripcion = eventEmitter.addListener('PagoYapeRecibido', (mensaje) => {
       console.log('✅ Yape detectado desde Kotlin:', mensaje);

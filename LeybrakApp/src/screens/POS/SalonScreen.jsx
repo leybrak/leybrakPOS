@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl, Modal, TextInput,
@@ -38,18 +38,20 @@ const useTema = () => {
   };
 };
 
-// ─── Colores de estado de mesa (Igual a tu Grid web) ───
+// ─── Colores de estado de mesa (idéntico a MesasGrid.jsx en la web) ───
+// Los íconos son los mismos emoji que usa la web (no un icon-font) para que
+// se vean exactamente igual en ambas plataformas.
 const getMesaStyles = (estado, colorPrimario, isDark) => {
   const est = estado?.toLowerCase() || 'libre';
-  
+
   if (est === 'ocupada') {
-    return { bg: isDark ? `${colorPrimario}15` : `${colorPrimario}10`, border: `${colorPrimario}60`, textPrim: isDark ? '#fff' : '#000', badgeBg: `${colorPrimario}20`, badgeText: colorPrimario, icon: 'cutlery' };
+    return { bg: isDark ? `${colorPrimario}15` : `${colorPrimario}10`, border: `${colorPrimario}60`, textPrim: isDark ? '#fff' : '#000', badgeBg: `${colorPrimario}20`, badgeText: colorPrimario, icon: '🍴' };
   }
   if (est === 'pidiendo') {
-    return { bg: isDark ? '#fbbf2415' : '#fef9c3', border: '#fbbf24aa', textPrim: '#fbbf24', badgeBg: '#fbbf2433', badgeText: '#fbbf24', icon: 'pencil' };
+    return { bg: isDark ? '#fbbf2415' : '#fef9c3', border: '#fbbf24aa', textPrim: '#fbbf24', badgeBg: '#fbbf2433', badgeText: '#fbbf24', icon: '📝' };
   }
   if (est === 'cobrando') { // Naranja web
-    return { bg: isDark ? '#f9731615' : '#fff7ed', border: '#f97316aa', textPrim: '#f97316', badgeBg: '#f9731633', badgeText: '#f97316', icon: 'credit-card' };
+    return { bg: isDark ? '#f9731615' : '#fff7ed', border: '#f97316aa', textPrim: '#f97316', badgeBg: '#f9731633', badgeText: '#f97316', icon: '💳' };
   }
   // Libre
   return { bg: isDark ? '#161616' : '#ffffff', border: isDark ? '#2a2a2a' : '#e5e7eb', textPrim: isDark ? '#ffffff' : '#111111', badgeBg: isDark ? '#222222' : '#f3f4f6', badgeText: isDark ? '#a3a3a3' : '#6b7280', icon: null };
@@ -85,12 +87,16 @@ function TarjetaMesa({ mesa, t, color, onPress, seleccionada, modoUnir, ancho })
             {mesa.esGigante ? 'GRUPO' : labelEstado(mesa.estado).toUpperCase()}
           </Text>
         </View>
-        {styles.icon && !modoUnir && <Icon name={styles.icon} size={12} color={styles.badgeText} style={{ opacity: 0.7 }} />}
+        {styles.icon && !modoUnir && <Text style={{ fontSize: 13, opacity: 0.7 }}>{styles.icon}</Text>}
       </View>
 
       <View style={s.mesaCardBody}>
-        <Text style={[s.mesaNumero, { color: seleccionada ? '#fff' : styles.textPrim }]}>
-          {mesa.numero_o_nombre}
+        <Text
+          style={[s.mesaNumero, mesa.esGigante && s.mesaNumeroGrupo, { color: seleccionada ? '#fff' : styles.textPrim }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : mesa.numero_o_nombre}
         </Text>
       </View>
 
@@ -98,14 +104,6 @@ function TarjetaMesa({ mesa, t, color, onPress, seleccionada, modoUnir, ancho })
         <Text style={[s.mesaTotal, { color: seleccionada ? '#fff' : styles.textPrim }]}>
           S/ {parseFloat(mesa.total_orden).toFixed(2)}
         </Text>
-      )}
-
-      {/* Indicador de mesas unidas */}
-      {mesa.unida_a && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-          <Icon name="link" size={10} color={seleccionada ? '#fff' : t.textMuted} style={{ marginRight: 4 }} />
-          <Text style={{ fontSize: 9, fontWeight: '700', color: seleccionada ? '#fff' : t.textMuted }}>Unida a {mesa.unida_a}</Text>
-        </View>
       )}
     </TouchableOpacity>
   );
@@ -184,6 +182,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
   const [abriendoCaja, setAbriendoCaja]     = useState(false);
   const [modoUnir, setModoUnir]             = useState(false);
   const [mesaPrincipal, setMesaPrincipal]   = useState(null);
+  const [mostrarPuerta, setMostrarPuerta]   = useState(false);
 
   const [modalClienteVisible, setModalClienteVisible]         = useState(false);
   const [drawerVentaRapidaAbierto, setDrawerVentaRapidaAbierto] = useState(false);
@@ -229,13 +228,26 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
         getMesas(params),
         getSedes({ negocio_id: negocioId }),
         getOrdenesLlevar(params),
-        getOrdenes({ negocio_id: negocioId, sede_id: savedSede, estado: 'preparando' }),
+        getOrdenes({ negocio_id: negocioId, sede_id: savedSede }),
       ]);
+      // 🛠️ Antes solo miraba estado:'preparando' — una orden 'pendiente' o 'listo'
+      // (aún no tomada por cocina, o ya lista pero no cobrada) no marcaba la mesa
+      // como ocupada. Igual que useMesasData.js en la web: cualquier orden que no
+      // esté completada/cancelada mantiene la mesa ocupada.
+      const ordenesVivas = (resOrdenesActivas.data || []).filter(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado'
+      );
       const mesasConEstado = resMesas.data.map(mesa => {
-        const ordenActiva = resOrdenesActivas.data?.find(o => String(o.mesa) === String(mesa.id));
+        const ordenActiva = ordenesVivas.find(o =>
+          o.mesa != null && (String(o.mesa) === String(mesa.id) || String(o.mesa) === String(mesa.mesa_principal))
+        );
+        let estado = 'libre';
+        if (mesa.mesa_principal) estado = 'unida';
+        else if (ordenActiva) estado = 'ocupada';
         return {
           ...mesa,
-          estado:      ordenActiva ? 'ocupada' : 'libre',
+          estado,
+          unida_a:     mesa.mesa_principal || null,
           total_orden: ordenActiva ? parseFloat(ordenActiva.total || 0) : 0,
         };
       });
@@ -278,23 +290,26 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       try {
         const res   = await api.get('/verificar-sesion/');
         const token = res.data.ws_token;
-        // Token en header en vez de URL para no exponerlo en logs de servidor
-        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/`, null, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // El middleware del backend solo lee el token de una cookie HttpOnly o de
+        // ?token= en la URL — nunca de un header Authorization (eso quedaba mudo:
+        // la conexión autenticaba como AnonymousUser y el server la cerraba con 4001).
+        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/?token=${token}`);
         wsRef.current = ws;
 
         ws.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'mesa_estado') {
+            // El backend siempre retransmite como 'mesa_actualizada' / 'orden_llevar_actualizada'
+            // (ver negocios/consumers.py) — nunca 'mesa_estado'/'orden_llevar', así que las
+            // actualizaciones de otras pantallas (incluida la web) se perdían en silencio.
+            if (data.type === 'mesa_actualizada') {
               setMesas(prev => prev.map(m =>
                 String(m.id) === String(data.mesa_id)
                   ? { ...m, estado: data.estado, total_orden: data.total ?? m.total_orden }
                   : m
               ));
             }
-            if (data.type === 'orden_llevar') cargar();
+            if (data.type === 'orden_llevar_actualizada') cargar();
           } catch {}
         };
         ws.onerror  = () => ws.close();
@@ -395,13 +410,25 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
     } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo marcar como entregado.'); }
   };
 
-  // ── Cálculo de columnas ──
+  // ── Columnas y agrupación de mesas unidas — igual a MesasGrid.jsx en la web ──
   const mesasFiltradas = mesas.filter(m => sedeId ? String(m.sede) === String(sedeId) : true);
-  const maxColumna     = mesasFiltradas.length > 0 ? Math.max(...mesasFiltradas.map(m => m.posicion_x || 0)) + 1 : 2;
-  const numColumnas    = Math.max(2, Math.min(3, maxColumna)); 
-  const anchoCelda     = `${Math.floor(100 / numColumnas) - 3}%`;
-  
+
+  const mesasAgrupadas = useMemo(() => {
+    return mesasFiltradas.filter(m => m.estado !== 'unida').map(mesaPadre => {
+      const hijas = mesasFiltradas.filter(m => m.unida_a === mesaPadre.id);
+      return {
+        ...mesaPadre,
+        mesasInvolucradas: [mesaPadre.numero_o_nombre, ...hijas.map(h => h.numero_o_nombre)],
+        esGigante: hijas.length > 0,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesas, sedeId]);
+
   const sedeActualInfo = sedes?.find(s => String(s.id) === String(sedeId));
+  // Sede.columnas_salon es configurable por el dueño (default 3, igual que la web).
+  const numColumnas    = sedeActualInfo?.columnas_salon || 3;
+  const anchoCelda     = `${Math.floor(100 / numColumnas) - 3}%`;
 
   if (vistaLocal === null || cargando) {
     return (
@@ -472,51 +499,53 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
           </View>
         </View>
 
-        {/* 2. Contenedor de Botones (Columna que agrupa las 2 filas) */}
+        {/* 2. Contenedor de Botones — mismo orden y agrupamiento que MesasHeader.jsx en la web */}
         <View style={{ flexDirection: 'column', gap: 6 }}>
-          
-          {/* FILA 1: Config, Venta Rápida, Unir Mesas */}
+
+          {/* FILA 1: Unir Mesas → cambiar vista Salón/Llevar → Venta Rápida */}
+          <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
+            {vistaLocal === 'salon' && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: t.bgCard2, borderColor: t.border }, modoUnir && { backgroundColor: t.color, borderColor: t.color }]}
+                onPress={() => { setModoUnir(!modoUnir); setMesaPrincipal(null); }}
+              >
+                <Text style={{ fontSize: 16 }}>🔗</Text>
+              </TouchableOpacity>
+            )}
+
+            {modulos.salon !== false && modulos.delivery !== false && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                onPress={() => setVistaLocal(vistaLocal === 'salon' ? 'llevar' : 'salon')}
+              >
+                <Icon name={vistaLocal === 'salon' ? 'shopping-bag' : 'table'} size={16} color={t.textSec} />
+                {vistaLocal === 'salon' && ordenesLlevar.length > 0 && (
+                  <View style={[s.badgeNotif, { backgroundColor: t.color }]}>
+                    <Text style={s.badgeNotifText}>{ordenesLlevar.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
+              <Text style={{ fontSize: 16 }}>⚡</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* FILA 2 (solo cajero/admin/dueño): ERP → Caja Chica → Cerrar Turno */}
           <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
             {esDueno && onVolver && (
               <TouchableOpacity style={[s.actionBtn, { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }]} onPress={onVolver}>
-                <Icon name="cog" size={18} color="#3b82f6" />
+                <Text style={{ fontSize: 16 }}>⚙️</Text>
               </TouchableOpacity>
             )}
-            
-            <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
-              <Icon name="bolt" size={18} color={t.color} />
-            </TouchableOpacity>
-            
-            {vistaLocal === 'salon' && (
-              <TouchableOpacity 
-                style={[s.actionBtn, { backgroundColor: t.bgCard, borderColor: t.border }, modoUnir && { backgroundColor: t.color, borderColor: t.color }]} 
-                onPress={() => { setModoUnir(!modoUnir); setMesaPrincipal(null); }}
-              >
-                <Icon name="link" size={16} color={modoUnir ? '#fff' : t.textSec} />
-              </TouchableOpacity>
-            )}
-          </View>
 
-          {/* FILA 2: Cambiar Vista, Caja Chica, Cerrar Caja */}
-          <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
-            <TouchableOpacity 
-              style={[s.actionBtn, { backgroundColor: t.bgCard, borderColor: t.border }]} 
-              onPress={() => setVistaLocal(vistaLocal === 'salon' ? 'llevar' : 'salon')}
-            >
-              <Icon name={vistaLocal === 'salon' ? 'shopping-bag' : 'table'} size={16} color={t.textSec} />
-              {vistaLocal === 'salon' && ordenesLlevar.length > 0 && (
-                <View style={[s.badgeNotif, { backgroundColor: t.color }]}>
-                  <Text style={s.badgeNotifText}>{ordenesLlevar.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            
             {['cajero', 'administrador', 'admin', 'dueño'].includes(rolUsuario.toLowerCase()) && (
               <TouchableOpacity
                 style={[s.actionBtn, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.3)' }]}
                 onPress={() => setModalMovimientosAbierto(true)}
               >
-                <Icon name="money" size={18} color="#10b981" />
+                <Text style={{ fontSize: 16 }}>💸</Text>
               </TouchableOpacity>
             )}
 
@@ -525,7 +554,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                 style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
                 onPress={handleCierreCajaSeguro}
               >
-                <Icon name="lock" size={18} color="#ef4444" />
+                <Text style={{ fontSize: 16 }}>🔒</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -547,9 +576,32 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                 </Text>
               </View>
             )}
-            
+
+            <View style={{ alignItems: 'flex-end', marginBottom: 16 }}>
+              <TouchableOpacity
+                style={[
+                  s.orientacionBtn,
+                  mostrarPuerta
+                    ? { backgroundColor: t.color, borderColor: t.color }
+                    : { backgroundColor: `${t.color}1A`, borderColor: `${t.color}40` },
+                ]}
+                onPress={() => setMostrarPuerta(!mostrarPuerta)}
+                activeOpacity={0.85}
+              >
+                <Text style={[s.orientacionBtnText, { color: mostrarPuerta ? '#fff' : t.color }]}>
+                  {mostrarPuerta ? 'OCULTAR ORIENTACIÓN' : '📍 ACTIVAR ORIENTACIÓN'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {mostrarPuerta && (
+              <View style={[s.puertaBanner, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}>
+                <Text style={[s.puertaBannerText, { color: t.textMuted }]}>ENTRADA PRINCIPAL 🚪</Text>
+              </View>
+            )}
+
             <View style={s.mesasGrid}>
-              {mesasFiltradas
+              {mesasAgrupadas
                 .sort((a, b) => a.posicion_y !== b.posicion_y ? a.posicion_y - b.posicion_y : a.posicion_x - b.posicion_x)
                 .map(mesa => (
                   <TarjetaMesa
@@ -557,7 +609,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                     mesa={mesa}
                     t={t}
                     color={t.color}
-                    ancho={anchoCelda}
+                    ancho={mesa.esGigante ? `${(100 / numColumnas) * 2 - 3}%` : anchoCelda}
                     onPress={manejarClickMesa}
                     seleccionada={mesaPrincipal === mesa.id}
                     modoUnir={modoUnir}
@@ -716,14 +768,21 @@ const s = StyleSheet.create({
   unirBanner:      { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
   unirBannerText:  { fontSize: 12, fontWeight: '800' },
 
+  // Grid: mismo alto fijo (h-32 = 128px) y rounded-3xl (24) que la web en móvil.
   mesasGrid:       { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  mesaCard:        { aspectRatio: 0.9, borderRadius: 24, borderWidth: 1.5, padding: 14, justifyContent: 'space-between' },
+  mesaCard:        { height: 128, borderRadius: 24, borderWidth: 1.5, padding: 14, justifyContent: 'space-between' },
   mesaCardHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  mesaEstadoBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  mesaEstadoText:  { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  mesaEstadoBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  mesaEstadoText:  { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   mesaCardBody:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  mesaNumero:      { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
+  mesaNumero:      { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  mesaNumeroGrupo: { fontSize: 24 },
   mesaTotal:       { fontSize: 12, fontWeight: '900', textAlign: 'center' },
+
+  orientacionBtn:     { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1 },
+  orientacionBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  puertaBanner:       { paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', marginBottom: 16, alignItems: 'center' },
+  puertaBannerText:   { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
 
   btnNuevaOrden:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 18, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 4 } },
   btnNuevaOrdenText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
