@@ -213,6 +213,7 @@ export default function LoginView({ onAccesoConcedido }) {
           
           <div className="text-center mb-8 w-full">
             <div className="flex items-center justify-center gap-2 mb-4">
+              <img src={logoLeybrak} alt="Leybrak" className="w-8 h-8 object-contain" />
               <span className="font-black text-2xl text-white tracking-tight">LEYBRAK<span className="text-[#3b82f6]">POS</span></span>
             </div>
             <h2 className="text-gray-300 font-semibold text-sm tracking-wide">{negocioNombre || 'Terminal de Caja'}</h2>
@@ -335,6 +336,7 @@ export default function LoginView({ onAccesoConcedido }) {
       <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 relative z-10 bg-[#0a0a0a] border-r border-[#1a1a1a]">
         
         <div className="absolute top-10 left-8 sm:left-16 lg:left-24 flex items-center gap-2">
+          <img src={logoLeybrak} alt="Leybrak" className="w-7 h-7 object-contain" />
           <span className="font-black text-xl tracking-tight">LEYBRAK<span className="text-[#3b82f6]">POS</span></span>
           <span className="ml-2 px-2 py-0.5 rounded-md bg-[#121212] border border-[#222] text-[9px] text-gray-500 font-bold uppercase tracking-widest">
             SAAS PLATFORM

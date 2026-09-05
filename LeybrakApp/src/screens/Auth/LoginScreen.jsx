@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   StatusBar, ActivityIndicator, Alert, ScrollView,
-  KeyboardAvoidingView, Platform
+  KeyboardAvoidingView, Platform, Image
 } from 'react-native';
+
+const logoLeybrak = require('../../assets/logo.png');
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { loginMovil, loginPinEmpleado, getSedes, guardarTokens, getEstadoCaja } from '../../api/api';
@@ -257,6 +259,7 @@ export default function LoginScreen({ onLoginExitoso }) {
         
         {/* Header */}
         <View style={s.headerAbsolute}>
+          <Image source={logoLeybrak} style={s.brandLogo} resizeMode="contain" />
           <Text style={s.brand}>LEYBRAK<Text style={s.brandBlue}> POS</Text></Text>
           <View style={s.badge}><Text style={s.badgeText}>SAAS PLATFORM</Text></View>
         </View>
@@ -311,6 +314,7 @@ export default function LoginScreen({ onLoginExitoso }) {
         <StatusBar barStyle="light-content" backgroundColor="#050505" />
         
         <View style={s.headerAbsolute}>
+          <Image source={logoLeybrak} style={s.brandLogo} resizeMode="contain" />
           <Text style={s.brand}>LEYBRAK<Text style={s.brandBlue}> POS</Text></Text>
           <View style={s.badge}><Text style={s.badgeText}>SAAS PLATFORM</Text></View>
         </View>
@@ -431,6 +435,7 @@ export default function LoginScreen({ onLoginExitoso }) {
           
           <View style={s.pinHeader}>
             <View style={s.brandRow}>
+              <Image source={logoLeybrak} style={s.brandLogo} resizeMode="contain" />
               <Text style={s.brand}>LEYBRAK<Text style={s.brandBlue}>POS</Text></Text>
             </View>
             <Text style={s.negocioNombre}>{negocioNombre || 'Terminal de Caja'}</Text>
@@ -526,6 +531,7 @@ const s = StyleSheet.create({
   container:       { flex: 1, backgroundColor: '#050505' },
   headerAbsolute:  { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 70, left: 25, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   brandRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  brandLogo:       { width: 24, height: 24, marginRight: 8 },
   brand:           { fontSize: 24, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
   brandBlue:       { color: '#3b82f6' },
   badge:           { marginLeft: 12, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#121212', borderWidth: 1, borderColor: '#222', borderRadius: 6 },

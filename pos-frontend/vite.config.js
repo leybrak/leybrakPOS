@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       workbox: {
         // Rutas que NO son de la SPA: el SW no debe servir index.html aquí,
         // las deja pasar a nginx (páginas/archivos estáticos reales).

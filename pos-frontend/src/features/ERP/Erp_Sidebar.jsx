@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import usePosStore from '../../store/usePosStore';
 import { cerrarSesionGlobal, crearTicket } from '../../api/api';
+import logoLeybrak from '../../assets/logoSinFondoCompacto copy.png';
 
 function ModalReportarProblema({ onClose }) {
   const [asunto, setAsunto] = useState('');
@@ -167,16 +168,19 @@ export default function Erp_Sidebar({
         `}
       >
         <div className={`p-6 flex items-center shrink-0 h-24 relative ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-          <div className={`overflow-hidden transition-all duration-300 flex flex-col ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-            <h1 className="text-2xl font-black text-white tracking-tight whitespace-nowrap">
-              LEYBRAK <span style={{ color: colorPrimario }}>POS</span>
-            </h1>
-            <p className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase mt-0.5">SaaS Platform</p>
+          <div className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+            <img src={logoLeybrak} alt="Leybrak" className="w-10 h-10 object-contain shrink-0" />
+            <div className="flex flex-col overflow-hidden">
+              <h1 className="text-2xl font-black text-white tracking-tight whitespace-nowrap">
+                LEYBRAK <span style={{ color: colorPrimario }}>POS</span>
+              </h1>
+              <p className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase mt-0.5">SaaS Platform</p>
+            </div>
           </div>
-          
+
           {isCollapsed && (
-            <div className="absolute text-2xl font-black text-white bg-[#1a1a1a] w-12 h-12 rounded-xl flex items-center justify-center border border-[#333]">
-              B<span style={{ color: colorPrimario }}>.</span>
+            <div className="absolute bg-[#1a1a1a] w-12 h-12 rounded-xl flex items-center justify-center border border-[#333]">
+              <img src={logoLeybrak} alt="Leybrak" className="w-8 h-8 object-contain" />
             </div>
           )}
 
