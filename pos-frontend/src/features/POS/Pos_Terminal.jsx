@@ -435,8 +435,12 @@ export default function PosTerminal({ onIrAErp }) {
           setModalCierreAbierto(false);
           const dif = resumen?.diferencia || 0;
           const msg = dif === 0 ? '✅ ¡Cuadre perfecto!' : dif > 0 ? `⚠️ Sobrante de S/ ${dif.toFixed(2)}` : `🚨 Faltante de S/ ${Math.abs(dif).toFixed(2)}`;
-          alert(`${msg}\n\nCerrando sesión...`);
-          window.location.reload();
+          alert(msg);
+          // 🛠️ Antes hacía window.location.reload() — un reload completo de la SPA
+          // solo para reflejar "caja cerrada". Igual que en mobile, alcanza con
+          // actualizar el store: la pantalla de apertura aparece al instante.
+          setEstadoCaja(null);
+          localStorage.removeItem('sesion_caja_id');
         }}
       />
 

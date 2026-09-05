@@ -19,7 +19,7 @@ import { useMesasData } from './hooks/useMesasData';
 import { useMesasWS } from './hooks/useMesasWS';
 
 export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId }) {
-  const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const { estadoCaja, configuracionGlobal, setConfiguracionGlobal, setEstadoCaja } = usePosStore();
   const confirmar = useConfirm();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
@@ -288,8 +288,12 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
           setModalCierreAbierto(false);
           const dif = resumen?.diferencia || 0;
           const msg = dif === 0 ? "✅ ¡Cuadre perfecto!" : dif > 0 ? `⚠️ Sobrante de S/ ${dif.toFixed(2)}` : `🚨 Faltante de S/ ${Math.abs(dif).toFixed(2)}`;
-          alert(`${msg}\n\nCerrando sesión...`);
-          window.location.reload(); 
+          alert(msg);
+          // 🛠️ Antes hacía window.location.reload() — un reload completo de la SPA
+          // solo para reflejar "caja cerrada". Igual que en mobile, alcanza con
+          // actualizar el store: la pantalla de apertura aparece al instante.
+          setEstadoCaja(null);
+          localStorage.removeItem('sesion_caja_id');
         }}
       />
 
