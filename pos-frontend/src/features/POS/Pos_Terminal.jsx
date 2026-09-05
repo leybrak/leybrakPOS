@@ -1,8 +1,9 @@
 import React, { useState,useEffect } from 'react';
-import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja, validarPinEmpleado } from '../../api/api';
+import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja } from '../../api/api';
 import { abrirCajaBD } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
 import api from '../../api/api';
+import { useConfirm } from '../../context/ConfirmContext';
 // Modales y Drawers
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
@@ -26,6 +27,7 @@ export default function PosTerminal({ onIrAErp }) {
   // =========================================================
   
   const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const confirmar = useConfirm();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
@@ -175,13 +177,12 @@ export default function PosTerminal({ onIrAErp }) {
     const hayOcupadas = mesas.some((m) => m.estado === 'ocupada' || m.orden_activa);
     const hayLlevar = ordenesLlevar.some((o) => o.estado_pago !== 'pagado');
     if (hayOcupadas || hayLlevar) { alert('⚠️ No puedes cerrar el turno. Hay mesas ocupadas o pedidos pendientes.'); return; }
-    const pin = window.prompt('Ingrese PIN autorizado para cerrar caja:');
-    if (!pin) return;
-    try {
-      const { data } = await validarPinEmpleado({ pin, accion: 'entrar' });
-      if (['Cajero', 'Administrador', 'Admin'].includes(data.rol_nombre)) setModalCierreAbierto(true);
-      else alert('🚫 Tu rol no tiene permisos para cerrar la caja.');
-    } catch { alert('❌ PIN incorrecto o empleado inactivo.'); }
+    // 🛠️ Antes pedía un PIN de empleado (window.prompt + validarPinEmpleado) — el
+    // dueño no tiene PIN configurado (entra con usuario/contraseña), así que nunca
+    // podía cerrar caja. El botón ya está gateado por rol para quien lo ve, así que
+    // alcanza con una confirmación simple.
+    const ok = await confirmar('¿Estás seguro de cerrar la caja? Se registrará el cierre de turno.');
+    if (ok) setModalCierreAbierto(true);
   };
 
   // ✨ NUEVO: Función que llama a Django y dispara el WhatsApp

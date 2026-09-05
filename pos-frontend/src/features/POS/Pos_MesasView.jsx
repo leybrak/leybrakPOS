@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja, validarPinEmpleado } from '../../api/api';
+import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // Modales
 import ModalCobro from '../../components/modals/ModalCobro';
@@ -19,6 +20,7 @@ import { useMesasWS } from './hooks/useMesasWS';
 
 export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId }) {
   const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const confirmar = useConfirm();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const isDark = tema === 'dark'; // ✨ Helper para el nuevo diseño
@@ -110,16 +112,15 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
 
   const manejarCierreCajaSeguro = async () => {
     const hayOcupadas = mesas.some(mesa => mesa.estado === 'ocupada' || mesa.orden_activa);
-    const hayLlevarPendientes = ordenesLlevar.some(orden => orden.estado_pago !== 'pagado'); 
+    const hayLlevarPendientes = ordenesLlevar.some(orden => orden.estado_pago !== 'pagado');
     if (hayOcupadas || hayLlevarPendientes) { alert("⚠️ Aún hay mesas ocupadas o pedidos pendientes."); return; }
 
-    const pin = window.prompt("Ingrese PIN autorizado para cerrar caja:");
-    if (!pin) return;
-    try {
-      const res = await validarPinEmpleado({ pin, accion: 'entrar' });
-      if (['Cajero', 'Administrador', 'Admin'].includes(res.data.rol_nombre)) setModalCierreAbierto(true);
-      else alert("🚫 Sin permisos para cerrar caja.");
-    } catch { alert("❌ PIN incorrecto o empleado inactivo."); }
+    // 🛠️ Antes pedía un PIN de empleado (window.prompt + validarPinEmpleado) — el
+    // dueño no tiene PIN configurado (entra con usuario/contraseña), así que nunca
+    // podía cerrar caja. El botón ya está gateado por rol para quien lo ve, así que
+    // alcanza con una confirmación simple.
+    const ok = await confirmar('¿Estás seguro de cerrar la caja? Se registrará el cierre de turno.');
+    if (ok) setModalCierreAbierto(true);
   };
 
   // ── RENDER DE ESTADOS ESPECIALES (Diseño ERP) ──────────────────────────────
