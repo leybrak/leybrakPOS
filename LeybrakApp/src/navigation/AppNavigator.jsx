@@ -21,6 +21,7 @@ import FacturacionScreen   from '../screens/ERP/FacturacionScreen';
 import SalonScreen         from '../screens/POS/SalonScreen';
 import useAppStore         from '../store/useAppStore';
 import PosScreen           from '../screens/POS/PosScreen';
+import KdsScreen           from '../screens/POS/KdsScreen';
 import { setLogoutCallback, crearTicket } from '../api/api';
 const { width } = Dimensions.get('window');
 
@@ -399,15 +400,15 @@ const Stack = createNativeStackNavigator();
 
 export default function AppNavigator({ sesion, onLogout, onCerrarTurno }) {
   const rolSesion = (sesion?.rol || '').toString().trim().toLowerCase();
-  // 🛠️ Antes SIEMPRE arrancaba en ERPLayout (enPos=false) sin importar el rol —
-  // un mesero/cajero/cocinero que entraba por PIN terminaba viendo el dashboard
+  // 🛠️ Antes SIEMPRE arrancaba en ERPLayout sin importar el rol — un
+  // mesero/cajero/cocinero que entraba por PIN terminaba viendo el dashboard
   // de admin. Solo dueño/admin/administrador (login directo por "Panel de
-  // Control") deben ver el ERP; el resto entra directo al Salón/POS y no tiene
-  // forma de volver al ERP (mesero/cajero/cocinero nunca deberían verlo).
-  // Cocinero no tiene pantalla de KDS en mobile todavía, así que por ahora
-  // también va al Salón/POS como los demás roles operativos.
+  // Control") deben ver el ERP; el resto entra directo a su pantalla
+  // operativa y no tiene forma de volver al ERP. Cocinero va al KDS (ya no
+  // al Salón/POS como stopgap — ahora tiene su propia pantalla).
   const esDueñoRol = ['dueño', 'dueno', 'admin', 'administrador'].includes(rolSesion);
-  const [enPos, setEnPos] = useState(!esDueñoRol);
+  const esCocineroRol = ['cocinero', 'cocina'].includes(rolSesion);
+  const [vista, setVista] = useState(esDueñoRol ? 'erp' : esCocineroRol ? 'kds' : 'pos');
 
   useEffect(() => {
     setLogoutCallback(onLogout);
@@ -418,13 +419,20 @@ export default function AppNavigator({ sesion, onLogout, onCerrarTurno }) {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
-          {() => enPos
-            ? <POSLayout
-                onVolver={esDueñoRol ? () => setEnPos(false) : undefined}
+          {() => {
+            if (vista === 'erp') {
+              return <ERPLayout onIrAlPos={() => setVista('pos')} onLogout={onLogout} />;
+            }
+            if (vista === 'kds') {
+              return <KdsScreen onCerrarTurno={onCerrarTurno} />;
+            }
+            return (
+              <POSLayout
+                onVolver={esDueñoRol ? () => setVista('erp') : undefined}
                 onCerrarTurno={!esDueñoRol ? onCerrarTurno : undefined}
               />
-            : <ERPLayout onIrAlPos={() => setEnPos(true)} onLogout={onLogout} />
-          }
+            );
+          }}
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
