@@ -122,6 +122,16 @@ const VistaInternaPOS = () => {
           const vistaDestino = getRolVista(rol);
           if (!vistaDestino) { setVista('sin_permiso'); return; }
 
+          // 🛠️ Si este dispositivo fue configurado como terminal PIN (ver
+          // View_Login.jsx → handleSedeSetup), no lo mandamos automáticamente a
+          // la vista del dueño solo porque su JWT sigue vivo — ese JWT lo sigue
+          // necesitando el empleado para operar (mesas, órdenes, cobrar...), pero
+          // la pantalla debe forzar igual el PIN en vez de saltarse directo al ERP.
+          if (localStorage.getItem('dispositivo_terminal_pin') === 'true') {
+            setVista('login');
+            return;
+          }
+
           if (negocio_id) localStorage.setItem('negocio_id', negocio_id);
           if (nombre) localStorage.setItem('usuario_nombre', nombre);
           if (avatar) localStorage.setItem('usuario_avatar', avatar);

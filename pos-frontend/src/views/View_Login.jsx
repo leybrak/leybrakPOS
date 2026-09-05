@@ -123,12 +123,15 @@ export default function LoginView({ onAccesoConcedido }) {
       localStorage.setItem('sede_id', sedeObj.id);
       localStorage.setItem('sede_nombre', sedeObj.nombre);
       localStorage.removeItem('modo_dispositivo');
-      // El login de dueño de este paso solo sirvió para elegir la sede del
-      // terminal. Si no cerramos esa sesión, la cookie JWT del dueño queda
-      // viva y App.jsx la prioriza al reabrir la app, mandando al ERP en
-      // vez de mostrar el PIN — de acá en más este dispositivo autentica
-      // solo por PIN de empleado.
-      api.post('/token/logout/').catch(() => {});
+      // 🛠️ Antes esto cerraba la sesión del dueño (POST /token/logout/) para que
+      // App.jsx no la priorizara al reabrir la app. Pero el JWT del dueño sigue
+      // siendo necesario para TODAS las llamadas que hace un empleado ya logueado
+      // por PIN (mesas, órdenes, cobrar...) — la sesión de empleado es solo un
+      // contexto liviano encima de ese JWT, no un token propio. Matarlo dejaba a
+      // cualquier empleado sin poder hacer nada (401 en cascada) apenas entraba.
+      // En cambio marcamos este dispositivo como terminal-PIN con una bandera
+      // aparte; App.jsx la usa para forzar el PIN sin tocar la sesión del dueño.
+      localStorage.setItem('dispositivo_terminal_pin', 'true');
       setModo('empleado');
     }
   };
