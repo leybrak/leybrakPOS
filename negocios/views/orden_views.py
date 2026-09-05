@@ -755,6 +755,14 @@ class OrdenViewSet(viewsets.ModelViewSet):
         if not sede_id or not telefono:
             return Response({"error": "Se requiere sede_id y telefono."}, status=400)
 
+        # 🛡️ IDOR fix: sin esto, el token de bot de CUALQUIER negocio podía
+        # consultar pedidos de OTRO negocio con solo cambiar el sede_id.
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'negocio') or not Sede.objects.filter(
+                id=sede_id, negocio=request.user.negocio
+            ).exists():
+                return Response({"error": "La sede indicada no pertenece a tu negocio."}, status=403)
+
         try:
             orden = Orden.objects.prefetch_related(
                 'detalles__producto', 'detalles__opciones_seleccionadas'
@@ -777,8 +785,15 @@ class OrdenViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def modificar_desde_bot(self, request, pk=None):
         try:
-            orden = Orden.objects.get(id=pk)
+            orden = Orden.objects.select_related('sede__negocio').get(id=pk)
         except Orden.DoesNotExist:
+            return Response({"error": f"La orden {pk} no existe."}, status=404)
+
+        # 🛡️ IDOR fix: sin esto, el token de bot de CUALQUIER negocio podía
+        # modificar o cancelar el pedido de OTRO negocio con solo saber el ID.
+        if not request.user.is_superuser and (
+            not hasattr(request.user, 'negocio') or orden.sede.negocio_id != request.user.negocio.id
+        ):
             return Response({"error": f"La orden {pk} no existe."}, status=404)
 
         accion = request.data.get('accion')
