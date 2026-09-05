@@ -65,4 +65,31 @@ export async function abrirConfiguracionPermisos() {
   }
 }
 
+/**
+ * Verifica si la app ya está excluida del ahorro de batería. Sin esto,
+ * Android (sobre todo Xiaomi/Huawei/Oppo) puede matar el lector de
+ * notificaciones en segundo plano y dejar de detectar pagos hasta que
+ * alguien reabra la app a mano.
+ */
+export async function verificarExclusionBateria() {
+  if (Platform.OS !== 'android' || !NotificationModule) return false;
+  try {
+    return await NotificationModule.tieneExclusionBateria();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Abre el diálogo del sistema para pedir la exclusión del ahorro de batería.
+ */
+export async function pedirExclusionBateria() {
+  if (Platform.OS !== 'android' || !NotificationModule) return;
+  try {
+    await NotificationModule.pedirExclusionBateria();
+  } catch (e) {
+    console.error('Error pidiendo exclusión de batería:', e);
+  }
+}
+
 export default NotificationModule;

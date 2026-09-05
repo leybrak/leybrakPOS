@@ -37,19 +37,22 @@ const GLOBAL_KEY_MAP = {
 
 function BotonPermisoNotificaciones({ t, color }) {
   const [tienePermiso, setTienePermiso] = useState(false);
+  const [tieneExclusionBateria, setTieneExclusionBateria] = useState(false);
 
-  useEffect(() => {
-    const verificar = async () => {
-      if (NativeModules.NotificationModule) {
-        const permiso = await NativeModules.NotificationModule.tienePermisoNotificaciones();
-        setTienePermiso(permiso);
-      }
-    };
-    verificar();
+  const verificar = useCallback(async () => {
+    if (!NativeModules.NotificationModule) return;
+    const [permiso, exclusion] = await Promise.all([
+      NativeModules.NotificationModule.tienePermisoNotificaciones(),
+      NativeModules.NotificationModule.tieneExclusionBateria(),
+    ]);
+    setTienePermiso(permiso);
+    setTieneExclusionBateria(exclusion);
   }, []);
 
+  useEffect(() => { verificar(); }, [verificar]);
+
   return (
-    <View style={{ marginTop: 12 }}>
+    <View style={{ marginTop: 12, gap: 10 }}>
       {tienePermiso ? (
         <View style={[s.alertBoxSuccess, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
           <Icon name="check-circle" size={14} color="#10b981" />
@@ -58,13 +61,35 @@ function BotonPermisoNotificaciones({ t, color }) {
       ) : (
         <TouchableOpacity
           style={[{ backgroundColor: `${color}15`, borderColor: `${color}40`, borderWidth: 1, borderRadius: 12, padding: 14, alignItems: 'center' }]}
-          onPress={() => NativeModules.NotificationModule?.abrirConfiguracionPermisos()}
+          onPress={async () => { await NativeModules.NotificationModule?.abrirConfiguracionPermisos(); verificar(); }}
           activeOpacity={0.8}
         >
           <Icon name="bell" size={16} color={color} style={{ marginBottom: 6 }} />
           <Text style={{ color, fontSize: 13, fontWeight: '800' }}>ACTIVAR LECTURA DE NOTIFICACIONES</Text>
           <Text style={{ color: t.textSec, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
             Necesario para detectar pagos de Yape/Plin automáticamente
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Sin esto, Android (sobre todo Xiaomi/Huawei/Oppo) puede matar el
+          lector en segundo plano y dejar de detectar pagos hasta que
+          alguien reabra la app a mano. */}
+      {tieneExclusionBateria ? (
+        <View style={[s.alertBoxSuccess, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+          <Icon name="check-circle" size={14} color="#10b981" />
+          <Text style={s.alertTextSuccess}>Sin restricciones de batería</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[{ backgroundColor: `${color}15`, borderColor: `${color}40`, borderWidth: 1, borderRadius: 12, padding: 14, alignItems: 'center' }]}
+          onPress={async () => { await NativeModules.NotificationModule?.pedirExclusionBateria(); verificar(); }}
+          activeOpacity={0.8}
+        >
+          <Icon name="battery-full" size={16} color={color} style={{ marginBottom: 6 }} />
+          <Text style={{ color, fontSize: 13, fontWeight: '800' }}>DESACTIVAR AHORRO DE BATERÍA</Text>
+          <Text style={{ color: t.textSec, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+            Evita que el celular deje de detectar pagos en segundo plano
           </Text>
         </TouchableOpacity>
       )}
