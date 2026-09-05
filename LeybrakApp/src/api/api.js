@@ -201,6 +201,9 @@ export const eliminarModificador   = (id)       => api.delete(`/modificadores-ra
 // nada: SalonScreen se queda con lo que corresponda a "para llevar".
 export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params });
 
+// ─── Soporte ────────────────────────────────────────────────────
+export const crearTicket = (data) => api.post('/tickets-soporte/', data);
+
 // ─── Inventario ───────────────────────────────────────────────
 export const getCatalogoGlobal      = (params) => api.get('/insumo-base/', { params });
 export const getInsumosSede         = (params) => api.get('/insumo-sede/', { params });
