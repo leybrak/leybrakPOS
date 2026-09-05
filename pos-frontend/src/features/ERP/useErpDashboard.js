@@ -115,8 +115,11 @@ export const useErpDashboard = () => {
 
   const moduloKdsActivo = configuracionGlobal?.modulos?.cocina;
   const rolesFiltrados = rolesReales.filter(rol => {
+    // El rol "Dueño" es un único registro global (ver login_movil) — no se puede
+    // asignar a un segundo empleado, así que ni aparece como opción.
+    if (rol.nombre.trim().toLowerCase() === 'dueño') return false;
     if (!moduloKdsActivo && (rol.nombre.toLowerCase().includes('cocin') || rol.nombre.toLowerCase().includes('chef'))) return false;
-    return true; 
+    return true;
   });
   
   const recargarSedes = async () => {

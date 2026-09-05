@@ -174,23 +174,25 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* Filtro sedes */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.sedesScroll}>
-          {['Todas', ...sedes.map(sd => sd.nombre)].map(nombre => (
-            <TouchableOpacity
-              key={nombre}
-              style={[s.sedePill, { backgroundColor: t.pill, borderColor: t.pillBorder },
-                sedeFiltro === nombre && { borderColor: t.color, backgroundColor: t.bgCard2 }]}
-              onPress={() => setSedeFiltro(nombre)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.sedePillText, { color: t.textSec },
-                sedeFiltro === nombre && { color: t.isDark ? '#fff' : '#111' }]}>
-                {nombre}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Filtro sedes — solo tiene sentido si hay más de una para elegir */}
+        {sedes.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.sedesScroll}>
+            {['Todas', ...sedes.map(sd => sd.nombre)].map(nombre => (
+              <TouchableOpacity
+                key={nombre}
+                style={[s.sedePill, { backgroundColor: t.pill, borderColor: t.pillBorder },
+                  sedeFiltro === nombre && { borderColor: t.color, backgroundColor: t.bgCard2 }]}
+                onPress={() => setSedeFiltro(nombre)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.sedePillText, { color: t.textSec },
+                  sedeFiltro === nombre && { color: t.isDark ? '#fff' : '#111' }]}>
+                  {nombre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Filtro tiempo */}
         <View style={s.filtrosRow}>

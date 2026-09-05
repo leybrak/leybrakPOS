@@ -163,8 +163,8 @@ export default function Erp_DashboardVentas({
       {/* ========== CABECERA SUPERIOR ========== */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         
-        {/* FILTRO MULTI-SEDE */}
-        {esDueño ? (
+        {/* FILTRO MULTI-SEDE — solo tiene sentido si hay más de una sede */}
+        {esDueño && sedesReales?.length > 1 ? (
           <div className={`flex w-full xl:w-auto p-1 rounded-xl overflow-x-auto custom-scrollbar shrink-0 border ${
             isDark ? 'bg-[#111] border-[#222]' : 'bg-gray-100 border-gray-200'
           }`}>

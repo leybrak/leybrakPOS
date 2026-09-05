@@ -388,9 +388,12 @@ export default function Erp_Personal({
 
             <div className="w-full sm:w-auto flex sm:flex-col justify-between sm:items-end mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-[#2a2a2a] sm:border-transparent">
               
-              {esDueño && (
+              {/* El registro del propio Dueño (auto-creado por login_movil) no se
+                  puede editar/desactivar desde acá — ni tendría sentido (su rol
+                  ya no aparece como opción) ni el backend lo permitiría. */}
+              {esDueño && emp.rol_nombre?.trim().toLowerCase() !== 'dueño' && (
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     onClick={() => onEditarEmpleado(emp)}
                     className={`p-2 rounded-lg border transition-all ${
                       isDark ? 'bg-[#111] border-[#333] hover:bg-[#222]' : 'bg-white border-gray-200 hover:bg-gray-50'

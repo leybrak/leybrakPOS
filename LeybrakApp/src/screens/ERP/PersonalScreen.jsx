@@ -357,7 +357,9 @@ export default function PersonalScreen() {
         getSedes(params),
       ]);
       setEmpleados(resEmp.data);
-      setRoles(resRoles.data);
+      // El rol "Dueño" es un único registro global (ver login_movil) — no se
+      // puede asignar a un segundo empleado, así que ni aparece como opción.
+      setRoles(resRoles.data.filter(r => r.nombre.trim().toLowerCase() !== 'dueño'));
       setSedes(resSedes.data);
     } catch (e) {
       console.error('Error cargando personal:', e);
@@ -525,7 +527,10 @@ export default function PersonalScreen() {
                   </View>
                 </View>
 
-                {esDueno && (
+                {/* El registro del propio Dueño (auto-creado al loguearse) no se
+                    puede editar/desactivar desde acá — su rol ni aparece como
+                    opción en el modal, y el backend igual lo rechazaría. */}
+                {esDueno && emp.rol_nombre?.trim().toLowerCase() !== 'dueño' && (
                   <View style={[s.cardSaaSActions, { borderTopColor: t.border }]}>
                     <TouchableOpacity style={[s.actionBtnSaaS, { backgroundColor: t.bgCard2, borderColor: t.border }]} onPress={() => { setEmpleadoEditar(emp); setModalVisible(true); }}>
                       <Icon name="pencil" size={14} color={t.color} />

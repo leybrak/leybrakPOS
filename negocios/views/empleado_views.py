@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.contrib.auth.hashers import check_password, make_password
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, permission_classes, throttle_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -45,14 +46,45 @@ class PinRateThrottle(ScopedRateThrottle):
     scope = 'intentos_pin'
 
 
+def _es_rol_dueno(rol):
+    """El rol "Dueño" es un solo registro global (Rol.objects.get(nombre='Dueño'),
+    ver login_movil en serializers_jwt.py) — no hay forma estructural de marcar
+    "este Empleado ES el propietario" más que por el nombre de su rol."""
+    return bool(rol and rol.nombre.strip().lower() == 'dueño')
+
+
 class EmpleadoViewSet(viewsets.ModelViewSet):
     serializer_class = EmpleadoSerializer
 
     def perform_create(self, serializer):
+        # 🛡️ Nada impedía crear un segundo empleado con rol "Dueño" — el catálogo
+        # de roles está bloqueado a superusuario, pero cualquiera podía ASIGNAR el
+        # rol ya existente al crear/editar un empleado.
+        if _es_rol_dueno(serializer.validated_data.get('rol')):
+            raise ValidationError({'rol': 'No se puede crear otro empleado con el rol "Dueño".'})
         if hasattr(self.request.user, 'negocio'):
             serializer.save(negocio=self.request.user.negocio)
         else:
             serializer.save()
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        rol_nuevo = serializer.validated_data.get('rol', instance.rol)
+        if _es_rol_dueno(instance.rol):
+            # Este Empleado ES el dueño (el auto-creado por login_movil): no se
+            # le puede cambiar el rol ni desactivar desde esta API.
+            if 'rol' in serializer.validated_data and not _es_rol_dueno(rol_nuevo):
+                raise ValidationError({'rol': 'No se puede cambiar el rol del Dueño.'})
+            if serializer.validated_data.get('activo') is False:
+                raise ValidationError({'activo': 'No se puede desactivar al Dueño.'})
+        elif _es_rol_dueno(rol_nuevo):
+            raise ValidationError({'rol': 'No se puede asignar el rol "Dueño" a otro empleado.'})
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if _es_rol_dueno(instance.rol):
+            raise ValidationError('No se puede eliminar al Dueño.')
+        instance.delete()
 
     def get_queryset(self):
         queryset = Empleado.objects.all()
