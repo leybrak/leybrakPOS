@@ -4,13 +4,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Animated, Dimensions, Modal, ScrollView,
-  Platform, StatusBar, Easing, Image
+  Platform, StatusBar, Easing
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { BlurView } from '@react-native-community/blur';
-
-const logoLeybrak = require('../assets/logo.png');
 
 import DashboardScreen     from '../screens/ERP/DashboardScreen';
 import ConfiguracionScreen from '../screens/ERP/ConfiguracionScreen';
@@ -106,12 +104,9 @@ function Drawer({ visible, vistaActiva, color, drawerItems, onNavegar, onIrAlPos
 
         <Animated.View style={[d.drawer, { transform: [{ translateX: slideAnim }] }]}>
           <View style={d.drawerHeader}>
-            <View style={d.drawerBrandRow}>
-              <Image source={logoLeybrak} style={d.drawerLogo} resizeMode="contain" />
-              <View>
-                <Text style={d.drawerBrand}>LEYBRAK<Text style={{ color }}>POS</Text></Text>
-                <Text style={d.drawerSub}>SISTEMA DE GESTIÓN</Text>
-              </View>
+            <View>
+              <Text style={d.drawerBrand}>LEYBRAK<Text style={{ color }}>POS</Text></Text>
+              <Text style={d.drawerSub}>SISTEMA DE GESTIÓN</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={d.closeBtn} activeOpacity={0.7}>
               <Icon name="times" size={16} color="#6b7280" />
@@ -387,8 +382,6 @@ const d = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: SAFE_TOP, paddingBottom: 24,
     borderBottomWidth: 1, borderBottomColor: '#1a1a1a',
   },
-  drawerBrandRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  drawerLogo:       { width: 32, height: 32 },
   drawerBrand:      { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
   drawerSub:        { fontSize: 9, color: '#6b7280', fontWeight: '800', letterSpacing: 2, marginTop: 2 },
   closeBtn: {

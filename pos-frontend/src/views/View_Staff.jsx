@@ -7,7 +7,6 @@ import Staff_Planes from '../features/Staff/Staff_Planes';
 import Staff_Pagos from '../features/Staff/Staff_Pagos';
 import Staff_Finanzas from '../features/Staff/Staff_Finanzas';
 import Staff_Configuracion from '../features/Staff/Staff_Configuracion';
-import logoLeybrak from '../assets/logoSinFondoCompacto copy.png';
 
 const TABS = [
   { id: 'dashboard',      icono: 'fi-rr-apps',          nombre: 'Dashboard' },
@@ -26,16 +25,13 @@ export default function View_Staff({ onLogout }) {
   return (
     <div className="h-screen w-full flex flex-col bg-[#0a0a0a] text-neutral-100">
       <header className="px-6 py-4 flex items-center justify-between border-b border-[#1a1a1a] shrink-0 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <img src={logoLeybrak} alt="Leybrak" className="w-8 h-8 object-contain" />
-          <div>
-            <h1 className="text-lg font-black tracking-tight">
-              LEYBRAK <span className="text-[#ff5a1f]">STAFF</span>
-            </h1>
-            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
-              Panel interno de la plataforma
-            </p>
-          </div>
+        <div>
+          <h1 className="text-lg font-black tracking-tight">
+            LEYBRAK <span className="text-[#ff5a1f]">STAFF</span>
+          </h1>
+          <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
+            Panel interno de la plataforma
+          </p>
         </div>
 
         <nav className="flex items-center gap-1 bg-[#111] border border-[#222] rounded-xl p-1 flex-wrap">
