@@ -498,7 +498,7 @@ export default function LoginScreen({ onLoginExitoso }) {
           <TouchableOpacity
             style={[s.buttonPrimary, (pin.length < 4 || bloqueadoSeg > 0 || cargando) && s.buttonDisabled]}
             onPress={procesarPin}
-            disabled={pin.length < 6 || bloqueadoSeg > 0 || cargando}
+            disabled={pin.length < 4 || bloqueadoSeg > 0 || cargando}
             activeOpacity={0.8}
           >
             {cargando ? (
