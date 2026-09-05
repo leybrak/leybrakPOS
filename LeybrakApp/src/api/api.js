@@ -140,6 +140,12 @@ export const actualizarProducto = (id, data) => api.put(`/productos/${id}/`, dat
 export const parchearProducto   = (id, data) => api.patch(`/productos/${id}/`, data);
 export const crearCategoria     = (data)     => api.post('/categorias/', data);
 export const parchearCategoria  = (id, data) => api.patch(`/categorias/${id}/`, data);
+// Sube la foto de un plato ya creado. `asset` = { uri, type, name } de react-native-image-picker.
+export const subirImagenProducto = (id, asset) => {
+  const form = new FormData();
+  form.append('imagen', { uri: asset.uri, type: asset.type || 'image/jpeg', name: asset.fileName || 'plato.jpg' });
+  return api.post(`/productos/${id}/subir_imagen/`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 
 // ─── Mesas y órdenes ─────────────────────────────────────────
 export const getMesas              = (params)        => api.get('/mesas/', { params });

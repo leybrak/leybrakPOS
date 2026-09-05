@@ -39,21 +39,22 @@ export default function ModalCategorias({ visible, categorias, t, onCrear, onEli
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCerrar}>
       <View style={s.overlay}>
-        <View style={[s.modal, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+        <View style={[s.card, { backgroundColor: t.bgCard, borderColor: t.border }]}>
 
-          {/* Header */}
+          {/* Header — igual al shell chico de la web (icono + título + cerrar) */}
           <View style={[s.header, { borderBottomColor: t.border, backgroundColor: t.bgCard2 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={s.headerLeft}>
               <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
                 <Icon name="folder" size={16} color={t.color} />
               </View>
-              <Text style={[s.titulo, { color: t.textPrim }]}>Categorías del Menú</Text>
+              <Text style={[s.titulo, { color: t.textPrim }]} numberOfLines={1}>Categorías del Menú</Text>
             </View>
             <TouchableOpacity
               onPress={onCerrar}
-              style={[s.closeBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}
+              style={[s.closeBtn, { backgroundColor: t.bgCard, borderColor: t.border2 }]}
+              activeOpacity={0.7}
             >
               <Icon name="times" size={14} color={t.textSec} />
             </TouchableOpacity>
@@ -123,12 +124,13 @@ export default function ModalCategorias({ visible, categorias, t, onCrear, onEli
 }
 
 const s = StyleSheet.create({
-  overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modal:         { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: '80%' },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
-  headerIcono:   { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  titulo:        { fontSize: 18, fontWeight: '900' },
-  closeBtn:      { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  card:          { width: '100%', maxWidth: 420, borderRadius: 24, borderWidth: 1, overflow: 'hidden', maxHeight: '85%' },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1 },
+  headerLeft:    { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 12 },
+  headerIcono:   { width: 40, height: 40, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  titulo:        { fontSize: 18, fontWeight: '900', flexShrink: 1 },
+  closeBtn:      { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   body:          { padding: 20 },
   inputRow:      { flexDirection: 'row', gap: 10, marginBottom: 16 },
   input:         { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontWeight: '600' },

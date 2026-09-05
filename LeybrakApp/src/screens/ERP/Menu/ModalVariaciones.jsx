@@ -69,7 +69,7 @@ function ModalRecetaOpcion({ opcionNombre, catalogo, ingredientes, onAgregar, on
 }
 
 const ro = StyleSheet.create({
-  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 16 },
+  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 16 },
   modal:    { borderRadius: 24, borderWidth: 1, maxHeight: '85%' },
   header:   { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1, gap: 12 },
   sub:      { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
@@ -317,7 +317,7 @@ export default function ModalVariaciones({ visible, plato, t, onCerrar }) {
             <Text style={[s.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>Variaciones: {plato.nombre}</Text>
             <Text style={[s.headerSub, { color: t.textMuted }]}>OPCIONES Y RECETA POR VARIANTE</Text>
           </View>
-          <TouchableOpacity onPress={onCerrar} style={[s.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}>
+          <TouchableOpacity onPress={onCerrar} style={[s.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}>
             <Icon name="times" size={14} color={t.textSec} />
           </TouchableOpacity>
         </View>
@@ -398,11 +398,11 @@ export default function ModalVariaciones({ visible, plato, t, onCerrar }) {
 
 const s = StyleSheet.create({
   container:    { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 16, borderBottomWidth: 1 },
-  headerIcono:  { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  headerTitulo: { fontSize: 16, fontWeight: '900' },
-  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
-  closeBtn:     { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 20, borderBottomWidth: 1 },
+  headerIcono:  { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headerTitulo: { fontSize: 17, fontWeight: '900' },
+  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
+  closeBtn:     { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   content:      { padding: 16, paddingBottom: 30 },
   emptyState:   { alignItems: 'center', justifyContent: 'center', padding: 30, borderWidth: 1, borderStyle: 'dashed', borderRadius: 16 },

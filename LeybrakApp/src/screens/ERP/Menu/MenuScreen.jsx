@@ -9,7 +9,7 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import {
   getProductos, getCategorias, parchearProducto,
   crearCategoria, parchearCategoria,
-  crearProducto, actualizarProducto,
+  crearProducto, actualizarProducto, subirImagenProducto,
 } from '../../../api/api';
 import useAppStore from '../../../store/useAppStore';
 import { useToast } from '../../../context/ToastContext';
@@ -258,8 +258,22 @@ export default function MenuScreen() {
       tiene_variaciones:  form.tiene_variaciones,
       grupos_variacion:   form.grupos_variacion,
     };
+    let productoId = form.id;
     if (form.id) await actualizarProducto(form.id, payload);
-    else await crearProducto(payload);
+    else {
+      const { data: nuevo } = await crearProducto(payload);
+      productoId = nuevo.id;
+    }
+
+    // La imagen se sube aparte (multipart) una vez que el producto ya tiene ID.
+    if (form.imagenAsset) {
+      try {
+        await subirImagenProducto(productoId, form.imagenAsset);
+      } catch (e) {
+        toast.error('El plato se guardó, pero la foto no se pudo subir.');
+      }
+    }
+
     await cargar();
   };
   if (cargando) {
@@ -288,23 +302,19 @@ export default function MenuScreen() {
         </View>
       </View>
 
-      {/* Botones acción — solo dueño */}
+      {/* Botones acción — solo dueño (grid 2x2, igual a la web) */}
       {esDueno && (
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={s.accionesScroll}
-          data={[
-            { label: 'Nuevo Plato', icono: 'plus', primary: true, onPress: () => { setPlatoEditar(null); setModalPlatoVisible(true); } },
-            { label: 'Categorías', icono: 'folder', primary: false, onPress: () => setModalCatVisible(true) },
+        <View style={s.accionesGrid}>
+          {[
             { label: 'Modificadores', icono: 'sliders', primary: false, onPress: () => setModalModifVisible(true) },
+            { label: 'Categorías', icono: 'folder', primary: false, onPress: () => setModalCatVisible(true) },
             { label: 'Combos', icono: 'th-large', primary: false, onPress: () => setModalCombosVisible(true) },
-          ]}
-          keyExtractor={item => item.label}
-          renderItem={({ item: btn }) => (
+            { label: 'Nuevo Plato', icono: 'plus', primary: true, onPress: () => { setPlatoEditar(null); setModalPlatoVisible(true); } },
+          ].map(btn => (
             <TouchableOpacity
+              key={btn.label}
               style={[
-                s.accionPill,
+                s.accionBtnGrid,
                 { borderColor: t.border2, backgroundColor: t.bgCard2 },
                 btn.primary && { backgroundColor: t.color, borderColor: t.color },
               ]}
@@ -316,8 +326,8 @@ export default function MenuScreen() {
                 {btn.label.toUpperCase()}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </View>
       )}
 
       {/* Buscador */}
@@ -463,8 +473,8 @@ const s = StyleSheet.create({
   titulo:         { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   subtitulo:      { fontSize: 12, marginTop: 2 },
 
-  accionesScroll: { marginBottom: 16 },
-  accionPill:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginRight: 8, marginLeft: 4 },
+  accionesGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16, paddingHorizontal: 4 },
+  accionBtnGrid:  { width: '48%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   accionPillText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
   buscadorBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: 4, marginBottom: 12 },
