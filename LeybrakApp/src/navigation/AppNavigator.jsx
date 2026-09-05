@@ -397,7 +397,16 @@ function POSLayout({ onVolver }) {
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator({ sesion, onLogout }) {
-  const [enPos, setEnPos] = useState(false);
+  const rolSesion = (sesion?.rol || '').toString().trim().toLowerCase();
+  // 🛠️ Antes SIEMPRE arrancaba en ERPLayout (enPos=false) sin importar el rol —
+  // un mesero/cajero/cocinero que entraba por PIN terminaba viendo el dashboard
+  // de admin. Solo dueño/admin/administrador (login directo por "Panel de
+  // Control") deben ver el ERP; el resto entra directo al Salón/POS y no tiene
+  // forma de volver al ERP (mesero/cajero/cocinero nunca deberían verlo).
+  // Cocinero no tiene pantalla de KDS en mobile todavía, así que por ahora
+  // también va al Salón/POS como los demás roles operativos.
+  const esDueñoRol = ['dueño', 'dueno', 'admin', 'administrador'].includes(rolSesion);
+  const [enPos, setEnPos] = useState(!esDueñoRol);
 
   useEffect(() => {
     setLogoutCallback(onLogout);
@@ -409,7 +418,7 @@ export default function AppNavigator({ sesion, onLogout }) {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
           {() => enPos
-            ? <POSLayout onVolver={() => setEnPos(false)} />
+            ? <POSLayout onVolver={esDueñoRol ? () => setEnPos(false) : undefined} />
             : <ERPLayout onIrAlPos={() => setEnPos(true)} onLogout={onLogout} />
           }
         </Stack.Screen>
