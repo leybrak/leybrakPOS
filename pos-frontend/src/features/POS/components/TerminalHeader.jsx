@@ -5,7 +5,7 @@ export default function TerminalHeader({
   sedes, sedeActualId, manejarCambioSede, modoUnir, setModoUnir,
   setMesaPrincipal, modSalonActivo, modLlevarActivo, setVistaLocal,
   ordenesLlevar, setDrawerVentaRapidaAbierto, rolUsuario, onIrAErp,
-  setModalMovimientosAbierto, manejarCierreCajaSeguro
+  setModalMovimientosAbierto, manejarCierreCajaSeguro, onCerrarTurno
 }) {
   return (
     // Estilo ERP: Fondo sólido oscuro, borde tenue, sin sombras ni blur
@@ -103,14 +103,25 @@ export default function TerminalHeader({
             )}
 
             {/* Botón Venta Rápida (Acento) */}
-            <button 
-              onClick={() => setDrawerVentaRapidaAbierto(true)} 
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95" 
+            <button
+              onClick={() => setDrawerVentaRapidaAbierto(true)}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95"
               style={{ backgroundColor: `${colorPrimario}15`, borderColor: `${colorPrimario}30`, color: colorPrimario }}
               title="Venta Rápida"
             >
               <i className="fi fi-rr-bolt mt-0.5 text-lg"></i>
             </button>
+
+            {/* Terminar mi turno (todos los roles — marca la salida y vuelve al PIN) */}
+            {onCerrarTurno && (
+              <button
+                onClick={() => { if (window.confirm('¿Terminar tu turno? Se marcará tu salida.')) onCerrarTurno(); }}
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all bg-[#141414] border-[#333] text-red-500/70 hover:text-red-500 hover:border-red-500/50"
+                title="Terminar mi turno"
+              >
+                <i className="fi fi-rr-sign-out-alt mt-0.5 text-lg"></i>
+              </button>
+            )}
           </div>
 
           {['administrador', 'admin', 'cajero', 'dueño'].includes(rolUsuario?.toLowerCase()) && (

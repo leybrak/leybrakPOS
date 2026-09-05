@@ -151,6 +151,10 @@ export default function LoginView({ onAccesoConcedido }) {
 
       // Éxito — limpiar bloqueo local
       setBloqueadoSegundos(0);
+      // 🛠️ Antes no se guardaba acá — un login por PIN "fresco" (no restaurado
+      // desde la cookie de sesión) se quedaba sin empleado_id en localStorage,
+      // rompiendo silenciosamente todo lo que lo usa (abrir/cerrar caja, etc.).
+      localStorage.setItem('empleado_id', empleado.id);
       localStorage.setItem('empleado_nombre', empleado.nombre);
       localStorage.setItem('usuario_rol', empleado.rol);
 

@@ -3,7 +3,7 @@ import LoginScreen from './src/screens/Auth/LoginScreen';
 import AppNavigator from './src/navigation/AppNavigator';
 import RepartidorScreen from './src/screens/Delivery/RepartidorScreen';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import { getNegocio } from './src/api/api';
+import { getNegocio, marcarSalidaEmpleado } from './src/api/api';
 import useAppStore from './src/store/useAppStore';
 import { StatusBar, View, ActivityIndicator,NativeModules } from 'react-native';
 import useActualizacionForzada from './src/hooks/useActualizacionForzada';
@@ -144,6 +144,22 @@ export default function App() {
   setSesion(null);
 };
 
+  // Fin de turno del empleado: marca la salida y vuelve al PIN — a diferencia
+  // de handleLogout, mantiene el dispositivo vinculado al negocio/sede (eso ya
+  // está hecho una sola vez al configurar el terminal, no se repite acá).
+  const handleCerrarTurno = async () => {
+    try {
+      const empleadoId = await EncryptedStorage.getItem('empleado_id');
+      if (empleadoId) await marcarSalidaEmpleado(empleadoId);
+    } catch (e) {
+      // Igual dejamos salir aunque falle la marca de salida por red.
+    }
+    await EncryptedStorage.removeItem('empleado_id');
+    await EncryptedStorage.removeItem('empleado_nombre');
+    await EncryptedStorage.removeItem('usuario_rol');
+    setSesion(null);
+  };
+
   // 🛵 El repartidor entra a su app dedicada (no ve el ERP/POS).
   if (sesion.es_repartidor) {
     return (
@@ -159,7 +175,7 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
       <ToastProvider>
         <ConfirmProvider>
-          <AppNavigator sesion={sesion} onLogout={handleLogout} />
+          <AppNavigator sesion={sesion} onLogout={handleLogout} onCerrarTurno={handleCerrarTurno} />
         </ConfirmProvider>
       </ToastProvider>
     </>

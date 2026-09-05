@@ -1,7 +1,7 @@
 import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { cerrarSesionGlobal } from '../src/api/api';
-import { verificarSesionEmpleado, generarPagoSuscripcion, refrescarSesion } from '../src/api/api';
+import { verificarSesionEmpleado, generarPagoSuscripcion, refrescarSesion, marcarIngresoEmpleado, marcarSalidaEmpleado } from '../src/api/api';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import LoginView from './views/View_Login';
@@ -38,6 +38,10 @@ const VistaInternaPOS = () => {
   const [suscripcion, setSuscripcion] = useState(null);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [errorPago, setErrorPago] = useState(null);
+  // Empleado que ya pasó el PIN pero todavía no confirmó su ingreso —
+  // mesero/cajero/cocinero no pueden pasar al POS/KDS sin este paso.
+  const [pendienteIngreso, setPendienteIngreso] = useState(null);
+  const [marcandoIngreso, setMarcandoIngreso] = useState(false);
 
   // Inicia el pago de la suscripción y redirige a MercadoPago.
   const handlePagarSuscripcion = async () => {
@@ -176,7 +180,7 @@ const VistaInternaPOS = () => {
       ? { rol: datosEmpleado, nombre: null, sede_id: null, suscripcion: null }
       : datosEmpleado;
 
-    const { rol, nombre, sede_id, suscripcion } = datos;
+    const { rol, nombre, sede_id, suscripcion, id } = datos;
 
     if (suscripcion && !suscripcion.puede_operar) {
       setSuscripcion(suscripcion);
@@ -192,8 +196,46 @@ const VistaInternaPOS = () => {
       if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
     }
 
-    setSesion({ rol, nombre, sede_id });
+    // Ingreso obligatorio solo para roles operativos (mesero/cajero/cocinero)
+    // que entran por PIN — el dueño/admin/staff no marca asistencia.
+    if (id && (vistaDestino === 'terminal' || vistaDestino === 'cocina')) {
+      setPendienteIngreso({ id, rol, nombre, sede_id, vistaDestino });
+      return;
+    }
+
+    setSesion({ rol, nombre, sede_id, id });
     setVista(vistaDestino);
+  };
+
+  const confirmarIngreso = async () => {
+    if (!pendienteIngreso || marcandoIngreso) return;
+    setMarcandoIngreso(true);
+    try {
+      await marcarIngresoEmpleado(pendienteIngreso.id);
+    } catch (_) {
+      // No bloqueamos el ingreso al trabajo por un error de red al marcar asistencia.
+    } finally {
+      setMarcandoIngreso(false);
+    }
+    const { id, rol, nombre, sede_id, vistaDestino } = pendienteIngreso;
+    setSesion({ rol, nombre, sede_id, id });
+    setVista(vistaDestino);
+    setPendienteIngreso(null);
+  };
+
+  // Fin de turno: marca la salida y vuelve al PIN (NO al login del dispositivo —
+  // ese vínculo con el negocio/sede ya está hecho y no se toca).
+  const handleCerrarTurno = async (empleadoId) => {
+    try {
+      if (empleadoId) await marcarSalidaEmpleado(empleadoId);
+    } catch (_) {
+      // Igual dejamos salir aunque falle la marca de salida por red.
+    }
+    localStorage.removeItem('empleado_id');
+    localStorage.removeItem('empleado_nombre');
+    localStorage.removeItem('usuario_rol');
+    setSesion(null);
+    setVista('login');
   };
 
   if (cargando || vista === null) {
@@ -264,6 +306,29 @@ const VistaInternaPOS = () => {
     );
   }
 
+  if (pendienteIngreso) {
+    return (
+      <div className="bg-[#0a0a0a] h-screen flex flex-col items-center justify-center text-center p-6">
+        <div className="w-24 h-24 rounded-3xl bg-[#ff5a1f]/10 flex items-center justify-center mb-6">
+          <span className="text-5xl">🕒</span>
+        </div>
+        <h1 className="text-3xl font-black text-white mb-3 uppercase tracking-tighter">
+          {pendienteIngreso.nombre ? `Hola, ${pendienteIngreso.nombre}` : 'Bienvenido'}
+        </h1>
+        <p className="text-neutral-400 font-bold mb-8 max-w-sm text-sm">
+          Antes de empezar tu turno, marca tu ingreso.
+        </p>
+        <button
+          onClick={confirmarIngreso}
+          disabled={marcandoIngreso}
+          className="px-8 py-4 rounded-2xl bg-[#ff5a1f] text-white font-black uppercase tracking-widest text-sm shadow-lg shadow-orange-900/20 active:scale-95 transition-all disabled:opacity-50"
+        >
+          {marcandoIngreso ? 'Marcando…' : 'Marcar Ingreso'}
+        </button>
+      </div>
+    );
+  }
+
   const mostrarBannerAlerta = suscripcion?.estado === 'prueba' && suscripcion?.alerta;
 
   return (
@@ -285,8 +350,8 @@ const VistaInternaPOS = () => {
       )}
 
       {vista === 'login'    && <LoginView onAccesoConcedido={handleAccesoConcedido} />}
-      {vista === 'terminal' && <PosTerminal rolUsuario={sesion?.rol} onIrAErp={() => setVista('erp')} />}
-      {vista === 'cocina'   && <KdsView onVolver={() => setVista('login')} />}
+      {vista === 'terminal' && <PosTerminal rolUsuario={sesion?.rol} onIrAErp={() => setVista('erp')} onCerrarTurno={() => handleCerrarTurno(sesion?.id)} />}
+      {vista === 'cocina'   && <KdsView onVolver={() => setVista('login')} onCerrarTurno={() => handleCerrarTurno(sesion?.id)} />}
       {vista === 'erp'      && <ErpDashboard onVolverAlPos={() => setVista('terminal')} rolUsuario={sesion?.rol} />}
       {vista === 'staff'    && <StaffDashboard onLogout={async () => { await cerrarSesionGlobal(); setVista('login'); }} />}
     </div>

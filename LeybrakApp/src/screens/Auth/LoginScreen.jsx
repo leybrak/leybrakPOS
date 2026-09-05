@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import { loginMovil, loginPinEmpleado, getSedes, guardarTokens, getEstadoCaja } from '../../api/api';
+import { loginMovil, loginPinEmpleado, getSedes, guardarTokens, getEstadoCaja, marcarIngresoEmpleado } from '../../api/api';
 
 // ─── Teclado PIN ──────────────────────────────────────────────
 function TecladoPin({ pin, onTecla, onBorrar, onLimpiar }) {
@@ -100,6 +100,10 @@ export default function LoginScreen({ onLoginExitoso }) {
   const [hora, setHora]                     = useState('');
   const [fecha, setFecha]                   = useState('');
   const [cajaAbierta, setCajaAbierta]       = useState(null);   // null=desconocido
+  // Empleado que ya pasó el PIN pero todavía no confirmó su ingreso —
+  // mesero/cajero/cocinero no pueden pasar al POS sin este paso.
+  const [empleadoPendienteIngreso, setEmpleadoPendienteIngreso] = useState(null);
+  const [marcandoIngreso, setMarcandoIngreso] = useState(false);
 
   // Reloj
   useEffect(() => {
@@ -237,7 +241,18 @@ export default function LoginScreen({ onLoginExitoso }) {
       await EncryptedStorage.setItem('es_repartidor',   empleado.puede_repartir ? '1' : '0');
 
       setPin('');
-      onLoginExitoso({ ...empleado, tipo: 'empleado', es_repartidor: !!empleado.puede_repartir });
+
+      // Ingreso obligatorio solo para roles operativos (mesero/cajero/cocinero)
+      // — el dueño/admin no marca asistencia, y el repartidor tiene su propia app.
+      const rolLimpio = (empleado.rol || '').toLowerCase().trim();
+      const requiereIngreso = !empleado.puede_repartir && !['dueño', 'dueno', 'admin', 'administrador'].includes(rolLimpio);
+      const datosSesion = { ...empleado, tipo: 'empleado', es_repartidor: !!empleado.puede_repartir };
+
+      if (requiereIngreso) {
+        setEmpleadoPendienteIngreso(datosSesion);
+      } else {
+        onLoginExitoso(datosSesion);
+      }
     } catch (error) {
       const data = error.response?.data || {};
       if (error.response?.status === 429) {
@@ -254,6 +269,49 @@ export default function LoginScreen({ onLoginExitoso }) {
       setCargando(false);
     }
   };
+
+  const confirmarIngreso = async () => {
+    if (!empleadoPendienteIngreso || marcandoIngreso) return;
+    setMarcandoIngreso(true);
+    try {
+      await marcarIngresoEmpleado(empleadoPendienteIngreso.id);
+    } catch (_) {
+      // No bloqueamos el ingreso al trabajo por un error de red al marcar asistencia.
+    } finally {
+      setMarcandoIngreso(false);
+    }
+    onLoginExitoso(empleadoPendienteIngreso);
+    setEmpleadoPendienteIngreso(null);
+  };
+
+  // ════════════════════════════════════════════════════════════
+  // RENDER: CONFIRMAR INGRESO (obligatorio antes de entrar al POS)
+  // ════════════════════════════════════════════════════════════
+  if (empleadoPendienteIngreso) {
+    return (
+      <View style={[s.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#050505" />
+        <View style={ci.iconBox}>
+          <Icon name="clock-o" size={40} color="#3b82f6" />
+        </View>
+        <Text style={ci.titulo}>
+          {empleadoPendienteIngreso.nombre ? `Hola, ${empleadoPendienteIngreso.nombre}` : 'Bienvenido'}
+        </Text>
+        <Text style={ci.subtitulo}>Antes de empezar tu turno, marca tu ingreso.</Text>
+        <TouchableOpacity
+          style={[ci.boton, marcandoIngreso && { opacity: 0.6 }]}
+          onPress={confirmarIngreso}
+          disabled={marcandoIngreso}
+          activeOpacity={0.85}
+        >
+          {marcandoIngreso
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={ci.botonText}>MARCAR INGRESO</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // ════════════════════════════════════════════════════════════
   // RENDER: INICIO
@@ -529,6 +587,14 @@ export default function LoginScreen({ onLoginExitoso }) {
 
   return null;
 }
+
+const ci = StyleSheet.create({
+  iconBox:   { width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(59,130,246,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  titulo:    { color: '#fff', fontSize: 24, fontWeight: '900', marginBottom: 8, textAlign: 'center' },
+  subtitulo: { color: '#9ca3af', fontSize: 14, fontWeight: '600', marginBottom: 32, textAlign: 'center' },
+  boton:     { backgroundColor: '#3b82f6', paddingHorizontal: 32, paddingVertical: 18, borderRadius: 16, minWidth: 220, alignItems: 'center' },
+  botonText: { color: '#fff', fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+});
 
 const s = StyleSheet.create({
   container:       { flex: 1, backgroundColor: '#050505' },

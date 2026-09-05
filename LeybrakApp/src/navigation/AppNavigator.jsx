@@ -367,7 +367,7 @@ function ERPLayout({ onIrAlPos, onLogout }) {
 }
 
 // ─── POS Layout ───────────────────────────────────────────────
-function POSLayout({ onVolver }) {
+function POSLayout({ onVolver, onCerrarTurno }) {
   const [mesaActiva, setMesaActiva] = useState(null);
 
   // Sin mesa seleccionada → mapa de mesas
@@ -378,6 +378,7 @@ function POSLayout({ onVolver }) {
         <SalonScreen
           onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
           onVolver={onVolver}
+          onCerrarTurno={onCerrarTurno}
         />
       </View>
     );
@@ -396,7 +397,7 @@ function POSLayout({ onVolver }) {
 // ─── Stack ────────────────────────────────────────────────────
 const Stack = createNativeStackNavigator();
 
-export default function AppNavigator({ sesion, onLogout }) {
+export default function AppNavigator({ sesion, onLogout, onCerrarTurno }) {
   const rolSesion = (sesion?.rol || '').toString().trim().toLowerCase();
   // 🛠️ Antes SIEMPRE arrancaba en ERPLayout (enPos=false) sin importar el rol —
   // un mesero/cajero/cocinero que entraba por PIN terminaba viendo el dashboard
@@ -418,7 +419,10 @@ export default function AppNavigator({ sesion, onLogout }) {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
           {() => enPos
-            ? <POSLayout onVolver={esDueñoRol ? () => setEnPos(false) : undefined} />
+            ? <POSLayout
+                onVolver={esDueñoRol ? () => setEnPos(false) : undefined}
+                onCerrarTurno={!esDueñoRol ? onCerrarTurno : undefined}
+              />
             : <ERPLayout onIrAlPos={() => setEnPos(true)} onLogout={onLogout} />
           }
         </Stack.Screen>

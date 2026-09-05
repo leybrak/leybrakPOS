@@ -126,6 +126,10 @@ export const loginPinEmpleado = (payload) =>
 export const verificarSesionEmpleado = () =>
   api.get('/empleados/verificar-sesion/');
 
+// Marca de asistencia (obligatoria antes de entrar al POS) y fin de turno.
+export const marcarIngresoEmpleado = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_ingreso/`);
+export const marcarSalidaEmpleado  = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_salida/`);
+
 // ─── Negocio ──────────────────────────────────────────────────
 export const getNegocio        = (id)       => api.get(`/negocios/${id}/`);
 export const actualizarNegocio = (id, data) => api.patch(`/negocios/${id}/`, data, {

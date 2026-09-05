@@ -484,7 +484,8 @@ class Empleado(models.Model):
     rol = models.ForeignKey('Rol', on_delete=models.SET_NULL, null=True, related_name='empleados')
     activo = models.BooleanField(default=True)
     ultimo_ingreso = models.DateTimeField(null=True, blank=True)
-    
+    ultima_salida = models.DateTimeField(null=True, blank=True)
+
     # ✨ LA MAGIA OCURRE AQUÍ ✨
     # 1. Devolvemos el manager normal a su lugar (Trae a todos)
     objects = models.Manager() 

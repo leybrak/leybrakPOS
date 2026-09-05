@@ -86,6 +86,20 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
             raise ValidationError('No se puede eliminar al Dueño.')
         instance.delete()
 
+    @action(detail=True, methods=['post'], url_path='marcar_ingreso')
+    def marcar_ingreso(self, request, pk=None):
+        empleado = self.get_object()
+        empleado.ultimo_ingreso = timezone.now()
+        empleado.save(update_fields=['ultimo_ingreso'])
+        return Response({'ok': True, 'ultimo_ingreso': empleado.ultimo_ingreso})
+
+    @action(detail=True, methods=['post'], url_path='marcar_salida')
+    def marcar_salida(self, request, pk=None):
+        empleado = self.get_object()
+        empleado.ultima_salida = timezone.now()
+        empleado.save(update_fields=['ultima_salida'])
+        return Response({'ok': True, 'ultima_salida': empleado.ultima_salida})
+
     def get_queryset(self):
         queryset = Empleado.objects.all()
         empleado_solicitante_id = self.request.headers.get('X-Empleado-Id')

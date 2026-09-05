@@ -21,7 +21,7 @@ import TerminalSidebar from './components/TerminalSidebar';
 import { useTerminalData } from './hooks/useTerminalData';
 import { useTerminalWS } from './hooks/useTerminalWS';
 
-export default function PosTerminal({ onIrAErp }) {
+export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   // =========================================================
   // ✨ HELPER DE SEGURIDAD (Desencripta el JWT)
   // =========================================================
@@ -301,8 +301,9 @@ export default function PosTerminal({ onIrAErp }) {
         modSalonActivo={modulos.salon} modLlevarActivo={modulos.delivery} 
         setVistaLocal={setVistaLocal} ordenesLlevar={ordenesLlevar} 
         setDrawerVentaRapidaAbierto={setDrawerVentaRapidaAbierto} rolUsuario={rolUsuario} 
-        onIrAErp={onIrAErp} setModalMovimientosAbierto={setModalMovimientosAbierto} 
-        manejarCierreCajaSeguro={manejarCierreCajaSeguro} 
+        onIrAErp={onIrAErp} setModalMovimientosAbierto={setModalMovimientosAbierto}
+        manejarCierreCajaSeguro={manejarCierreCajaSeguro}
+        onCerrarTurno={onCerrarTurno}
       />
 
       <div className="flex-1 flex overflow-hidden">

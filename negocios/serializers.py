@@ -367,7 +367,7 @@ class EmpleadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Empleado
         # Ya no mostramos el PIN (hash) en las respuestas de la API por seguridad pura 🔒
-        fields = ['id', 'nombre', 'rol','pin', 'rol_nombre', 'activo', 'ultimo_ingreso', 'sede', 'sede_nombre']
+        fields = ['id', 'nombre', 'rol','pin', 'rol_nombre', 'activo', 'ultimo_ingreso', 'ultima_salida', 'sede', 'sede_nombre']
         extra_kwargs = {
             'pin': {'write_only': True}
         }

@@ -163,7 +163,7 @@ function ModalCliente({ visible, t, color, onConfirmar, onCerrar }) {
 }
 
 // ─── Pantalla principal ───
-export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
+export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno }) {
   const t = useTema();
   const { estadoCaja, setEstadoCaja } = useAppStore();
 
@@ -553,6 +553,19 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
             <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
               <Text style={{ fontSize: 16 }}>⚡</Text>
             </TouchableOpacity>
+
+            {/* Terminar mi turno — marca la salida y vuelve al PIN (mesero/cajero/cocinero) */}
+            {onCerrarTurno && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+                onPress={() => Alert.alert('Terminar turno', '¿Terminar tu turno? Se marcará tu salida.', [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: 'Terminar', style: 'destructive', onPress: onCerrarTurno },
+                ])}
+              >
+                <Icon name="sign-out" size={16} color="#ef4444" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* FILA 2 (solo cajero/admin/dueño): ERP → Caja Chica → Cerrar Turno */}

@@ -226,6 +226,9 @@ export const refrescarSesion = () =>
 // CAJA Y LOGIN DE EMPLEADOS
 // ============================================================
 export const validarPinEmpleado      = (payload)  => api.post(`/empleados/validar_pin/`, { ...payload, sede_id: getSedeId() });
+// Marca de asistencia (obligatoria antes de entrar al POS/KDS) y fin de turno.
+export const marcarIngresoEmpleado   = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_ingreso/`);
+export const marcarSalidaEmpleado    = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_salida/`);
 export const getEstadoCaja           = (params)   => api.get(`/sesiones_caja/estado_actual/`, { params });
 export const abrirCajaBD             = (payload)  => api.post(`/sesiones_caja/abrir_caja/`, { ...payload, sede_id: getSedeId() });
 export const cerrarCaja              = (data)     => api.post('/sesiones_caja/cerrar_caja/', { ...data, sede_id: getSedeId() });

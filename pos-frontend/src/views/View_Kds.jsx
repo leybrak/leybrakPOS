@@ -4,13 +4,13 @@ import api from '../api/api';
 import usePosStore from '../store/usePosStore';
 import ModalAlertaBot from '../components/modals/ModalAlertaBot';
 import { useToast } from '../context/ToastContext';
-import { 
-  ChefHat, LayoutList, BarChart2, Clock, 
-  AlertTriangle, Undo2, Bell, ShoppingBag, 
-  Wifi, PowerOff, CheckCircle2, ChevronDown, Check
+import {
+  ChefHat, LayoutList, BarChart2, Clock,
+  AlertTriangle, Undo2, Bell, ShoppingBag,
+  Wifi, PowerOff, CheckCircle2, ChevronDown, Check, LogOut
 } from 'lucide-react';
 
-export default function KdsView({ onVolver }) {
+export default function KdsView({ onVolver, onCerrarTurno }) {
   localStorage.setItem('modo_dispositivo', 'cocina');
   const toast = useToast();
   const { configuracionGlobal } = usePosStore();
@@ -347,6 +347,17 @@ export default function KdsView({ onVolver }) {
           >
             {verConsolidado ? <><LayoutList size={18} /> Ver Comandas</> : <><BarChart2 size={18} /> Consolidado</>}
           </button>
+
+          {/* Terminar mi turno — marca la salida y vuelve al PIN */}
+          {onCerrarTurno && (
+            <button
+              onClick={() => { if (window.confirm('¿Terminar tu turno? Se marcará tu salida.')) onCerrarTurno(); }}
+              className={`px-5 py-3 rounded-xl font-bold text-sm border transition-all flex justify-center items-center gap-2 text-red-500/80 hover:text-red-500 ${tema === 'dark' ? 'bg-[#121212] border-[#1e1e1e] hover:border-red-500/50' : 'bg-white border-gray-200 hover:border-red-300'}`}
+              title="Terminar mi turno"
+            >
+              <LogOut size={18} /> Terminar Turno
+            </button>
+          )}
         </div>
       </header>
 
