@@ -118,11 +118,14 @@ const VistaInternaPOS = () => {
           }
         }
         if (res?.data?.autenticado) {
-          const { rol, negocio_id } = res.data.user;
+          const { rol, negocio_id, nombre, avatar } = res.data.user;
           const vistaDestino = getRolVista(rol);
           if (!vistaDestino) { setVista('sin_permiso'); return; }
 
           if (negocio_id) localStorage.setItem('negocio_id', negocio_id);
+          if (nombre) localStorage.setItem('usuario_nombre', nombre);
+          if (avatar) localStorage.setItem('usuario_avatar', avatar);
+          else localStorage.removeItem('usuario_avatar');
           setSesion({ rol });
 
           // El operador de la plataforma no tiene negocio propio — la

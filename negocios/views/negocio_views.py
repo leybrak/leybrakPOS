@@ -176,6 +176,27 @@ class NegocioViewSet(viewsets.ModelViewSet):
 
         return Response({'ok': True, 'url': url})
 
+    # ==========================================
+    # 🔐 CAMBIO DE CONTRASEÑA (autoservicio, dueño/admin)
+    # ==========================================
+    # Ruta: POST /api/negocios/cambiar_password/
+    @action(detail=False, methods=['post'], url_path='cambiar_password', permission_classes=[IsAuthenticated])
+    def cambiar_password(self, request):
+        user = request.user
+        password_actual = request.data.get('password_actual', '')
+        password_nueva = request.data.get('password_nueva', '')
+
+        if not password_actual or not password_nueva:
+            return Response({'error': 'Debes ingresar la contraseña actual y la nueva.'}, status=400)
+        if not user.check_password(password_actual):
+            return Response({'error': 'La contraseña actual es incorrecta.'}, status=400)
+        if len(password_nueva) < 8:
+            return Response({'error': 'La nueva contraseña debe tener al menos 8 caracteres.'}, status=400)
+
+        user.set_password(password_nueva)
+        user.save()
+        return Response({'detail': 'Contraseña actualizada correctamente.'})
+
     # ============================================================
     # El resto de los métodos no cambia
     # ============================================================

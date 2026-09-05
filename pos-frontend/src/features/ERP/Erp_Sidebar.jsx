@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import usePosStore from '../../store/usePosStore';
-import { cerrarSesionGlobal, crearTicket } from '../../api/api';
+import { crearTicket } from '../../api/api';
 
 function ModalReportarProblema({ onClose }) {
   const [asunto, setAsunto] = useState('');
@@ -144,12 +144,6 @@ export default function Erp_Sidebar({
     }
   ];
 
-  const handleCerrarSesion = async () => {
-    if (window.confirm("¿Estás seguro que deseas cerrar sesión?")) {
-      await cerrarSesionGlobal(); 
-    }
-  };
-
   return (
     <>
       {menuAbierto && (
@@ -291,17 +285,6 @@ export default function Erp_Sidebar({
           </button>
 
           {mostrarReporte && <ModalReportarProblema onClose={() => setMostrarReporte(false)} />}
-
-          <button
-            onClick={handleCerrarSesion}
-            className={`text-neutral-500 hover:text-red-500 hover:bg-red-500/10 transition-colors flex items-center justify-center
-              ${isCollapsed ? 'w-12 h-12 rounded-xl text-xl' : 'w-full py-2.5 rounded-xl gap-3 font-medium text-sm'}
-            `}
-            title={isCollapsed ? "Cerrar Sesión" : ""}
-          >
-            <i className="fi fi-rr-exit mt-1"></i>
-            {!isCollapsed && <span>Cerrar Sesión</span>}
-          </button>
         </div>
       </aside>
     </>

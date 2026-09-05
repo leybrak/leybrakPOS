@@ -98,7 +98,7 @@ class NegocioSerializer(serializers.ModelSerializer):
         model  = Negocio
         fields = [
             'id', 'propietario', 'propietario_username', 'nombre', 'ruc', 'razon_social', 'logo',
-            'telefono_propietario', 'dni_propietario', 'nombre_propietario',
+            'telefono_propietario', 'dni_propietario', 'nombre_propietario', 'avatar_propietario',
             'yape_numero', 'yape_qr', 'plin_numero', 'plin_qr',
             'confirmacion_automatica', 'device_token',
             'plan', 'plan_detalles', 'fecha_registro', 'fin_prueba', 'activo',

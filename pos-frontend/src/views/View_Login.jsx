@@ -99,6 +99,8 @@ export default function LoginView({ onAccesoConcedido }) {
       if (destino === 'erp') {
         const rolSeguro = res.data.rol || 'Dueño';
         localStorage.setItem('usuario_rol', rolSeguro);
+        if (res.data.nombre) localStorage.setItem('usuario_nombre', res.data.nombre);
+        if (res.data.avatar) localStorage.setItem('usuario_avatar', res.data.avatar);
         onAccesoConcedido(rolSeguro);
       } else {
         localStorage.removeItem('empleado_id');

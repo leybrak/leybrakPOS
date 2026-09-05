@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useErpDashboard } from '../features/ERP/useErpDashboard';
 import { useToast } from '../context/ToastContext';
+import { cerrarSesionGlobal } from '../api/api';
+import Erp_ModalPerfil from '../features/ERP/Erp_ModalPerfil';
 
 // ==========================================
 // 📦 IMPORTACIÓN DE COMPONENTES MODULARIZADOS
@@ -32,11 +34,32 @@ import DrawerCombosNormales from '../features/ERP/MenuComponents/DrawerCombosNor
 // ==========================================
 const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario }) => {
   const isDark = tema === 'dark';
-  
+
   // Extraemos la data real de la sesión activa
-  const usuarioNombre = localStorage.getItem('usuario_nombre') || 'Administrador';
+  const [usuarioNombre, setUsuarioNombre] = React.useState(localStorage.getItem('usuario_nombre') || 'Administrador');
+  const [usuarioAvatar, setUsuarioAvatar] = React.useState(localStorage.getItem('usuario_avatar') || null);
   const usuarioRol = localStorage.getItem('usuario_rol') || 'Dueño';
   const sedeNombre = localStorage.getItem('sede_nombre') || 'Todas las Sedes';
+
+  const [menuPerfilAbierto, setMenuPerfilAbierto] = React.useState(false);
+  const [modalPerfilAbierto, setModalPerfilAbierto] = React.useState(false);
+  const menuPerfilRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const handleClickFuera = (e) => {
+      if (menuPerfilRef.current && !menuPerfilRef.current.contains(e.target)) {
+        setMenuPerfilAbierto(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickFuera);
+    return () => document.removeEventListener('mousedown', handleClickFuera);
+  }, []);
+
+  const handleCerrarSesion = async () => {
+    if (window.confirm('¿Estás seguro que deseas cerrar sesión?')) {
+      await cerrarSesionGlobal();
+    }
+  };
 
   // Reloj dinámico
   const [fechaHora, setFechaHora] = React.useState(new Date());
@@ -104,25 +127,92 @@ const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario }) => {
 
         <div className={`w-px h-8 hidden sm:block ${isDark ? 'bg-[#333]' : 'bg-gray-200'}`}></div>
 
-        {/* Perfil de Usuario */}
-        <div className="flex items-center gap-3 cursor-pointer group">
-          <div className="hidden sm:block text-right">
-            <p className={`text-sm font-black leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {usuarioNombre}
-            </p>
-            <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
-              {usuarioRol}
-            </p>
-          </div>
-          <div 
-            className="w-11 h-11 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-md transition-transform group-hover:scale-105" 
-            style={{ backgroundColor: colorPrimario }}
+        {/* Perfil de Usuario — estilo red social: click abre menú (perfil / cerrar sesión) */}
+        <div className="relative" ref={menuPerfilRef}>
+          <button
+            onClick={() => setMenuPerfilAbierto(v => !v)}
+            className="flex items-center gap-3 cursor-pointer group"
           >
-            {usuarioNombre.charAt(0).toUpperCase()}
-          </div>
+            <div className="hidden sm:block text-right">
+              <p className={`text-sm font-black leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {usuarioNombre}
+              </p>
+              <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
+                {usuarioRol}
+              </p>
+            </div>
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-md transition-transform group-hover:scale-105 overflow-hidden"
+              style={{ backgroundColor: colorPrimario }}
+            >
+              {usuarioAvatar ? (
+                <img src={usuarioAvatar} alt={usuarioNombre} className="w-full h-full object-cover" />
+              ) : (
+                usuarioNombre.charAt(0).toUpperCase()
+              )}
+            </div>
+          </button>
+
+          {menuPerfilAbierto && (
+            <div className={`absolute right-0 top-[calc(100%+10px)] w-64 rounded-2xl border shadow-2xl overflow-hidden z-40 animate-fadeIn ${
+              isDark ? 'bg-[#141414] border-[#2a2a2a]' : 'bg-white border-gray-200'
+            }`}>
+              <div className={`p-4 flex items-center gap-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-md shrink-0 overflow-hidden"
+                  style={{ backgroundColor: colorPrimario }}
+                >
+                  {usuarioAvatar ? (
+                    <img src={usuarioAvatar} alt={usuarioNombre} className="w-full h-full object-cover" />
+                  ) : (
+                    usuarioNombre.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-black leading-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {usuarioNombre}
+                  </p>
+                  <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
+                    {usuarioRol} · {sedeNombre}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setModalPerfilAbierto(true); setMenuPerfilAbierto(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold transition-colors ${
+                  isDark ? 'text-neutral-300 hover:bg-[#1e1e1e]' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <i className="fi fi-rr-user text-sm"></i> Mi Perfil
+              </button>
+
+              <button
+                onClick={() => { setMenuPerfilAbierto(false); handleCerrarSesion(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-500 transition-colors border-t ${
+                  isDark ? 'border-[#222] hover:bg-red-500/10' : 'border-gray-100 hover:bg-red-50'
+                }`}
+              >
+                <i className="fi fi-rr-exit text-sm"></i> Cerrar Sesión
+              </button>
+            </div>
+          )}
         </div>
 
       </div>
+
+      <Erp_ModalPerfil
+        isOpen={modalPerfilAbierto}
+        onClose={() => setModalPerfilAbierto(false)}
+        isDark={isDark}
+        colorPrimario={colorPrimario}
+        usuarioNombre={usuarioNombre}
+        usuarioAvatar={usuarioAvatar}
+        onPerfilActualizado={({ nombre, avatar }) => {
+          setUsuarioNombre(nombre);
+          setUsuarioAvatar(avatar);
+        }}
+      />
     </header>
   );
 };

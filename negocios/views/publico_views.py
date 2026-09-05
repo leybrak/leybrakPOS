@@ -110,7 +110,7 @@ def orden_publica(request, sede_id, mesa_id):
 def verificar_sesion(request):
     user = request.user
     ws_token = AccessToken.for_user(user)
-    
+
     # Determinar rol real desde la BD, no desde localStorage
     if user.is_superuser:
         rol = 'SuperAdmin'
@@ -118,15 +118,23 @@ def verificar_sesion(request):
         rol = 'Dueño'
     else:
         rol = 'Admin'  # usuario Django sin negocio
-    
+
+    negocio = getattr(user, 'negocio', None)
+    nombre_perfil = (negocio.nombre_propietario if negocio else '') or user.get_full_name() or user.username
+    avatar_url = None
+    if negocio and negocio.avatar_propietario:
+        avatar_url = request.build_absolute_uri(negocio.avatar_propietario.url)
+
     return Response({
         'autenticado': True,
         'ws_token': str(ws_token),
         'user': {
             'username': user.username,
             'rol': rol,
+            'nombre': nombre_perfil,
+            'avatar': avatar_url,
             # negocio_id para que el frontend sepa a qué negocio pertenece
-            'negocio_id': user.negocio.id if hasattr(user, 'negocio') else None,
+            'negocio_id': negocio.id if negocio else None,
         }
     })
 

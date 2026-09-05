@@ -144,6 +144,10 @@ class Negocio(models.Model):
         max_length=150, blank=True, default='',
         help_text="Nombre completo del dueño (RENIEC) — no es la razón social del negocio."
     )
+    avatar_propietario = models.ImageField(
+        upload_to='negocios/avatars/', blank=True, null=True,
+        help_text="Foto de perfil del dueño/administrador, mostrada en el topbar del ERP."
+    )
 
     # ==========================================
     # 📱 2. BILLETERAS DIGITALES (QRs y Números)
