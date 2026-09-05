@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from negocios.models import Negocio, Sede, Orden
+from negocios.models import Negocio, Sede, Orden, SolicitudCambio
 
 
 class OrdenBotSeguridadTest(APITestCase):
@@ -66,3 +66,26 @@ class OrdenBotSeguridadTest(APITestCase):
             'accion': 'cancelar',
         }, format='json')
         self.assertEqual(r.status_code, 200, r.data)
+
+    # ── resolver_solicitud_bot ─────────────────────────────────────
+    def test_no_puede_resolver_solicitud_de_otro_negocio(self):
+        solicitud = SolicitudCambio.objects.create(
+            orden=self.orden_b, tipo_accion='cancelar', detalles_json={})
+        self.client.force_authenticate(user=self.user_a)
+        r = self.client.post(f'/api/ordenes/{self.orden_b.id}/resolver_solicitud_bot/', {
+            'solicitud_id': solicitud.id, 'decision': 'aprobar',
+        }, format='json')
+        self.assertEqual(r.status_code, 404)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, 'pendiente')
+
+    def test_si_puede_resolver_su_propia_solicitud(self):
+        solicitud = SolicitudCambio.objects.create(
+            orden=self.orden_a, tipo_accion='cancelar', detalles_json={})
+        self.client.force_authenticate(user=self.user_a)
+        r = self.client.post(f'/api/ordenes/{self.orden_a.id}/resolver_solicitud_bot/', {
+            'solicitud_id': solicitud.id, 'decision': 'aprobar',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.data)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, 'aprobada')

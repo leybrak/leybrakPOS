@@ -111,7 +111,12 @@ def _calcular_descuento_puntos(negocio, cliente, puntos_solicitados):
     return p, descuento, None
 
 
-def _procesar_opciones(opciones_ids_raw, variaciones_dict):
+def _procesar_opciones(opciones_ids_raw, variaciones_dict, negocio):
+    """
+    `negocio` es obligatorio: sin filtrar por él, un ID de opción de OTRO
+    negocio (con precio_adicional negativo, por ejemplo) permitía rebajar
+    el total de un pedido ajeno usando descuentos que no le pertenecen.
+    """
     opciones_ids = list(opciones_ids_raw)
     for grupo_id, ids in variaciones_dict.items():
         if isinstance(ids, list):
@@ -124,7 +129,7 @@ def _procesar_opciones(opciones_ids_raw, variaciones_dict):
         opc_id = opc_raw.get('id') if isinstance(opc_raw, dict) else opc_raw
         if opc_id is not None:
             try:
-                opcion = OpcionVariacion.objects.get(id=opc_id)
+                opcion = OpcionVariacion.objects.get(id=opc_id, grupo__producto__negocio=negocio)
                 subtotal += opcion.precio_adicional
                 opciones_a_guardar.append(opcion)
             except OpcionVariacion.DoesNotExist:
@@ -199,7 +204,11 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
 
     def perform_create(self, serializer):
-        empleado = get_empleado_desde_header(self.request)
+        # 🛡️ IDOR fix: get_empleado_desde_header() NO valida el negocio del
+        # empleado contra el del JWT — un X-Empleado-Id de OTRO negocio dejaba
+        # crear órdenes directo en su cocina/salón. get_empleado_verificado()
+        # sí cruza empleado.negocio == request.user.negocio (ver helpers.py).
+        empleado = get_empleado_verificado(self.request)
         sede_id_solicitada = self.request.data.get('sede')
 
         if empleado:
@@ -225,7 +234,9 @@ class OrdenViewSet(viewsets.ModelViewSet):
             nuevo_total = Decimal('0.00')
 
             for d in detalles_data:
-                producto = Producto.objects.get(id=d['producto'])
+                # 🛡️ Sin negocio=... acá, un producto_id de OTRO negocio traía
+                # su propio precio/nombre a esta orden.
+                producto = Producto.objects.get(id=d['producto'], negocio=self.request.user.negocio)
                 if not producto.disponible:
                     # 🛡️ FIX: perform_create() no puede "return Response(...)" acá —
                     # CreateModelMixin.create() ignora ese valor de retorno y de
@@ -248,7 +259,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 variaciones_dict = notas.get('variaciones', {})
                 # Compat: web manda 'opciones', la app móvil 'opciones_seleccionadas'.
                 opciones_ids_raw = d.get('opciones', []) or d.get('opciones_seleccionadas', [])
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_ids_raw, variaciones_dict)
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(
+                    opciones_ids_raw, variaciones_dict, self.request.user.negocio)
                 precio_final_unitario = precio_seguro + subtotal_opciones
 
                 detalle = DetalleOrden.objects.create(
@@ -391,12 +403,15 @@ class OrdenViewSet(viewsets.ModelViewSet):
             lineas = []
             for d in detalles_data:
                 try:
-                    producto = Producto.objects.get(id=d.get('producto'))
+                    # 🛡️ Filtrado por sede.negocio (ya validada arriba), no por
+                    # el `negocio` crudo del request — así funciona igual de
+                    # bien si algún día se permite cotizar sin token con negocio.
+                    producto = Producto.objects.get(id=d.get('producto'), negocio=sede.negocio)
                 except Producto.DoesNotExist:
                     continue
                 cantidad = int(d.get('cantidad') or 1)
                 opciones_raw = d.get('opciones') or d.get('opciones_seleccionadas') or []
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_raw, {})
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_raw, {}, sede.negocio)
                 precio_unit = producto.precio_base + subtotal_opciones
                 det = DetalleOrden.objects.create(
                     orden=orden, producto=producto, cantidad=cantidad, precio_unitario=precio_unit,
@@ -497,7 +512,9 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             for detalle_data in detalles_data:
-                producto = Producto.objects.get(id=detalle_data['producto'])
+                # 🛡️ orden ya está scopeada a request.user.negocio por get_object()
+                # (ver get_queryset), así que orden.sede.negocio es de fiar acá.
+                producto = Producto.objects.get(id=detalle_data['producto'], negocio=orden.sede.negocio)
                 precio_seguro = producto.precio_base
 
                 notas = detalle_data.get('notas_y_modificadores', {})
@@ -509,7 +526,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
                 variaciones_dict = notas.get('variaciones', {})
                 opciones_ids_raw = detalle_data.get('opciones_seleccionadas', [])
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_ids_raw, variaciones_dict)
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(
+                    opciones_ids_raw, variaciones_dict, orden.sede.negocio)
                 precio_final_unitario = precio_seguro + subtotal_opciones
 
                 nuevo_detalle = DetalleOrden.objects.create(
@@ -848,11 +866,19 @@ class OrdenViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def resolver_solicitud_bot(self, request, pk=None):
         try:
-            orden         = Orden.objects.get(id=pk)
+            orden         = Orden.objects.select_related('sede__negocio').get(id=pk)
             solicitud_id  = request.data.get('solicitud_id')
             decision      = request.data.get('decision')
             solicitud     = SolicitudCambio.objects.get(id=solicitud_id, orden=orden, estado='pendiente')
         except (Orden.DoesNotExist, SolicitudCambio.DoesNotExist):
+            return Response({"error": "La orden o solicitud no existe."}, status=404)
+
+        # 🛡️ IDOR fix: mismo patrón que estado_orden_bot/modificar_desde_bot —
+        # sin esto, el token de bot de CUALQUIER negocio podía aprobar/rechazar
+        # solicitudes de cambio de pedidos de OTRO negocio.
+        if not request.user.is_superuser and (
+            not hasattr(request.user, 'negocio') or orden.sede.negocio_id != request.user.negocio.id
+        ):
             return Response({"error": "La orden o solicitud no existe."}, status=404)
 
         mensaje_whatsapp = ""

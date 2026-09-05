@@ -6,7 +6,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..models import InsumoBase, InsumoSede
+from ..models import InsumoBase, InsumoSede, Sede
 from ..serializers import InsumoBaseSerializer, InsumoSedeSerializer
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,14 @@ class InsumoSedeViewSet(viewsets.ModelViewSet):
 
             distribucion     = request.data.get('distribucion', {})
             total_a_repartir = sum(float(v) for v in distribucion.values() if v and float(v) > 0)
+
+            # 🛡️ Sin esto, se podía repartir stock a una sede de OTRO negocio
+            # (id de sede adivinado), ensuciando su inventario con datos ajenos.
+            sede_ids = [int(sid) for sid in distribucion.keys()]
+            if sede_ids and Sede.objects.filter(
+                id__in=sede_ids, negocio=insumo_base.negocio
+            ).count() != len(set(sede_ids)):
+                return Response({'error': 'Una de las sedes indicadas no pertenece a tu negocio.'}, status=403)
 
             if total_a_repartir > stock_proyectado_matriz:
                 raise ValueError(

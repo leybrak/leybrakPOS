@@ -18,6 +18,7 @@ from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 
 from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede, Orden, InsumoSede, Comprobante
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
+from .historia_views import _token_bot_valido
 from ..services import precargar_modulos_por_plan
 from ..permissions import EsSuperUsuario
 
@@ -383,6 +384,13 @@ class SedeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='info_bot', permission_classes=[AllowAny])
     def info_bot(self, request):
+        # 🛡️ Antes era AllowAny sin ningún token: cualquiera podía iterar
+        # nombres de instancia (formato predecible) y leer personalidad,
+        # instrucciones internas y config de puntos de CUALQUIER negocio.
+        # Misma convención de X-Bot-Token que historia_views.py.
+        if not _token_bot_valido(request):
+            return Response({'error': 'No autorizado'}, status=403)
+
         instancia = request.query_params.get('instancia')
         if not instancia:
             return Response({'error': 'Falta el parámetro instancia'}, status=400)

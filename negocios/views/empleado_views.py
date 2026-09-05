@@ -13,6 +13,7 @@ from urllib3 import request
 
 from .helpers import es_valor_nulo
 from ..models import Rol, Empleado
+from ..permissions import SoloLecturaSalvoSuperUsuario
 from ..serializers import RolSerializer, EmpleadoSerializer
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,14 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 class RolViewSet(viewsets.ModelViewSet):
+    """
+    Catálogo GLOBAL de roles (Cajero, Mesero, etc.), compartido por todos los
+    negocios — no tiene FK a Negocio. Por eso el CRUD de escritura queda
+    reservado al superusuario (Leybrak); cualquier negocio solo puede leerlo
+    para armar el selector de rol al crear un empleado (ver Personal y Accesos).
+    """
     serializer_class = RolSerializer
+    permission_classes = [SoloLecturaSalvoSuperUsuario]
 
     def get_queryset(self):
         return Rol.objects.all()
