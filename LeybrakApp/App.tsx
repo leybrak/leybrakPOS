@@ -30,7 +30,14 @@ export default function App() {
         const negocioId = await EncryptedStorage.getItem('negocio_id');
         const esRepartidor = (await EncryptedStorage.getItem('es_repartidor')) === '1';
 
-        if (token && negocioId) {
+        // 🛠️ Antes solo miraba token && negocioId. Al configurar un terminal
+        // (LoginScreen → handleLoginParaPos) el dueño se loguea SOLO para elegir
+        // la sede, dejando access_token/negocio_id guardados sin que ningún
+        // empleado haya entrado con PIN todavía — eso ya bastaba para "restaurar
+        // sesión" y saltar directo al dashboard, saltándose la pantalla de PIN al
+        // reabrir la app. Exigimos también un `rol` resuelto (por PIN o por login
+        // directo del dueño) para considerar que hay una sesión real que resumir.
+        if (token && negocioId && rol) {
           setSesion({ rol, negocioId, restaurado: true, es_repartidor: esRepartidor });
         }
       } catch (e) {

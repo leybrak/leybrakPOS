@@ -123,6 +123,12 @@ export default function LoginView({ onAccesoConcedido }) {
       localStorage.setItem('sede_id', sedeObj.id);
       localStorage.setItem('sede_nombre', sedeObj.nombre);
       localStorage.removeItem('modo_dispositivo');
+      // El login de dueño de este paso solo sirvió para elegir la sede del
+      // terminal. Si no cerramos esa sesión, la cookie JWT del dueño queda
+      // viva y App.jsx la prioriza al reabrir la app, mandando al ERP en
+      // vez de mostrar el PIN — de acá en más este dispositivo autentica
+      // solo por PIN de empleado.
+      api.post('/token/logout/').catch(() => {});
       setModo('empleado');
     }
   };

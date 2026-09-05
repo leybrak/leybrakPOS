@@ -193,6 +193,14 @@ export default function LoginScreen({ onLoginExitoso }) {
       await guardarTokens(access, refresh);
       await EncryptedStorage.setItem('negocio_id',     String(negocio_id));
       await EncryptedStorage.setItem('negocio_nombre', nombre);
+      // Este login solo sirve para elegir la sede del terminal — todavía no hay
+      // ningún empleado con la sesión abierta. Si quedó un usuario_rol/empleado_id
+      // de una sesión anterior en este mismo dispositivo, App.tsx lo tomaría como
+      // sesión válida para restaurar y saltaría directo al dashboard sin pasar
+      // por el PIN al reabrir la app.
+      await EncryptedStorage.removeItem('usuario_rol');
+      await EncryptedStorage.removeItem('empleado_id');
+      await EncryptedStorage.removeItem('empleado_nombre');
 
       const resSedes = await getSedes({ negocio_id });
       setSedes(resSedes.data);
