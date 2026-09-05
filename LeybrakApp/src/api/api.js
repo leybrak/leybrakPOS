@@ -195,7 +195,11 @@ export const getModificadores      = (params)   => api.get('/modificadores-rapid
 export const crearModificador      = (data)     => api.post('/modificadores-rapidos/', data);
 export const actualizarModificador = (id, data) => api.put(`/modificadores-rapidos/${id}/`, data);
 export const eliminarModificador   = (id)       => api.delete(`/modificadores-rapidos/${id}/`);
-export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params: { ...params, tipo: 'llevar', estado: 'preparando' } });
+// 🛠️ Antes forzaba tipo:'llevar' + estado:'preparando' — las órdenes
+// 'delivery' del bot quedaban afuera y las 'pendiente'/'listo' también.
+// El backend solo filtra por un valor exacto, así que acá no filtramos
+// nada: SalonScreen se queda con lo que corresponda a "para llevar".
+export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params });
 
 // ─── Inventario ───────────────────────────────────────────────
 export const getCatalogoGlobal      = (params) => api.get('/insumo-base/', { params });

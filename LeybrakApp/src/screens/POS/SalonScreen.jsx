@@ -9,6 +9,7 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
 import ModalMovimientoCaja from '../../components/modals/ModalMovimientoCaja';
+import ModalCobro from '../../components/modals/ModalCobro';
 // ─── IMPORTACIONES DE API Y POS ───
 import api, {
   getMesas, getSedes, getOrdenesLlevar, getOrdenes,
@@ -188,6 +189,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
   const [drawerVentaRapidaAbierto, setDrawerVentaRapidaAbierto] = useState(false);
   const [modalMovimientosAbierto, setModalMovimientosAbierto] = useState(false);
   const [modalCierreAbierto, setModalCierreAbierto]           = useState(false);
+  const [ordenACobrar, setOrdenACobrar]                       = useState(null);
 
   const cajaAbierta  = estadoCaja === 'abierto' || estadoCaja?.estado === 'abierto';
   const esDueno      = ['dueño', 'admin', 'administrador'].includes(rolUsuario.toLowerCase());
@@ -240,7 +242,14 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
 
       setMesas(mesasConEstado);
       setSedes(resSedes.data);
-      setOrdenesLlevar(resOrdenes.data || []);
+      // 🛠️ 'delivery' (bot de WhatsApp) entra en el mismo balde que 'llevar' —
+      // antes quedaba afuera de esta pestaña por completo.
+      setOrdenesLlevar(
+        (resOrdenes.data || []).filter(o =>
+          (o.tipo === 'llevar' || o.tipo === 'delivery') &&
+          o.estado !== 'completado' && o.estado !== 'cancelado'
+        )
+      );
 
       const { configuracionGlobal } = useAppStore.getState();
       const mods = configuracionGlobal?.modulos || {};
@@ -376,6 +385,14 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
         } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
       }},
     ]);
+  };
+
+  // 🛠️ Antes: onPress={() => {}} — el botón de check no hacía nada.
+  const handleEntregarOrdenLlevar = async (id) => {
+    try {
+      await actualizarOrden(id, { estado: 'completado' });
+      cargar();
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo marcar como entregado.'); }
   };
 
   // ── Cálculo de columnas ──
@@ -557,39 +574,56 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
               <Text style={s.btnNuevaOrdenText}>NUEVA ORDEN PARA LLEVAR</Text>
             </TouchableOpacity>
 
-            {ordenesLlevar.filter(o => o.estado !== 'pagado').length === 0 ? (
+            {ordenesLlevar.length === 0 ? (
               <View style={[s.emptyState, { borderColor: t.border }]}>
                 <Icon name="shopping-bag" size={40} color={t.textMuted} style={{ opacity: 0.5 }} />
                 <Text style={[s.emptyTitulo, { color: t.textPrim }]}>SIN PEDIDOS ACTIVOS</Text>
                 <Text style={[s.emptySub, { color: t.textMuted }]}>Las órdenes para llevar aparecerán aquí</Text>
               </View>
             ) : (
-              ordenesLlevar.filter(o => o.estado !== 'pagado').map(orden => (
+              ordenesLlevar.map(orden => {
+                const esDelivery = orden.tipo === 'delivery';
+                const estaPagado = orden.estado_pago === 'pagado';
+                return (
                 <View key={orden.id} style={[s.llevarCard, { backgroundColor: t.bgCard, borderColor: t.border }]}>
                   <View style={s.llevarHeader}>
-                    <View>
-                      <Text style={[s.llevarNombre, { color: t.textPrim }]}>{orden.cliente_nombre || 'Cliente'}</Text>
-                      {orden.telefono && (
-                        <Text style={[s.llevarTel, { color: t.textSec }]}><Icon name="whatsapp" /> {orden.telefono}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <View style={[s.badgeTipo, { backgroundColor: esDelivery ? 'rgba(59,130,246,0.1)' : `${t.color}15` }]}>
+                          <Icon name={esDelivery ? 'motorcycle' : 'shopping-bag'} size={9} color={esDelivery ? '#3b82f6' : t.color} style={{ marginRight: 4 }} />
+                          <Text style={[s.badgeTipoText, { color: esDelivery ? '#3b82f6' : t.color }]}>{esDelivery ? 'DELIVERY' : 'PARA LLEVAR'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[s.llevarNombre, { color: t.textPrim }]}>{orden.cliente_nombre || 'Cliente sin nombre'}</Text>
+                      {orden.cliente_telefono && (
+                        <Text style={[s.llevarTel, { color: t.textSec }]}><Icon name="whatsapp" /> {orden.cliente_telefono}</Text>
+                      )}
+                      {esDelivery && orden.direccion_entrega && (
+                        <Text style={[s.llevarTel, { color: t.textMuted }]}><Icon name="map-marker" /> {orden.direccion_entrega}</Text>
                       )}
                     </View>
                     <Text style={[s.llevarTotal, { color: t.color }]}>S/ {parseFloat(orden.total || 0).toFixed(2)}</Text>
                   </View>
-                  
+
                   <View style={s.llevarActions}>
-                    <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: t.color }]} onPress={() => {}}>
-                      <Icon name="money" size={12} color="#fff" style={{ marginRight: 6 }} />
-                      <Text style={s.btnCobrarText}>COBRAR</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[s.btnActionIcon, { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)' }]} onPress={() => {}}>
-                      <Icon name="check" size={14} color="#22c55e" />
-                    </TouchableOpacity>
+                    {!estaPagado ? (
+                      <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: t.color }]} onPress={() => setOrdenACobrar(orden)}>
+                        <Icon name="money" size={12} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={s.btnCobrarText}>COBRAR</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: '#22c55e' }]} onPress={() => handleEntregarOrdenLlevar(orden.id)}>
+                        <Icon name="check" size={12} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={s.btnCobrarText}>ENTREGAR</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={[s.btnActionIcon, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.2)' }]} onPress={() => handleCancelarOrdenLlevar(orden.id)}>
                       <Icon name="trash" size={14} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))
+                );
+              })
             )}
           </View>
         )}
@@ -611,6 +645,28 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       <ModalMovimientoCaja
         visible={modalMovimientosAbierto}
         onClose={() => setModalMovimientosAbierto(false)}
+      />
+      <ModalCobro
+        visible={!!ordenACobrar}
+        onClose={() => { setOrdenACobrar(null); cargar(); }}
+        total={ordenACobrar ? parseFloat(ordenACobrar.total || 0) : 0}
+        ordenId={ordenACobrar?.id}
+        carrito={ordenACobrar?.detalles || []}
+        onCobroExitoso={async ({ pagos, telefono }) => {
+          try {
+            const sesionCajaId = await EncryptedStorage.getItem('sesion_caja_id');
+            const pagosManuales = pagos.filter(p => !p.yaConfirmado);
+            await api.post(`/ordenes/${ordenACobrar.id}/cobrar_orden/`, {
+              pagos: pagosManuales,
+              telefono,
+              sesion_caja_id: sesionCajaId,
+            });
+            return { ordenId: ordenACobrar.id };
+          } catch (err) {
+            Alert.alert('Error', err?.response?.data?.error || 'No se pudo procesar el pago.');
+            throw err;
+          }
+        }}
       />
     </View>
   );
@@ -679,6 +735,8 @@ const s = StyleSheet.create({
   llevarHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   llevarNombre:    { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
   llevarTel:       { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  badgeTipo:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  badgeTipoText:   { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   llevarTotal:     { fontSize: 20, fontWeight: '900' },
   llevarActions:   { flexDirection: 'row', gap: 8 },
   btnCobrarLlevar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12 },
