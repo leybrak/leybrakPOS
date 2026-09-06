@@ -10,6 +10,7 @@ import useAppStore from '../../store/useAppStore';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
 import ModalMovimientoCaja from '../../components/modals/ModalMovimientoCaja';
 import ModalCobro from '../../components/modals/ModalCobro';
+import ModalVentaRapida from '../../components/modals/ModalVentaRapida';
 // ─── IMPORTACIONES DE API Y POS ───
 import api, {
   getMesas, getSedes, getOrdenesLlevar, getOrdenes, getNegocio,
@@ -754,20 +755,52 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
         total={ordenACobrar ? parseFloat(ordenACobrar.total || 0) : 0}
         ordenId={ordenACobrar?.id}
         carrito={ordenACobrar?.detalles || []}
+        esVentaRapida={ordenACobrar?.es_venta_rapida || false}
         onCobroExitoso={async ({ pagos, telefono }) => {
           try {
+            let idOrden = ordenACobrar.id;
+
+            // 🛠️ Igual que Pos_Terminal.jsx en la web: la venta rápida no
+            // tiene una orden real todavía, hay que crearla antes de cobrar.
+            if (idOrden === 'venta_rapida') {
+              const { data } = await crearOrden({
+                tipo: 'llevar',
+                estado: 'pendiente',
+                estado_pago: 'pendiente',
+                sede: sedeId,
+                detalles: ordenACobrar.detalles || [],
+              });
+              idOrden = data.id;
+            }
+
             const sesionCajaId = await EncryptedStorage.getItem('sesion_caja_id');
             const pagosManuales = pagos.filter(p => !p.yaConfirmado);
-            await api.post(`/ordenes/${ordenACobrar.id}/cobrar_orden/`, {
+            await api.post(`/ordenes/${idOrden}/cobrar_orden/`, {
               pagos: pagosManuales,
               telefono,
               sesion_caja_id: sesionCajaId,
             });
-            return { ordenId: ordenACobrar.id };
+            return { ordenId: idOrden };
           } catch (err) {
             Alert.alert('Error', err?.response?.data?.error || 'No se pudo procesar el pago.');
             throw err;
           }
+        }}
+      />
+
+      <ModalVentaRapida
+        visible={drawerVentaRapidaAbierto}
+        onClose={() => setDrawerVentaRapidaAbierto(false)}
+        onProcederPago={(carritoVR, totalVR) => {
+          setOrdenACobrar({
+            id: 'venta_rapida',
+            es_venta_rapida: true,
+            total: totalVR,
+            detalles: carritoVR.map(c => ({
+              producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad,
+            })),
+          });
+          setDrawerVentaRapidaAbierto(false);
         }}
       />
     </View>
