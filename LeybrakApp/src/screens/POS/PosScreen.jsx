@@ -10,9 +10,10 @@ import useAppStore from '../../store/useAppStore';
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalModificadores from '../../components/modals/ModalModificadores';
 import api, {
-  getProductos, getCategorias, getOrdenes, getModificadores,
+  getOrdenes,
   crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden,
 } from '../../api/api';
+import { leerMenuCache, refrescarMenuCache, esCacheReciente } from '../../services/menuCache';
 const { NotificationModule } = NativeModules;
 const eventEmitter = new NativeEventEmitter(NotificationModule);
 // ─── Hook de tema ─────────────────────────────────────────────
@@ -77,23 +78,39 @@ export default function PosScreen({ mesaId, onVolver }) {
 
   const cargarDatos = useCallback(async () => {
     if (!sedeId || !negocioId) return;
-    setCargando(true);
+
+    // 🛠️ Antes se pedía la carta completa (productos/categorías/modificadores)
+    // por red cada vez que se abría CUALQUIER mesa — con el local lleno eso
+    // es una descarga de red por cada toque, sin necesidad (la carta casi
+    // no cambia). Ahora, si hay una carta guardada localmente, se muestra
+    // al instante (optimistic UI) y solo se refresca por red si no es
+    // reciente; el WS del salón fuerza el refresco apenas cambia un
+    // producto (ver ManejoWSMenu en SalonScreen y negocios/signals.py).
+    const cache = await leerMenuCache(sedeId);
+    if (cache) {
+      setProductos(cache.productos);
+      setCategorias(cache.categorias);
+      setModificadores(cache.modificadores);
+      setCargando(false);
+    } else {
+      setCargando(true);
+    }
+
     try {
-      const [resProd, resCat, resOrdenes, resMods] = await Promise.all([
-        getProductos({ negocio_id: negocioId, sede_id: sedeId, disponible: true }),
-        getCategorias({ negocio_id: negocioId }),
+      const [resOrdenes] = await Promise.all([
+        // Las órdenes de la mesa SIEMPRE se piden frescas — eso sí puede
+        // cambiar en cualquier momento y no se cachea.
         !esParaLlevar && mesaIdReal
           ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal, estado: 'preparando' })
           : Promise.resolve({ data: [] }),
-        getModificadores({ negocio_id: negocioId }),
+        esCacheReciente(cache?.timestamp) ? null : refrescarMenuCache(negocioId, sedeId).then((fresco) => {
+          setProductos(fresco.productos);
+          setCategorias(fresco.categorias);
+          setModificadores(fresco.modificadores);
+        }),
       ]);
 
-      setProductos(resProd.data || []);
-      setCategorias(resCat.data || []);
-      setModificadores(resMods.data || []);
-
       const ordenes = resOrdenes.data || [];
-      console.warn('MESA:', mesaIdReal, '| ÓRDENES:', JSON.stringify(ordenes.map(o => ({ id: o.id, mesa: o.mesa }))))
       if (ordenes.length > 0) setOrdenActiva(ordenes[0]);
 
     } catch (e) {

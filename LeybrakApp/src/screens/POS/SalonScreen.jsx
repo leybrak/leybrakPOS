@@ -19,6 +19,7 @@ import api, {
   crearOrden, crearPago,
   registrarMovimientoCaja, validarPinEmpleado
 } from '../../api/api';
+import { refrescarMenuCache } from '../../services/menuCache';
 
 // ─── Hook de tema (Alineado con los colores de tu Web) ───
 const useTema = () => {
@@ -321,6 +322,15 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
               ));
             }
             if (data.type === 'orden_llevar_actualizada') cargar();
+            // La carta cambió (alguien activó/desactivó o editó un producto
+            // desde el ERP) — refrescamos la cache local en segundo plano
+            // para que la próxima mesa que se abra ya la tenga al día
+            // (ver negocios/signals.py: avisar_menu_actualizado_*).
+            if (data.type === 'menu_actualizado') {
+              EncryptedStorage.getItem('negocio_id').then((negocioId) => {
+                if (negocioId) refrescarMenuCache(negocioId, sedeId);
+              });
+            }
           } catch {}
         };
         ws.onerror  = () => ws.close();
@@ -332,6 +342,18 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
 
     conectar();
     return () => { unmounted = true; clearTimeout(retry); ws?.close(); };
+  }, [sedeId]);
+
+  // Red de seguridad: si el WS se perdió el evento (reconexión, app en
+  // segundo plano, etc.), igual refrescamos la carta cada 10 minutos.
+  useEffect(() => {
+    if (!sedeId) return;
+    const intervalo = setInterval(() => {
+      EncryptedStorage.getItem('negocio_id').then((negocioId) => {
+        if (negocioId) refrescarMenuCache(negocioId, sedeId);
+      });
+    }, 10 * 60 * 1000);
+    return () => clearInterval(intervalo);
   }, [sedeId]);
 
   useEffect(() => {

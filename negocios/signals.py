@@ -3,8 +3,10 @@ from django.dispatch import receiver
 from django.db.models import F
 from django.db import transaction
 from django.core.mail import EmailMultiAlternatives, send_mail
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from core import settings # ✨ 1. Importamos la transacción
-from .models import Empleado, HorarioVisibilidad, Negocio, Pago, InsumoSede, PagoSuscripcion, Producto, RecetaDetalle, RecetaOpcion, ReglaNegocio, ComponenteCombo
+from .models import Empleado, HorarioVisibilidad, Negocio, Pago, InsumoSede, PagoSuscripcion, Producto, RecetaDetalle, RecetaOpcion, ReglaNegocio, ComponenteCombo, Sede
 
 @receiver(post_save, sender=Pago)
 def procesar_descuento_stock(sender, instance, created, **kwargs):
@@ -64,6 +66,35 @@ def procesar_descuento_stock(sender, instance, created, **kwargs):
                         InsumoSede.objects.filter(
                             sede=sede, insumo_base=receta_opc.insumo
                         ).update(stock_actual=F('stock_actual') - gasto_total_opcion)
+
+# ══════════════════════════════════════════════════════
+# 📡 CARTA ACTUALIZADA — avisa a las tablets/celulares conectados
+# ══════════════════════════════════════════════════════
+# La app móvil (y en el futuro la web) cachean localmente los productos
+# para no re-descargar la carta cada vez que se abre una mesa. Cuando un
+# producto se crea/edita/borra (precio, disponible, activo, etc.) hay que
+# avisarle a todos los dispositivos conectados al salón de esa sede para
+# que invaliden su cache — si no, un mozo podría seguir vendiendo un plato
+# recién desactivado. Reusamos el grupo `salon_sede_{id}` (SalonConsumer)
+# que ambas apps ya escuchan para las mesas.
+def _avisar_menu_actualizado(negocio_id):
+    channel_layer = get_channel_layer()
+    if not channel_layer or not negocio_id:
+        return
+    for sede_id in Sede.objects.filter(negocio_id=negocio_id).values_list('id', flat=True):
+        async_to_sync(channel_layer.group_send)(
+            f'salon_sede_{sede_id}',
+            {'type': 'menu_actualizado'},
+        )
+
+@receiver(post_save, sender=Producto)
+def avisar_menu_actualizado_al_guardar(sender, instance, **kwargs):
+    _avisar_menu_actualizado(instance.negocio_id)
+
+@receiver(post_delete, sender=Producto)
+def avisar_menu_actualizado_al_borrar(sender, instance, **kwargs):
+    _avisar_menu_actualizado(instance.negocio_id)
+
 
 LOGO_URL = 'https://pos.leybrak.com/static/img/logo.png'
  
