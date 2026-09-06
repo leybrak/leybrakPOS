@@ -154,6 +154,66 @@ class ReglasDeNegocioEnCobroTest(BaseOrdenTest):
         self.assertEqual(orden.total, Decimal('20.00'))
 
 
+class TrasladarMesaTest(BaseOrdenTest):
+    """
+    /api/ordenes/<id>/trasladar_mesa/ — el cliente empezó en una mesa y se
+    cambió a otra ya con el pedido hecho. Antes no existía forma de mover
+    una orden de mesa; el mozo tenía que cancelar y rehacer todo el pedido.
+    """
+
+    def _crear_mesa(self, numero='1'):
+        from negocios.models import Mesa
+        return Mesa.objects.create(sede=self.sede, numero_o_nombre=numero, capacidad=4)
+
+    def _crear_orden_en_mesa(self, mesa, cantidad=1):
+        resp = self.client.post('/api/ordenes/', {
+            'sede': self.sede.id, 'tipo': 'salon', 'mesa': mesa.id,
+            'detalles': [{'producto': self.prod.id, 'cantidad': cantidad}],
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return Orden.objects.get(id=resp.data['id'])
+
+    def test_traslada_la_orden_y_libera_la_mesa_origen(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden = self._crear_orden_en_mesa(mesa1)  # 25.00
+
+        resp = self.client.post(f'/api/ordenes/{orden.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.mesa_id, mesa2.id)
+
+    def test_no_se_puede_trasladar_a_una_mesa_con_pedido_activo(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden1 = self._crear_orden_en_mesa(mesa1)
+        orden2 = self._crear_orden_en_mesa(mesa2)  # mesa2 ya está ocupada
+
+        resp = self.client.post(f'/api/ordenes/{orden1.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 409, resp.data)
+
+        orden1.refresh_from_db()
+        self.assertEqual(orden1.mesa_id, mesa1.id)  # no se movió
+
+    def test_no_se_puede_trasladar_una_orden_ya_pagada(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden = self._crear_orden_en_mesa(mesa1)
+        orden.estado_pago = 'pagado'
+        orden.estado = 'completado'
+        orden.save()
+
+        resp = self.client.post(f'/api/ordenes/{orden.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+
 class CobrarOrdenSesionCajaTest(BaseOrdenTest):
     """
     /api/ordenes/<id>/cobrar_orden/ tomaba sesion_caja_id del body sin
@@ -314,6 +374,37 @@ class ConfirmarPagoYapeTest(BaseOrdenTest):
         self.assertFalse(notif_ajena.usado)  # no se consumió
         orden.refresh_from_db()
         self.assertEqual(orden.estado_pago, 'pendiente')
+
+
+class CancelarPedidoLiberaLaMesaTest(BaseOrdenTest):
+    """
+    El mozo anulaba los platos uno por uno (anular_item) hasta dejar la
+    orden vacía, pero la orden en sí seguía 'pendiente'/'preparando' — la
+    mesa quedaba "ocupada" para siempre por un pedido fantasma sin items.
+    El fix real es un botón de "Cancelar Pedido" en el POS (mobile) que
+    cancela la orden entera de una vez, en vez de vaciarla item por item.
+    Este test confirma que el mecanismo que ya usa perform_update
+    (creado_en el fix de cobrar_orden/yape) efectivamente libera la mesa
+    cuando se cancela la orden completa vía PATCH.
+    """
+
+    def test_cancelar_la_orden_marca_la_mesa_libre(self):
+        from negocios.models import Mesa
+        mesa = Mesa.objects.create(sede=self.sede, numero_o_nombre='5', capacidad=4)
+        resp = self.client.post('/api/ordenes/', {
+            'sede': self.sede.id, 'tipo': 'salon', 'mesa': mesa.id,
+            'detalles': [{'producto': self.prod.id, 'cantidad': 1}],
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 201, resp.data)
+        orden = Orden.objects.get(id=resp.data['id'])
+
+        resp = self.client.patch(f'/api/ordenes/{orden.id}/', {
+            'estado': 'cancelado',
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'cancelado')
 
 
 class ProductoNoDisponibleTest(BaseOrdenTest):

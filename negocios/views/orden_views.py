@@ -20,7 +20,7 @@ from ..services import aplicar_reglas_negocio, calcular_preview_happy_hours
 from ..models import (
     Orden, DetalleOrden, DetalleOrdenOpcion, Pago,
     Producto, OpcionVariacion, Cliente, SolicitudCambio, SesionCaja, RegistroAuditoria, Sede,
-    CanjePuntos
+    CanjePuntos, Mesa
 )
 from ..serializers import OrdenSerializer, DetalleOrdenSerializer, PagoSerializer
 from django.db.models import Sum, Count
@@ -774,6 +774,59 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 {'error': 'Error interno al procesar el pago.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=True, methods=['post'])
+    def trasladar_mesa(self, request, pk=None):
+        """
+        Mueve una orden activa de una mesa a otra de la misma sede — el
+        cliente empezó en una mesa y se cambió a otra ya con el pedido
+        hecho. Solo se puede trasladar a una mesa que no tenga ya otro
+        pedido activo, para no pisarle la cuenta a otra mesa.
+        """
+        orden = self.get_object()
+        mesa_destino_id = request.data.get('mesa_destino_id')
+
+        if not mesa_destino_id:
+            return Response({'error': 'mesa_destino_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if orden.estado in ('completado', 'cancelado') or orden.estado_pago == 'pagado':
+            return Response({'error': 'No se puede trasladar una orden cerrada.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        mesa_destino = Mesa.objects.filter(id=mesa_destino_id, sede_id=orden.sede_id).first()
+        if not mesa_destino:
+            return Response({'error': 'La mesa destino no existe en esta sede.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if mesa_destino.id == orden.mesa_id:
+            return Response({'error': 'La orden ya está en esa mesa.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # No permitir trasladar a una mesa que ya tiene otro pedido activo.
+        ocupada = Orden.objects.filter(mesa=mesa_destino).exclude(id=orden.id).exclude(
+            estado__in=['completado', 'cancelado']
+        ).exists()
+        if ocupada:
+            return Response({'error': 'La mesa destino ya tiene un pedido activo.'}, status=status.HTTP_409_CONFLICT)
+
+        with transaction.atomic():
+            orden = Orden.objects.select_for_update().get(pk=orden.pk)
+            mesa_origen_id = orden.mesa_id
+            orden.mesa = mesa_destino
+            orden.save(update_fields=['mesa'])
+
+        channel_layer = get_channel_layer()
+        if mesa_origen_id:
+            async_to_sync(channel_layer.group_send)(
+                f"salon_sede_{orden.sede_id}",
+                {"type": "mesa_actualizada", "mesa_id": mesa_origen_id, "estado": "libre", "total": 0}
+            )
+        async_to_sync(channel_layer.group_send)(
+            f"salon_sede_{orden.sede_id}",
+            {"type": "mesa_actualizada", "mesa_id": mesa_destino.id, "estado": "ocupada", "total": float(orden.total)}
+        )
+
+        return Response({
+            'status': 'Mesa trasladada',
+            'orden': self.get_serializer(orden).data,
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def preview_cobro(self, request, pk=None):
