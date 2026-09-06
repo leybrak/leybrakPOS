@@ -75,6 +75,7 @@ urlpatterns = [
     # ==========================================
     path('negocio/configuracion/',    views.configuracion_negocio,    name='configuracion_negocio'),
     path('dashboard/metricas/',       views.metricas_dashboard,       name='metricas_dashboard'),
+    path('analiticas/',               views.analiticas_resumen,       name='analiticas_resumen'),
     path('movimientos-caja/',         views.registrar_movimiento_caja, name='registrar_movimiento_caja'),
     path('verificar-sesion/',         views.verificar_sesion,         name='verificar_sesion'),
     path('marketing/guardar-global/', MarketingGlobalView.as_view(),  name='guardar_marketing_global'),
