@@ -5,6 +5,7 @@ import {
   StatusBar, Platform, Image, NativeModules, NativeEventEmitter // ← AGREGADOS AQUÍ
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import ModalCobro from '../../components/modals/ModalCobro';
@@ -36,8 +37,26 @@ const useTema = () => {
 };
 
 // ─── PosScreen principal ──────────────────────────────────────
-export default function PosScreen({ mesaId, onVolver }) {
+// 🛠️ El footer (VER CUENTA / total / ENVIAR) flotaba con un `bottom: 25`
+// fijo en vez de respetar el inset real del gesto de Android — quedaba
+// suspendido a 25px del borde, y como la lista de productos de atrás sí
+// llega hasta el borde real, se veía una tira de productos asomando por
+// debajo del footer ("sandwich": productos, footer, más productos). Se
+// necesita useSafeAreaInsets() para el valor real del inset, y ese hook
+// exige un <SafeAreaProvider> por encima — como PosScreen no tenía
+// ninguno (ni lo hereda de App.tsx/AppNavigator), se envuelve acá mismo,
+// igual que ya hacen ModalCobro.jsx y los demás modales de este proyecto.
+export default function PosScreen(props) {
+  return (
+    <SafeAreaProvider>
+      <PosScreenInner {...props} />
+    </SafeAreaProvider>
+  );
+}
+
+function PosScreenInner({ mesaId, onVolver }) {
   const t = useTema();
+  const insets = useSafeAreaInsets();
   const [modalCobroVisible, setModalCobroVisible] = useState(false);
   const esParaLlevar = typeof mesaId === 'object' && mesaId?.id === 'llevar';
   const nombreLlevar = typeof mesaId === 'object' ? mesaId.cliente : '';
@@ -578,7 +597,7 @@ export default function PosScreen({ mesaId, onVolver }) {
         renderItem={renderProducto}
         keyExtractor={item => String(item.id)}
         numColumns={2}
-        contentContainerStyle={[s.prodGrid, { paddingBottom: (carrito.length > 0 || ordenActiva) ? 100 : 40 }]}
+        contentContainerStyle={[s.prodGrid, { paddingBottom: (carrito.length > 0 || ordenActiva) ? 110 + insets.bottom : 40 }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={[s.emptyState, { borderColor: t.border }]}>
@@ -590,7 +609,7 @@ export default function PosScreen({ mesaId, onVolver }) {
 
       {/* ─── FOOTER ──────────────────────────────────────── */}
       {(carrito.length > 0 || ordenActiva) && (
-        <View style={[s.footer, { backgroundColor: t.bgCard, borderTopColor: t.border }]}>
+        <View style={[s.footer, { backgroundColor: t.bgCard, borderTopColor: t.border, paddingBottom: 10 + insets.bottom }]}>
           
           {/* Botón Ver Cuenta */}
           <TouchableOpacity
@@ -770,7 +789,7 @@ export default function PosScreen({ mesaId, onVolver }) {
             </ScrollView>
 
             {/* Footer carrito */}
-            <View style={[s.carritoFooter, { borderTopColor: t.border }]}>
+            <View style={[s.carritoFooter, { borderTopColor: t.border, paddingBottom: 16 + insets.bottom }]}>
               {carrito.length > 0 && (
                 <TouchableOpacity
                   style={[s.btnEnviarCocina, { backgroundColor: t.color }, procesando && { opacity: 0.6 }]}
@@ -938,7 +957,7 @@ const s = StyleSheet.create({
   emptyState:    { padding: 40, alignItems: 'center', borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', margin: 20, gap: 8 },
   emptyTitulo:   { fontSize: 15, fontWeight: '900' },
 
-  footer:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, gap: 10, position: 'absolute', bottom: 25, left: 0, right: 0 },
+  footer:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, gap: 10, position: 'absolute', bottom: 0, left: 0, right: 0 },
   footerVerCuenta: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
   footerBadge:     { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   footerBadgeText: { color: '#fff', fontSize: 16, fontWeight: '900' },
