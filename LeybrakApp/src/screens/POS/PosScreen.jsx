@@ -11,8 +11,8 @@ import useAppStore from '../../store/useAppStore';
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalModificadores from '../../components/modals/ModalModificadores';
 import api, {
-  getOrdenes,
-  crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden,
+  getOrdenes, getMesas,
+  crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden, trasladarMesaOrden,
 } from '../../api/api';
 import { leerMenuCache, refrescarMenuCache, esCacheReciente } from '../../services/menuCache';
 const { NotificationModule } = NativeModules;
@@ -84,6 +84,84 @@ function PosScreenInner({ mesaId, onVolver }) {
   const [empleadoNombre, setEmpleadoNombre] = useState('');
   const [productoParaVariar, setProductoParaVariar] = useState(null);
   const [modalVariacionesVisible, setModalVariacionesVisible] = useState(false);
+
+  // ─── Cancelar pedido / trasladar mesa ───────────────────────
+  // 🛠️ Antes, si el cliente se arrepentía, el único camino era anular los
+  // platos uno por uno (anular_item) — la orden quedaba vacía pero seguía
+  // 'pendiente'/'preparando', así que la mesa se quedaba "ocupada" para
+  // siempre por un pedido fantasma. Cancelar la orden ENTERA (que ya
+  // libera la mesa vía el mismo mecanismo que usa cobrar_orden) es un
+  // solo paso, en vez de anular ítem por ítem.
+  const [modalTrasladoVisible, setModalTrasladoVisible] = useState(false);
+  const [mesasParaTraslado, setMesasParaTraslado]       = useState([]);
+  const [cargandoMesas, setCargandoMesas]               = useState(false);
+  const [trasladando, setTrasladando]                   = useState(false);
+
+  const handleCancelarPedido = () => {
+    if (!ordenActiva) return;
+    Alert.alert(
+      'Cancelar pedido',
+      'Esto cancela TODO el pedido y libera la mesa. No se puede deshacer.',
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Sí, cancelar', style: 'destructive',
+          onPress: async () => {
+            try {
+              await actualizarOrden(ordenActiva.id, {
+                estado: 'cancelado',
+                notas_cocina: 'Anulación total desde el POS (mobile)',
+              });
+              setCarritoAbierto(false);
+              onVolver();
+            } catch (e) {
+              Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar el pedido.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Trae las mesas de la sede sin un pedido activo, para elegir el destino.
+  const abrirModalTraslado = async () => {
+    if (!ordenActiva) return;
+    setCargandoMesas(true);
+    setModalTrasladoVisible(true);
+    try {
+      const [resMesas, resOrdenes] = await Promise.all([
+        getMesas({ sede_id: sedeId }),
+        getOrdenes({ sede_id: sedeId }),
+      ]);
+      const mesasOcupadasIds = new Set(
+        (resOrdenes.data || [])
+          .filter(o => o.mesa && o.id !== ordenActiva.id && o.estado !== 'completado' && o.estado !== 'cancelado')
+          .map(o => o.mesa)
+      );
+      setMesasParaTraslado(
+        (resMesas.data || []).filter(m => m.id !== mesaIdReal && !mesasOcupadasIds.has(m.id))
+      );
+    } catch (e) {
+      Alert.alert('Error', 'No se pudieron cargar las mesas.');
+      setModalTrasladoVisible(false);
+    } finally {
+      setCargandoMesas(false);
+    }
+  };
+
+  const confirmarTraslado = async (mesaDestino) => {
+    setTrasladando(true);
+    try {
+      await trasladarMesaOrden(ordenActiva.id, mesaDestino.id);
+      setModalTrasladoVisible(false);
+      setCarritoAbierto(false);
+      onVolver();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo trasladar la mesa.');
+    } finally {
+      setTrasladando(false);
+    }
+  };
 
   // ─── Sesión ───────────────────────────────────────────────
   useEffect(() => {
@@ -701,6 +779,31 @@ function PosScreenInner({ mesaId, onVolver }) {
               </View>
             </View>
 
+            {/* Acciones sobre el pedido ya hecho — cancelar todo de una,
+                o mover el pedido si el cliente se cambió de mesa. */}
+            {ordenActiva && (
+              <View style={s.accionesOrdenRow}>
+                <TouchableOpacity
+                  style={[s.accionOrdenBtn, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }]}
+                  onPress={handleCancelarPedido}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="ban" size={11} color="#ef4444" style={{ marginRight: 6 }} />
+                  <Text style={[s.accionOrdenBtnText, { color: '#ef4444' }]}>CANCELAR PEDIDO</Text>
+                </TouchableOpacity>
+                {!esParaLlevar && (
+                  <TouchableOpacity
+                    style={[s.accionOrdenBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                    onPress={abrirModalTraslado}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="exchange" size={11} color={t.textSec} style={{ marginRight: 6 }} />
+                    <Text style={[s.accionOrdenBtnText, { color: t.textSec }]}>TRASLADAR MESA</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
 
               {/* Items en cocina */}
@@ -820,6 +923,43 @@ function PosScreenInner({ mesaId, onVolver }) {
           </View>
         </View>
       </Modal>
+
+      {/* ─── MODAL TRASLADAR MESA ──────────────────────────── */}
+      <Modal visible={modalTrasladoVisible} transparent animationType="fade" onRequestClose={() => setModalTrasladoVisible(false)}>
+        <View style={s.trasladoOverlay}>
+          <View style={[s.trasladoModal, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+            <View style={[s.trasladoHeader, { borderBottomColor: t.border }]}>
+              <Text style={[s.trasladoTitulo, { color: t.textPrim }]}>Trasladar a...</Text>
+              <TouchableOpacity onPress={() => setModalTrasladoVisible(false)} style={[s.carritoCloseBtn, { backgroundColor: t.bgCard2 }]}>
+                <Icon name="times" size={14} color={t.textSec} />
+              </TouchableOpacity>
+            </View>
+            {cargandoMesas ? (
+              <ActivityIndicator color={t.color} style={{ paddingVertical: 40 }} />
+            ) : mesasParaTraslado.length === 0 ? (
+              <Text style={[s.trasladoVacio, { color: t.textMuted }]}>No hay mesas libres para trasladar.</Text>
+            ) : (
+              <FlatList
+                data={mesasParaTraslado}
+                keyExtractor={(m) => String(m.id)}
+                numColumns={3}
+                contentContainerStyle={{ padding: 16 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[s.mesaTrasladoBtn, { backgroundColor: t.bgCard2, borderColor: t.border }, trasladando && { opacity: 0.5 }]}
+                    onPress={() => confirmarTraslado(item)}
+                    disabled={trasladando}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.mesaTrasladoText, { color: t.textPrim }]}>{item.numero_o_nombre}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <ModalCobro
         visible={modalCobroVisible}
         onClose={(info) => {
@@ -1012,4 +1152,16 @@ const s = StyleSheet.create({
   exitoCheck:    { width: 80, height: 80, borderRadius: 40, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', marginBottom: 16, elevation: 10 },
   exitoTitulo:   { fontSize: 24, fontWeight: '900', marginBottom: 4 },
   exitoSub:      { fontSize: 13, textAlign: 'center' },
+
+  accionesOrdenRow:   { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  accionOrdenBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, paddingVertical: 10 },
+  accionOrdenBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+
+  trasladoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  trasladoModal:   { width: '100%', maxWidth: 420, maxHeight: '70%', borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
+  trasladoHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1 },
+  trasladoTitulo:  { fontSize: 16, fontWeight: '900' },
+  trasladoVacio:   { textAlign: 'center', padding: 40, fontSize: 13, fontWeight: '600' },
+  mesaTrasladoBtn: { flex: 1, margin: 6, aspectRatio: 1, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  mesaTrasladoText:{ fontSize: 16, fontWeight: '900' },
 });

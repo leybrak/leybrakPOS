@@ -158,6 +158,7 @@ export const crearOrden            = (data)          => api.post('/ordenes/', da
 export const actualizarOrden       = (id, data)      => api.patch(`/ordenes/${id}/`, data);
 export const agregarProductosAOrden = (id, payload)  => api.post(`/ordenes/${id}/agregar_productos/`, payload);
 export const anularItemDeOrden     = (id, payload)   => api.post(`/ordenes/${id}/anular_item/`, payload);
+export const trasladarMesaOrden    = (id, mesaDestinoId) => api.post(`/ordenes/${id}/trasladar_mesa/`, { mesa_destino_id: mesaDestinoId });
 
 // ─── Caja ─────────────────────────────────────────────────────
 export const getEstadoCaja = (params)  => api.get('/sesiones_caja/estado_actual/', { params });
