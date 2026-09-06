@@ -11,6 +11,7 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import { BlurView } from '@react-native-community/blur';
 
 import DashboardScreen     from '../screens/ERP/DashboardScreen';
+import AnaliticasScreen    from '../screens/ERP/AnaliticasScreen';
 import ConfiguracionScreen from '../screens/ERP/ConfiguracionScreen';
 import PersonalScreen      from '../screens/ERP/PersonalScreen';
 import MenuScreen          from '../screens/ERP/Menu/MenuScreen';
@@ -47,6 +48,7 @@ const PlaceholderScreen = ({ titulo, icono }) => (
 // ─── Metadata de cada pantalla (id -> ícono FontAwesome + título de arriba) ───
 const SCREENS_META = {
   dashboard:     { icono: 'th-large',    nombre: 'Panel de Control' },
+  analiticas:    { icono: 'line-chart',  nombre: 'Analíticas' },
   menu:          { icono: 'cutlery',     nombre: 'Carta y Precios' },
   inventario:    { icono: 'cube',        nombre: 'Inventario y Recetas' },
   sedes:         { icono: 'map-marker',  nombre: 'Sedes y Mapa' },
@@ -67,6 +69,7 @@ function construirGruposMenu(modulos, esDueño) {
       titulo: 'MONITOREO',
       items: [
         { id: 'dashboard', show: true },
+        { id: 'analiticas', show: true },
       ],
     },
     {
@@ -340,6 +343,7 @@ function ERPLayout({ onIrAlPos, onLogout }) {
 
       <View style={{ flex: 1 }}>
         {vistaActiva === 'dashboard'     && <DashboardScreen />}
+        {vistaActiva === 'analiticas'    && <AnaliticasScreen />}
         {vistaActiva === 'configuracion' && <ConfiguracionScreen />}
         {vistaActiva === 'menu'          && <MenuScreen />}
         {vistaActiva === 'personal'      && <PersonalScreen />}

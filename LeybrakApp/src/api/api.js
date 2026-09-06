@@ -196,6 +196,8 @@ export const actualizarSede = (id, data) => api.patch(`/sedes/${id}/`, data);
 // ─── Dashboard ────────────────────────────────────────────────
 export const obtenerMetricasDashboard = (params) =>
   api.get('/dashboard/metricas/', { params });
+export const obtenerAnaliticas = (params) =>
+  api.get('/analiticas/', { params });
 
 // ─── Yape / Plin ─────────────────────────────────────────────
 export const confirmarPagoYape = (data) => api.post('/yape/confirmar/', data);
