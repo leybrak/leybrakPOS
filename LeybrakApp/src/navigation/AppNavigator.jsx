@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Animated, Dimensions, Modal, ScrollView, TextInput, Alert,
-  Platform, StatusBar, Easing
+  Platform, StatusBar, Easing, BackHandler
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
@@ -325,6 +325,24 @@ function ERPLayout({ onIrAlPos, onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modulos, esDueño]);
 
+  // 🛠️ Antes nada escuchaba el botón/gesto de retroceder de Android acá
+  // dentro, así que Android caía a su comportamiento default (cerrar la
+  // app) sin importar en qué pestaña del ERP estuviera el dueño. Ahora:
+  // modal "Reportar" abierto → cerrarlo; drawer abierto → cerrarlo;
+  // parado en una pestaña que no es el Dashboard → volver al Dashboard
+  // (la "home" del ERP). Solo en el Dashboard con todo cerrado se deja
+  // el comportamiento default (salir de la app), como en cualquier pantalla raíz.
+  useEffect(() => {
+    const onBack = () => {
+      if (reportarVisible) { setReportarVisible(false); return true; }
+      if (drawerVisible) { setDrawerVisible(false); return true; }
+      if (vistaActiva !== 'dashboard') { setVistaActiva('dashboard'); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [reportarVisible, drawerVisible, vistaActiva]);
+
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={bgColor} />
@@ -374,6 +392,22 @@ function ERPLayout({ onIrAlPos, onLogout }) {
 // ─── POS Layout ───────────────────────────────────────────────
 function POSLayout({ onVolver, onCerrarTurno }) {
   const [mesaActiva, setMesaActiva] = useState(null);
+
+  // 🛠️ Mismo problema que en ERPLayout: sin esto, el botón/gesto de
+  // retroceder de Android salía de la app en vez de volver al Salón desde
+  // una mesa abierta. Con mesa abierta → cerrarla (vuelve al Salón); en el
+  // Salón, si el dueño llegó acá desde el ERP (onVolver existe) → volver
+  // al ERP; si no hay onVolver (mesero/cajero, el Salón es su pantalla
+  // raíz) se deja el comportamiento default (salir de la app).
+  useEffect(() => {
+    const onBack = () => {
+      if (mesaActiva) { setMesaActiva(null); return true; }
+      if (onVolver) { onVolver(); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [mesaActiva, onVolver]);
 
   // Sin mesa seleccionada → mapa de mesas
   if (!mesaActiva) {
