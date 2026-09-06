@@ -241,3 +241,14 @@ class PagosConsumer(AsyncWebsocketConsumer):
             'codigo_seguridad':  event['codigo_seguridad'],  # None si es PLIN
             'nombre_cliente':    event['nombre_cliente'],
         }))
+
+    async def notificacion_confirmada(self, event):
+        """
+        Otra caja del mismo negocio ya confirmó esta notificación — se la
+        retransmitimos a todas para que la saquen de su lista de pagos
+        pendientes (evita que alguien más intente confirmarla de nuevo).
+        """
+        await self.send(text_data=json.dumps({
+            'type':            'notificacion_confirmada',
+            'notificacion_id': event['notificacion_id'],
+        }))

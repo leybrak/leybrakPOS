@@ -241,6 +241,37 @@ class ConfirmarPagoYapeTest(BaseOrdenTest):
         self.assertEqual(
             Pago.objects.filter(orden=orden, metodo='efectivo', monto=Decimal('30.00')).count(), 1)
 
+    def test_no_se_puede_confirmar_la_misma_notificacion_dos_veces(self):
+        """
+        Cubre el fix de la race condition: confirmar_pago_yape ahora envuelve
+        el chequeo 'usado'+creación del Pago en una transacción con
+        select_for_update. Este test no reproduce el hilo concurrente real
+        (el test client de Django es síncrono), pero sí verifica que el
+        camino que la transacción protege sigue rechazando correctamente un
+        segundo intento sobre la misma notificación — sin crear un segundo
+        Pago ni marcar pagada una segunda orden con la misma plata.
+        """
+        orden1 = self._crear_orden()  # 25.00
+        orden2 = self._crear_orden()  # otra mesa, mismo monto — el caso real
+        notif = self._notif('25.00')
+
+        self.client.force_authenticate(user=self.user)
+        resp1 = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden1.id,
+        }, format='json')
+        self.assertEqual(resp1.status_code, 200, resp1.data)
+
+        resp2 = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden2.id,
+        }, format='json')
+        self.assertEqual(resp2.status_code, 409, resp2.data)
+
+        orden1.refresh_from_db()
+        orden2.refresh_from_db()
+        self.assertEqual(orden1.estado_pago, 'pagado')
+        self.assertEqual(orden2.estado_pago, 'pendiente')  # no se le acreditó el pago ajeno
+        self.assertEqual(Pago.objects.filter(notificacion_origen=notif).count(), 1)
+
     def test_no_puede_confirmar_notificacion_de_otro_negocio(self):
         otro_user = User.objects.create_user(username='otro_dueno', password='x')
         otro_negocio = Negocio.objects.create(
