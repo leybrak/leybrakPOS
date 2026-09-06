@@ -527,7 +527,14 @@ export default function ConfiguracionScreen() {
     launchImageLibrary(
       { mediaType: 'photo', quality: 0.8 },
       async (response) => {
-        if (response.didCancel || response.errorCode) return;
+        if (response.didCancel) return;
+        // 🛠️ Antes un errorCode (p.ej. 'permission' si Android negaba el
+        // acceso a la galería) se ignoraba en silencio — el botón parecía
+        // no hacer nada. Ahora se avisa qué pasó.
+        if (response.errorCode) {
+          Alert.alert('Error', response.errorMessage || 'No se pudo abrir la galería.');
+          return;
+        }
         const asset = response.assets?.[0];
         if (!asset) return;
 

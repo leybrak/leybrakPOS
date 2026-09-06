@@ -3,6 +3,12 @@
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Subir QR de Yape/Plin (react-native-image-picker → galería). Android 13+
+         usa el Photo Picker del sistema y no necesita permiso; en 12 o menor,
+         sin READ_EXTERNAL_STORAGE declarado acá, el picker pedía el permiso en
+         runtime y Android lo denegaba sin diálogo (silencioso: "no pasa nada"). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:name=".MainApplication"

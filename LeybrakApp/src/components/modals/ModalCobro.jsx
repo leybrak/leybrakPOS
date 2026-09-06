@@ -287,8 +287,11 @@ export default function ModalCobro({
 
   const metodosDisponibles = [
     { id: 'efectivo', nombre: 'Efectivo', icono: 'money',       color: '#10b981' },
-    yapeNumero && { id: 'yape',    nombre: 'Yape',     icono: 'mobile',      color: '#6d28d9' },
-    plinNumero && { id: 'plin',    nombre: 'Plin',     icono: 'mobile',      color: '#14b8a6' },
+    // 🛠️ Antes exigía yapeNumero/plinNumero — si el negocio solo cargó el QR
+    // (sin número), el botón desaparecía aunque la web sí lo mostraba (ver
+    // metodosDisponibles en ModalCobro.jsx web: !!(numero || qr)).
+    (yapeNumero || yapeQr) && { id: 'yape', nombre: 'Yape', icono: 'mobile', color: '#6d28d9' },
+    (plinNumero || plinQr) && { id: 'plin', nombre: 'Plin', icono: 'mobile', color: '#14b8a6' },
     { id: 'tarjeta',  nombre: 'Tarjeta',  icono: 'credit-card', color: '#3b82f6' },
   ].filter(Boolean);
 
