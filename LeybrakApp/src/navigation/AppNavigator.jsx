@@ -9,6 +9,7 @@ import {
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { BlurView } from '@react-native-community/blur';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DashboardScreen     from '../screens/ERP/DashboardScreen';
 import AnaliticasScreen    from '../screens/ERP/AnaliticasScreen';
@@ -27,7 +28,6 @@ import { setLogoutCallback, crearTicket } from '../api/api';
 const { width } = Dimensions.get('window');
 
 const COLOR_DEFAULT = '#3b82f6';
-const SAFE_BOTTOM   = Platform.OS === 'ios' ? 34 : 24;
 const SAFE_TOP      = Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 24) + 10;
 
 // ─── Placeholder (features que hoy solo viven en la web) ───────
@@ -179,7 +179,8 @@ function ModalReportarProblema({ visible, onClose }) {
 }
 
 // ─── Drawer (sidebar completo, igual a la web) ─────────────────
-function Drawer({ visible, vistaActiva, color, gruposMenu, onNavegar, onIrAlPos, onReportar, onLogout, onClose }) {
+function Drawer({ visible, vistaActiva, color, gruposMenu, onNavegar, onReportar, onLogout, onClose }) {
+  const insets = useSafeAreaInsets();
   const [render, setRender] = useState(false);
   const slideAnim = useRef(new Animated.Value(-width)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -266,16 +267,11 @@ function Drawer({ visible, vistaActiva, color, gruposMenu, onNavegar, onIrAlPos,
             })}
           </ScrollView>
 
-          <View style={d.drawerFooter}>
-            <TouchableOpacity
-              style={[d.posBtn, { backgroundColor: color }]}
-              onPress={() => { onIrAlPos(); onClose(); }}
-              activeOpacity={0.8}
-            >
-              <Icon name="desktop" size={16} color="#fff" style={{ marginRight: 10 }} />
-              <Text style={d.posBtnText}>Terminal POS</Text>
-            </TouchableOpacity>
-
+          {/* 🛠️ Antes había acá un botón "Terminal POS" duplicado — el
+              header del ERP ya tiene su propio botón exclusivo para volver
+              al POS (th.posBtn, ícono de escritorio), así que este era
+              redundante. */}
+          <View style={[d.drawerFooter, { paddingBottom: 20 + insets.bottom }]}>
             <TouchableOpacity style={d.reportarBtn} onPress={() => { onClose(); setTimeout(onReportar, 300); }} activeOpacity={0.8}>
               <Icon name="life-ring" size={15} color="#6b7280" style={{ marginRight: 10 }} />
               <Text style={d.reportarBtnText}>Reportar un problema</Text>
@@ -379,7 +375,6 @@ function ERPLayout({ onIrAlPos, onLogout }) {
         color={color}
         gruposMenu={gruposMenu}
         onNavegar={setVistaActiva}
-        onIrAlPos={onIrAlPos}
         onReportar={() => setReportarVisible(true)}
         onLogout={onLogout}
         onClose={() => setDrawerVisible(false)}
@@ -454,26 +449,33 @@ export default function AppNavigator({ sesion, onLogout, onCerrarTurno }) {
   }, [onLogout]);
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main">
-          {() => {
-            if (vista === 'erp') {
-              return <ERPLayout onIrAlPos={() => setVista('pos')} onLogout={onLogout} />;
-            }
-            if (vista === 'kds') {
-              return <KdsScreen onCerrarTurno={onCerrarTurno} />;
-            }
-            return (
-              <POSLayout
-                onVolver={esDueñoRol ? () => setVista('erp') : undefined}
-                onCerrarTurno={!esDueñoRol ? onCerrarTurno : undefined}
-              />
-            );
-          }}
-        </Stack.Screen>
-      </Stack.Navigator>
-    </NavigationContainer>
+    // 🛠️ Nada en este árbol tenía un <SafeAreaProvider> — cada pantalla que
+    // necesitaba el inset real de abajo (gesto de Android) terminaba
+    // adivinándolo con una constante fija (SAFE_BOTTOM = 24), que no
+    // coincide con el inset real en muchos equipos. Uno solo acá arriba
+    // alcanza para todo el árbol (ERP, POS, Drawer, KDS).
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Main">
+            {() => {
+              if (vista === 'erp') {
+                return <ERPLayout onIrAlPos={() => setVista('pos')} onLogout={onLogout} />;
+              }
+              if (vista === 'kds') {
+                return <KdsScreen onCerrarTurno={onCerrarTurno} />;
+              }
+              return (
+                <POSLayout
+                  onVolver={esDueñoRol ? () => setVista('erp') : undefined}
+                  onCerrarTurno={!esDueñoRol ? onCerrarTurno : undefined}
+                />
+              );
+            }}
+          </Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
@@ -525,12 +527,10 @@ const d = StyleSheet.create({
   drawerItemNombre: { flex: 1, fontSize: 14, fontWeight: '600', color: '#9ca3af' },
   drawerItemBarra:  { position: 'absolute', right: 0, top: 8, bottom: 8, width: 3, borderRadius: 4 },
   drawerFooter: {
-    padding: 20, paddingBottom: SAFE_BOTTOM + 20,
+    padding: 20,
     borderTopWidth: 1, borderTopColor: '#1a1a1a',
     backgroundColor: '#0a0a0a', gap: 10,
   },
-  posBtn:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16 },
-  posBtnText:       { color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
   reportarBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     borderRadius: 14, paddingVertical: 13, borderWidth: 1, borderColor: 'transparent',
