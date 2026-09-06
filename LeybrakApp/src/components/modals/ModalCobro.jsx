@@ -178,7 +178,32 @@ export default function ModalCobro({
     }
   };
 
+  // 🛡️ Si hay 2+ pagos del mismo monto a la vez (dos clientes pagando lo
+  // mismo casi juntos), nada impide tocar el que no corresponde — el
+  // sistema no sabe cuál mesa mandó cuál Yape, solo el cajero puede
+  // verificarlo leyendo el nombre/código. Con un solo pago en pantalla no
+  // hay ambigüedad posible, así que no se agrega este paso de más.
+  const confirmarConAmbiguedad = (notificacion) => new Promise((resolve) => {
+    const esYape = notificacion.tipo === 'YAPE';
+    const detalle = esYape && notificacion.codigo_seguridad
+      ? `el código de seguridad es ${notificacion.codigo_seguridad}`
+      : `el nombre es "${notificacion.nombre_cliente}"`;
+    Alert.alert(
+      'Hay más de un pago con este monto',
+      `Verifica con el cliente que ${detalle} antes de confirmar — hay otro pago de S/ ${parseFloat(notificacion.monto).toFixed(2)} esperando al mismo tiempo.`,
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Sí, coincide', onPress: () => resolve(true) },
+      ],
+    );
+  });
+
   const confirmarNotificacion = async (notificacion) => {
+    if (notificaciones.length >= 2) {
+      const ok = await confirmarConAmbiguedad(notificacion);
+      if (!ok) return;
+    }
+
     setNotificacionElegida(notificacion);
     try {
       await api.post('/yape/confirmar/', {
