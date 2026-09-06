@@ -12,7 +12,7 @@ import ModalMovimientoCaja from '../../components/modals/ModalMovimientoCaja';
 import ModalCobro from '../../components/modals/ModalCobro';
 // ─── IMPORTACIONES DE API Y POS ───
 import api, {
-  getMesas, getSedes, getOrdenesLlevar, getOrdenes,
+  getMesas, getSedes, getOrdenesLlevar, getOrdenes, getNegocio,
   actualizarOrden, actualizarMesa,
   abrirCajaBD, getEstadoCaja,
   crearOrden, crearPago,
@@ -38,20 +38,21 @@ const useTema = () => {
   };
 };
 
-// ─── Colores de estado de mesa (idéntico a MesasGrid.jsx en la web) ───
-// Los íconos son los mismos emoji que usa la web (no un icon-font) para que
-// se vean exactamente igual en ambas plataformas.
+// ─── Colores de estado de mesa (idéntico a TerminalMesasGrid.jsx en la web) ───
+// 🛠️ Antes usaba emoji (🍴📝💳); la web real (Pos_Terminal → TerminalMesasGrid.jsx)
+// usa icon-font (fi-rr-restaurant/edit/credit-card), no emoji — se cambió a
+// react-native-vector-icons/FontAwesome para verse igual.
 const getMesaStyles = (estado, colorPrimario, isDark) => {
   const est = estado?.toLowerCase() || 'libre';
 
   if (est === 'ocupada') {
-    return { bg: isDark ? `${colorPrimario}15` : `${colorPrimario}10`, border: `${colorPrimario}60`, textPrim: isDark ? '#fff' : '#000', badgeBg: `${colorPrimario}20`, badgeText: colorPrimario, icon: '🍴' };
+    return { bg: isDark ? `${colorPrimario}15` : `${colorPrimario}10`, border: `${colorPrimario}60`, textPrim: isDark ? '#fff' : '#000', badgeBg: `${colorPrimario}20`, badgeText: colorPrimario, icon: 'cutlery' };
   }
   if (est === 'pidiendo') {
-    return { bg: isDark ? '#fbbf2415' : '#fef9c3', border: '#fbbf24aa', textPrim: '#fbbf24', badgeBg: '#fbbf2433', badgeText: '#fbbf24', icon: '📝' };
+    return { bg: isDark ? '#fbbf2415' : '#fef9c3', border: '#fbbf24aa', textPrim: '#fbbf24', badgeBg: '#fbbf2433', badgeText: '#fbbf24', icon: 'pencil' };
   }
   if (est === 'cobrando') { // Naranja web
-    return { bg: isDark ? '#f9731615' : '#fff7ed', border: '#f97316aa', textPrim: '#f97316', badgeBg: '#f9731633', badgeText: '#f97316', icon: '💳' };
+    return { bg: isDark ? '#f9731615' : '#fff7ed', border: '#f97316aa', textPrim: '#f97316', badgeBg: '#f9731633', badgeText: '#f97316', icon: 'credit-card' };
   }
   // Libre
   return { bg: isDark ? '#161616' : '#ffffff', border: isDark ? '#2a2a2a' : '#e5e7eb', textPrim: isDark ? '#ffffff' : '#111111', badgeBg: isDark ? '#222222' : '#f3f4f6', badgeText: isDark ? '#a3a3a3' : '#6b7280', icon: null };
@@ -87,7 +88,7 @@ function TarjetaMesa({ mesa, t, color, onPress, seleccionada, modoUnir, ancho })
             {mesa.esGigante ? 'GRUPO' : labelEstado(mesa.estado).toUpperCase()}
           </Text>
         </View>
-        {styles.icon && !modoUnir && <Text style={{ fontSize: 13, opacity: 0.7 }}>{styles.icon}</Text>}
+        {styles.icon && !modoUnir && <Icon name={styles.icon} size={13} color={styles.textPrim} style={{ opacity: 0.7 }} />}
       </View>
 
       <View style={s.mesaCardBody}>
@@ -224,11 +225,12 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
 
       const params = { negocio_id: negocioId, sede_id: savedSede };
 
-      const [resMesas, resSedes, resOrdenes, resOrdenesActivas] = await Promise.all([
+      const [resMesas, resSedes, resOrdenes, resOrdenesActivas, resNegocio] = await Promise.all([
         getMesas(params),
         getSedes({ negocio_id: negocioId }),
         getOrdenesLlevar(params),
         getOrdenes({ negocio_id: negocioId, sede_id: savedSede }),
+        getNegocio(negocioId),
       ]);
       // 🛠️ Antes solo miraba estado:'preparando' — una orden 'pendiente' o 'listo'
       // (aún no tomada por cocina, o ya lista pero no cobrada) no marcaba la mesa
@@ -263,10 +265,18 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
         )
       );
 
-      const { configuracionGlobal } = useAppStore.getState();
-      const mods = configuracionGlobal?.modulos || {};
-      setModulos({ salon: mods.salon !== false, delivery: mods.delivery !== false });
-      setVistaLocal(mods.salon !== false ? 'salon' : 'llevar');
+      // 🛠️ Antes leía configuracionGlobal.modulos (calculado en App.tsx), que
+      // para "delivery" exige además el flag del plan (plan.modulo_delivery)
+      // — eso es correcto para el menú del ERP, pero la pestaña "Para Llevar"
+      // del POS en la web (useMesasData.js/useTerminalData.js) solo depende
+      // del interruptor crudo mod_delivery_activo del negocio, sin mirar el
+      // plan. Si el plan no traía modulo_delivery, el botón desaparecía en
+      // mobile aunque en la web sí se viera.
+      const dataNegocio = resNegocio.data || {};
+      const modSalon    = dataNegocio.mod_salon_activo !== false;
+      const modDelivery = dataNegocio.mod_delivery_activo !== false;
+      setModulos({ salon: modSalon, delivery: modDelivery });
+      setVistaLocal(modSalon ? 'salon' : 'llevar');
 
     } catch (e) {
       setVistaLocal('salon');
@@ -532,7 +542,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
                 style={[s.actionBtn, { backgroundColor: t.bgCard2, borderColor: t.border }, modoUnir && { backgroundColor: t.color, borderColor: t.color }]}
                 onPress={() => { setModoUnir(!modoUnir); setMesaPrincipal(null); }}
               >
-                <Text style={{ fontSize: 16 }}>🔗</Text>
+                <Icon name="link" size={16} color={modoUnir ? '#fff' : t.textSec} />
               </TouchableOpacity>
             )}
 
@@ -551,7 +561,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
             )}
 
             <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
-              <Text style={{ fontSize: 16 }}>⚡</Text>
+              <Icon name="bolt" size={16} color={t.color} />
             </TouchableOpacity>
 
             {/* Terminar mi turno — marca la salida y vuelve al PIN (mesero/cajero/cocinero) */}
@@ -572,7 +582,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
           <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
             {esDueno && onVolver && (
               <TouchableOpacity style={[s.actionBtn, { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }]} onPress={onVolver}>
-                <Text style={{ fontSize: 16 }}>⚙️</Text>
+                <Icon name="th-large" size={16} color="#3b82f6" />
               </TouchableOpacity>
             )}
 
@@ -581,7 +591,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
                 style={[s.actionBtn, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.3)' }]}
                 onPress={() => setModalMovimientosAbierto(true)}
               >
-                <Text style={{ fontSize: 16 }}>💸</Text>
+                <Icon name="money" size={16} color="#10b981" />
               </TouchableOpacity>
             )}
 
@@ -590,7 +600,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
                 style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
                 onPress={handleCierreCajaSeguro}
               >
-                <Text style={{ fontSize: 16 }}>🔒</Text>
+                <Icon name="lock" size={16} color="#ef4444" />
               </TouchableOpacity>
             )}
           </View>
