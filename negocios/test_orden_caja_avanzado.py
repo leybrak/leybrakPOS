@@ -154,6 +154,31 @@ class ReglasDeNegocioEnCobroTest(BaseOrdenTest):
         self.assertEqual(orden.total, Decimal('20.00'))
 
 
+class CobrarOrdenSesionCajaTest(BaseOrdenTest):
+    """
+    /api/ordenes/<id>/cobrar_orden/ tomaba sesion_caja_id del body sin
+    validar que perteneciera a la sede de la orden — un cliente con un bug
+    (o un request armado a mano) podía atribuir el pago a la caja de OTRA
+    sede/negocio, descuadrando el cierre de esa caja ajena.
+    """
+
+    def test_no_se_puede_cobrar_con_sesion_caja_de_otra_sede(self):
+        otra_sede = Sede.objects.create(negocio=self.negocio, nombre='Sucursal 2')
+        sesion_ajena = SesionCaja.objects.create(
+            sede=otra_sede, estado='abierta', fondo_inicial=Decimal('50'))
+
+        orden = self._crear_orden()  # 25.00, en self.sede
+        resp = self.client.post(f'/api/ordenes/{orden.id}/cobrar_orden/', {
+            'pagos': [{'metodo': 'efectivo', 'monto': '25.00'}],
+            'sesion_caja_id': sesion_ajena.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 403, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pendiente')  # no se cobró
+        self.assertEqual(Pago.objects.filter(orden=orden).count(), 0)
+
+
 class PagoConfirmadoPorAppSobreviveReintentoTest(BaseOrdenTest):
 
     def test_pago_confirmado_por_notificacion_no_se_cancela_ni_se_duplica(self):

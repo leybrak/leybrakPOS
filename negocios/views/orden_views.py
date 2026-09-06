@@ -646,13 +646,38 @@ class OrdenViewSet(viewsets.ModelViewSet):
         telefono_crm    = request.data.get('telefono', '').strip()
         sesion_caja_id  = request.data.get('sesion_caja_id')
 
-        # ✅ Si la orden ya fue pagada por WebSocket, solo procesamos
-        # CRM y WebSockets sin intentar crear pagos duplicados.
-        ya_pagada = orden.estado_pago == 'pagado'
-
         try:
             with transaction.atomic():
+                # 🛡️ select_for_update: self.get_object() (arriba) no bloquea
+                # la fila. Dos terminales cobrando la MISMA orden casi al
+                # mismo tiempo (ej. dos cajeros, o el mismo cajero con dos
+                # pestañas/una doble carga de red) podían pasar ambos el
+                # chequeo `ya_pagada == False` antes de que cualquiera
+                # guardara, y cada uno creaba su propio Pago manual — a
+                # diferencia de Yape (donde notificacion_origen es único),
+                # un Pago en efectivo/tarjeta no tiene ningún constraint que
+                # evite duplicarse, así que la orden terminaba con el doble
+                # de pagos registrados (la caja cuadra mal al cierre, aunque
+                # no se "pierde" plata real). El guard cobroComprometidoRef
+                # del frontend evita el doble-tap en la MISMA pestaña, pero
+                # no cubre dos terminales distintos.
+                orden = Orden.objects.select_for_update().get(pk=orden.pk)
+
                 sesion_caja = SesionCaja.objects.get(id=sesion_caja_id) if sesion_caja_id else None
+                # 🛡️ IDOR fix: sesion_caja_id venía del body sin validar que
+                # perteneciera a la sede de la orden — un cliente con un bug
+                # (o un request armado a mano) podía atribuir el pago a la
+                # caja de OTRA sede/negocio, descuadrando su cierre de caja.
+                if sesion_caja and sesion_caja.sede_id != orden.sede_id:
+                    return Response(
+                        {'error': 'La sesión de caja no pertenece a la sede de esta orden.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                # ✅ Si la orden ya fue pagada (por WebSocket o por el request
+                # que ganó la carrera de arriba), solo procesamos CRM y
+                # WebSockets sin intentar crear pagos duplicados.
+                ya_pagada = orden.estado_pago == 'pagado'
 
                 if not ya_pagada:
                     # ── Flujo normal: registrar pagos ──────────────────
