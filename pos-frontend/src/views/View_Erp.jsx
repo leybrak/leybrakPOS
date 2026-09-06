@@ -8,6 +8,7 @@ import Erp_ModalPerfil from '../features/ERP/Erp_ModalPerfil';
 // 📦 IMPORTACIÓN DE COMPONENTES MODULARIZADOS
 // ==========================================
 import Erp_DashboardVentas from '../features/ERP/Erp_DashboardVentas';
+import Erp_TabAnaliticas from '../features/ERP/Erp_TabAnaliticas';
 import Erp_DashboardCartaQR from '../features/ERP/DashboardCartaQR';
 import Erp_EditorMenu from '../features/ERP/Erp_EditorMenu';
 import Erp_GestionSedes from '../features/ERP/Erp_GestionSedes'; 
@@ -398,6 +399,10 @@ export default function ErpDashboard({ onVolverAlPos, rolUsuario }) {
           
           {vistaActiva === 'dashboard' && (
             <Erp_DashboardVentas config={config} sedeFiltro={sedeFiltro} cambiarSedeFiltro={cambiarSedeFiltro} sedesReales={sedesReales} metricas={metricas} ordenesReales={ordenesReales} />
+          )}
+
+          {vistaActiva === 'analiticas' && (
+            <Erp_TabAnaliticas config={config} sedesReales={sedesReales} />
           )}
 
           {vistaActiva === 'negocio' && (

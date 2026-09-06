@@ -254,6 +254,7 @@ export const anularItemDeOrden       = (idOrden, payload) => api.post(`/ordenes/
 // DASHBOARD Y CONFIGURACIÓN
 // ============================================================
 export const obtenerMetricasDashboard = (params) => api.get(`/dashboard/metricas/`, { params });
+export const obtenerAnaliticas        = (params) => api.get(`/analiticas/`, { params });
 export const getNegocioConfig         = (params) => api.get(`/negocio/configuracion/`, { params });
 export const updateNegocioConfig      = (data)   => api.put(`/negocio/configuracion/?negocio_id=${getNegocioId()}`, data);
 

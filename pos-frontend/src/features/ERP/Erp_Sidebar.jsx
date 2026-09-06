@@ -111,6 +111,7 @@ export default function Erp_Sidebar({
       titulo: "MONITOREO",
       items: [
         { id: 'dashboard', icono: 'fi-rr-apps', nombre: 'Panel de Control', show: true },
+        { id: 'analiticas', icono: 'fi-rr-chart-histogram', nombre: 'Analíticas', show: true },
       ]
     },
     {
