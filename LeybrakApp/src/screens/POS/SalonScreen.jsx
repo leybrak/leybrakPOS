@@ -409,7 +409,16 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
       if (mesa.estado === 'libre' && wsRef.current) {
         wsRef.current.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesa.id, estado: 'pidiendo' }));
       }
-      onSeleccionarMesa(mesa.id);
+      // 🛠️ Antes se pasaba solo mesa.id (el id de la fila en la BD, un
+      // autoincremental GLOBAL de todo el sistema) y PosScreen lo mostraba
+      // tal cual como "MESA {id}" — con pocas mesas en el negocio, ese id
+      // fácilmente es un número como 20 aunque el negocio solo tenga 7
+      // mesas numeradas 1-7. Ahora mandamos también el número/nombre real
+      // de la mesa (numero_o_nombre) para que PosScreen muestre ese, no el id.
+      onSeleccionarMesa({
+        id: mesa.id,
+        numero: mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : mesa.numero_o_nombre,
+      });
     }
   };
 

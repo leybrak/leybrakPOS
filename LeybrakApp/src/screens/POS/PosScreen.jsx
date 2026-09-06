@@ -42,6 +42,12 @@ export default function PosScreen({ mesaId, onVolver }) {
   const esParaLlevar = typeof mesaId === 'object' && mesaId?.id === 'llevar';
   const nombreLlevar = typeof mesaId === 'object' ? mesaId.cliente : '';
   const mesaIdReal   = esParaLlevar ? null : (typeof mesaId === 'object' ? mesaId.id : mesaId);
+  // 🛠️ El id de mesa es el de la fila en la BD (autoincremental global de
+  // todo el sistema, no del negocio) — antes se mostraba tal cual como
+  // "MESA {id}". SalonScreen ahora manda también el número/nombre real de
+  // la mesa (numero_o_nombre); si no viene (llamador viejo), como último
+  // recurso cae al id para no dejar el título vacío.
+  const numeroMesaMostrado = (typeof mesaId === 'object' && mesaId?.numero != null) ? mesaId.numero : mesaIdReal;
 
   const [productos, setProductos]       = useState([]);
   const [categorias, setCategorias]     = useState([]);
@@ -524,7 +530,7 @@ export default function PosScreen({ mesaId, onVolver }) {
                   {esParaLlevar ? '🛵 DELIVERY' : '🍽 SALÓN'}
                 </Text>
                 <Text style={[s.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
-                  {esParaLlevar ? nombreLlevar.toUpperCase() : `MESA ${mesaIdReal}`}
+                  {esParaLlevar ? nombreLlevar.toUpperCase() : `MESA ${numeroMesaMostrado}`}
                 </Text>
               </View>
               <TouchableOpacity
