@@ -73,32 +73,53 @@ const VistaInternaPOS = () => {
     }
   };
 
+  // Intenta restaurar la sesión de empleado desde la cookie empleado_session.
+  // Devuelve true si encontró/manejó una sesión (autenticada o no) y ya no
+  // hace falta seguir revisando las otras opciones; false si no hay cookie.
+  const intentarRestaurarEmpleado = async () => {
+    const res = await verificarSesionEmpleado();
+    if (!res.data.autenticado) return false;
+
+    const { rol, sede_id, nombre, empleado_id, negocio_id } = res.data.empleado;
+    const vistaDestino = getRolVista(rol);
+    if (!vistaDestino) { setVista('sin_permiso'); return true; }
+
+    localStorage.setItem('sede_id',         sede_id);
+    localStorage.setItem('empleado_id',     empleado_id);
+    localStorage.setItem('empleado_nombre', nombre);
+    localStorage.setItem('negocio_id',      negocio_id);
+    localStorage.setItem('usuario_rol',     rol);
+
+    const sus = await verificarSuscripcion();
+    if (sus && !sus.puede_operar) { setVista('bloqueado'); return true; }
+
+    setSesion({ rol, nombre, sede_id });
+    setVista(vistaDestino);
+    return true;
+  };
+
   useEffect(() => {
   const verificar = async () => {
     try {
       // 1. ¿Hay sesión de empleado activa? (cookie empleado_session)
       try {
-        const res = await verificarSesionEmpleado();
-        if (res.data.autenticado) {
-          const { rol, sede_id, nombre, empleado_id, negocio_id } = res.data.empleado;
-          const vistaDestino = getRolVista(rol);
-          if (!vistaDestino) { setVista('sin_permiso'); return; }
-
-          localStorage.setItem('sede_id',         sede_id);
-          localStorage.setItem('empleado_id',     empleado_id);
-          localStorage.setItem('empleado_nombre', nombre);
-          localStorage.setItem('negocio_id',      negocio_id);
-          localStorage.setItem('usuario_rol',     rol);
-
-          const sus = await verificarSuscripcion();
-          if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
-
-          setSesion({ rol, nombre, sede_id });
-          setVista(vistaDestino);
-          return;
+        if (await intentarRestaurarEmpleado()) return;
+      } catch (err) {
+        // 🛠️ Antes CUALQUIER error acá (incluyendo un timeout de red, o el
+        // backend reiniciando a mitad de un deploy) se trataba igual que "no
+        // hay sesión" y mandaba de vuelta al PIN — aunque la sesión siguiera
+        // viva en el servidor. Eso es justo lo que reportó el mozo: "a veces
+        // recargo y me manda al PIN, a veces no". Un 401 sí significa que la
+        // sesión ya no es válida; cualquier otra falla puede ser pasajera —
+        // se reintenta una vez antes de rendirse.
+        if (err?.response?.status !== 401) {
+          try {
+            await new Promise(r => setTimeout(r, 800));
+            if (await intentarRestaurarEmpleado()) return;
+          } catch (_) {
+            // Sigue fallando — recién ahora se sigue con las demás opciones.
+          }
         }
-      } catch (_) {
-        // No hay sesión de empleado
       }
 
       // 2. ¿Hay sesión de dueño activa? (cookie JWT) — tiene prioridad sobre tablet
@@ -181,7 +202,7 @@ const VistaInternaPOS = () => {
       ? { rol: datosEmpleado, nombre: null, sede_id: null, suscripcion: null }
       : datosEmpleado;
 
-    const { rol, nombre, sede_id, suscripcion, id } = datos;
+    const { rol, nombre, sede_id, suscripcion, id, turno_abierto } = datos;
 
     if (suscripcion && !suscripcion.puede_operar) {
       setSuscripcion(suscripcion);
@@ -199,7 +220,12 @@ const VistaInternaPOS = () => {
 
     // Ingreso obligatorio solo para roles operativos (mesero/cajero/cocinero)
     // que entran por PIN — el dueño/admin/staff no marca asistencia.
-    if (id && (vistaDestino === 'terminal' || vistaDestino === 'cocina')) {
+    // 🛠️ Antes se pedía SIEMPRE, aunque el empleado ya hubiera marcado su
+    // ingreso antes y no hubiera marcado su salida — si la sesión se perdía
+    // a mitad de turno (cookie vencida, error de red) y volvía a entrar con
+    // el PIN, le volvía a aparecer "marca tu ingreso" sin sentido. El login
+    // ahora dice si el turno ya está abierto (turno_abierto).
+    if (id && !turno_abierto && (vistaDestino === 'terminal' || vistaDestino === 'cocina')) {
       setPendienteIngreso({ id, rol, nombre, sede_id, vistaDestino });
       return;
     }
