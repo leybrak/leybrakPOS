@@ -678,11 +678,14 @@ function PosScreenInner({ mesaId, onVolver }) {
             >
               <Icon name="plus" size={12} color="#fff" />
             </TouchableOpacity>
+            {/* 🛠️ Antes: mismo tamaño que -/+ (36px) y un ícono de globo de
+                chat ("comment") que no representaba bien "agregar una nota".
+                Un poco más grande y con un ícono de nota real. */}
             <TouchableOpacity
-              style={[s.prodCantBtn, { backgroundColor: t.bgCard2, borderColor: t.border, marginLeft: 2 }]}
+              style={[s.prodNotaBtn, { backgroundColor: t.bgCard2, borderColor: t.border, marginLeft: 2 }]}
               onPress={() => { setProductoParaVariar(item); setModalVariacionesVisible(true); }}
             >
-              <Icon name="comment" size={12} color={t.textSec} />
+              <Icon name="sticky-note-o" size={15} color={t.textSec} />
             </TouchableOpacity>
           </View>
         ) : item.tiene_variaciones && !item.requiere_seleccion ? (
@@ -706,10 +709,10 @@ function PosScreenInner({ mesaId, onVolver }) {
         ) : (
           <View style={[s.prodCantRow, { justifyContent: 'flex-end' }]}>
             <TouchableOpacity
-              style={[s.prodCantBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+              style={[s.prodNotaBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
               onPress={() => { setProductoParaVariar(item); setModalVariacionesVisible(true); }}
             >
-              <Icon name="comment" size={12} color={t.textSec} />
+              <Icon name="sticky-note-o" size={15} color={t.textSec} />
             </TouchableOpacity>
           </View>
         )}
@@ -1242,6 +1245,9 @@ const s = StyleSheet.create({
   
   prodCantBtn:   { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   prodCantBadge: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  // Un poco más grande que prodCantBtn — el botón de nota se toca más
+  // seguido que -/+ y necesita algo más de presencia.
+  prodNotaBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   prodCantNum:   { color: '#fff', fontSize: 14, fontWeight: '900' },
   
   prodAddBtn:    { marginHorizontal: 10, marginBottom: 10, borderRadius: 10, borderWidth: 1, paddingVertical: 7, alignItems: 'center' },
