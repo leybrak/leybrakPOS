@@ -15,7 +15,7 @@ import { usePosData } from '../features/POS/hooks/usePosData';
 import { usePosSearch } from '../features/POS/hooks/usePosSearch';
 import { calcularLineasHappyHour, calcularLineasReglas, happyHourActivaAhora } from '../features/POS/hooks/usePosData';
 
-export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
+export default function PosView({ mesaId, onVolver, esModoTerminal = false, numeroMesaMostrado }) {
   // Al momento en que el empleado inicia sesión en la terminal de sala:
   localStorage.setItem('modo_dispositivo', 'terminal');
   const toast = useToast();
@@ -321,7 +321,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   return (
     <div className={`relative h-full flex flex-col overflow-hidden font-sans transition-colors duration-500 ${tema === 'dark' ? 'bg-[#0a0a0a] text-neutral-100' : 'bg-[#f4f4f5] text-gray-900'}`}>
       
-      <PosHeader esModoTerminal={esModoTerminal} onVolver={onVolver} tema={tema} colorPrimario={colorPrimario} esParaLlevar={esParaLlevar} nombreLlevar={nombreLlevar} mesaId={mesaId} inputBusquedaActivo={inputBusquedaActivo} setInputBusquedaActivo={setInputBusquedaActivo} busqueda={busqueda} setBusqueda={setBusqueda} categoriaActiva={categoriaActiva} setCategoriaActiva={setCategoriaActiva} categoriasReales={categoriasReales} productosBase={productosBase} />
+      <PosHeader esModoTerminal={esModoTerminal} onVolver={onVolver} tema={tema} colorPrimario={colorPrimario} esParaLlevar={esParaLlevar} nombreLlevar={nombreLlevar} mesaId={mesaId} numeroMesaMostrado={numeroMesaMostrado} inputBusquedaActivo={inputBusquedaActivo} setInputBusquedaActivo={setInputBusquedaActivo} busqueda={busqueda} setBusqueda={setBusqueda} categoriaActiva={categoriaActiva} setCategoriaActiva={setCategoriaActiva} categoriasReales={categoriasReales} productosBase={productosBase} />
 
       {/* Aquí resolvemos el 'cargando' never used: Muestra un loader simple mientras baja data */}
       {cargando ? (

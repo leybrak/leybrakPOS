@@ -8,6 +8,7 @@ export default function PosHeader({
   esParaLlevar,
   nombreLlevar,
   mesaId,
+  numeroMesaMostrado,
   inputBusquedaActivo,
   setInputBusquedaActivo,
   busqueda,
@@ -69,7 +70,13 @@ export default function PosHeader({
                         {esParaLlevar ? <><i className="fi fi-rr-motorcycle"></i> Cajón Delivery</> : <><i className="fi fi-rr-restaurant"></i> Salón</>}
                       </span>
                       <h1 className={`text-xl font-black uppercase tracking-tight truncate leading-none mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {esParaLlevar ? nombreLlevar : `Mesa ${mesaId}`}
+                        {/* 🛠️ mesaId es el id de la fila en la BD (autoincremental
+                            GLOBAL de todo el sistema, no del negocio) — mostrarlo
+                            tal cual hacía que "Mesa 1" apareciera como "Mesa 15"
+                            en negocios con pocas mesas. numeroMesaMostrado trae el
+                            número/nombre real (ver TerminalSidebar.jsx); si no
+                            llega (por compatibilidad), cae al id como antes. */}
+                        {esParaLlevar ? nombreLlevar : `Mesa ${numeroMesaMostrado ?? mesaId}`}
                       </h1>
                   </div>
                   <button 

@@ -10,9 +10,18 @@ export default function TerminalSidebar({
       {mesaSeleccionada ? (
         <PosView
           mesaId={mesaSeleccionada}
+          // 🛠️ mesaSeleccionada es el id de la fila en la BD (autoincremental
+          // GLOBAL de todo el sistema, no del negocio) — PosHeader lo mostraba
+          // tal cual como "Mesa {id}", así que con pocas mesas en el negocio
+          // ese id fácilmente era un número como 15 aunque solo hubiera 7
+          // mesas numeradas 1-7. Se resuelve acá el número/nombre real (ya
+          // disponible en `mesas`, igual que arriba en la lista de tickets)
+          // y se manda aparte, sin tocar mesaId (se usa tal cual para
+          // comparar con las órdenes).
+          numeroMesaMostrado={mesas.find(m => String(m.id) === String(mesaSeleccionada))?.numero}
           onVolver={() => {
             setMesaSeleccionada(null);
-            setTriggerRecarga(p => !p); 
+            setTriggerRecarga(p => !p);
           }}
         />
       ) : (
