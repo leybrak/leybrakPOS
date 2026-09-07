@@ -9,6 +9,7 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import api, { emitirComprobante, enviarTicketWhatsapp } from '../../api/api';
 import { useYapePlinListener } from '../../hooks/useYapePlinListener';
+import { usePagosWS } from '../../hooks/usePagosWS';
 import ModalEmitirComprobante from './ModalEmitirComprobante';
 
 export default function ModalCobro({
@@ -70,6 +71,12 @@ export default function ModalCobro({
   useEffect(() => { pasoRef.current   = paso;   }, [paso]);
   useEffect(() => { metodoRef.current = metodo; }, [metodo]);
 
+  // ─── Negocio (para el WS de pagos) ─────────────────────────
+  const [negocioId, setNegocioId] = useState(null);
+  useEffect(() => {
+    EncryptedStorage.getItem('negocio_id').then(id => { if (id) setNegocioId(id); });
+  }, []);
+
   // ─── Reset al abrir ───────────────────────────────────────
   useEffect(() => {
     if (visible) {
@@ -113,7 +120,8 @@ export default function ModalCobro({
   useEffect(() => {
     if (visible && ordenId) fetchPreview(metodo);
   }, [metodo, visible, ordenId, fetchPreview]);
-  // Escuchar pagos Yape/Plin desde notificaciones del celular
+  // Escuchar pagos Yape/Plin desde notificaciones del celular (mismo
+  // dispositivo que recibe la notificación de Yape/Plin).
   useYapePlinListener(
     visible && paso === 'qr' && (metodo === 'yape' || metodo === 'plin') && confirmacionAutomatica,
     (data) => {
@@ -126,6 +134,36 @@ export default function ModalCobro({
         });
       }
     }
+  );
+
+  // Escuchar el mismo canal por WebSocket — respaldo para cuando el celular
+  // que cobra NO es el que tiene Yape/Plin instalado (o Android mató el
+  // listener nativo en segundo plano). El backend ya transmite cada
+  // notificación por este canal (lo usa la web); antes el mobile no lo
+  // escuchaba y la pantalla de "esperando Yape" se quedaba esperando para
+  // siempre aunque el pago sí hubiera llegado al servidor.
+  const manejarMensajePagos = useCallback((data) => {
+    if (data.type === 'notificacion_confirmada') {
+      setNotificaciones(prev => prev.filter(n => n.notificacion_id !== data.notificacion_id));
+      return;
+    }
+    if (data.type !== 'pago_recibido') return;
+    if (pasoRef.current   !== 'qr') return;
+    if (metodoRef.current !== 'yape' && metodoRef.current !== 'plin') return;
+
+    const montoNotif = parseFloat(data.monto);
+    const montoEsp   = parseFloat(montoCobroRef.current.toFixed(2));
+    if (Math.abs(montoNotif - montoEsp) >= 0.01) return;
+
+    setNotificaciones(prev => {
+      if (prev.some(n => n.notificacion_id === data.notificacion_id)) return prev;
+      return [...prev, data];
+    });
+  }, []);
+
+  usePagosWS(
+    visible && confirmacionAutomatica ? negocioId : null,
+    manejarMensajePagos
   );
   // ─── Cálculos ─────────────────────────────────────────────
   const totalEfectivo = preview ? preview.total : total;
