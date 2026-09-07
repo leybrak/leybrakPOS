@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 
 const ToastContext = createContext(null);
@@ -59,13 +59,20 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <Modal visible={toasts.length > 0} transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
-        <View pointerEvents="box-none" style={st.overlay}>
+      {/* 🛠️ Antes esto vivía dentro de un <Modal> — en RN un Modal (aunque sea
+          transparent) se dibuja como su propia ventana nativa y bloquea TODOS
+          los toques a lo que está detrás mientras esté visible, sin importar
+          el pointerEvents de sus hijos. Con un toast en pantalla (3.5-4.5s) la
+          app entera quedaba congelada hasta que se cerraba solo. Un <View>
+          absoluto normal sí respeta pointerEvents="box-none": dejа pasar los
+          toques por las zonas vacías y solo intercepta el toast mismo. */}
+      {toasts.length > 0 && (
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFillObject, st.overlay]}>
           {toasts.map(t => (
             <ToastItem key={t.id} toast={t} onClose={() => remove(t.id)} />
           ))}
         </View>
-      </Modal>
+      )}
     </ToastContext.Provider>
   );
 }
