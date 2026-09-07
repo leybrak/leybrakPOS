@@ -112,6 +112,7 @@ function PosScreenInner({ mesaId, onVolver }) {
                 estado: 'cancelado',
                 notas_cocina: 'Anulación total desde el POS (mobile)',
               });
+              mesaLiberadaRef.current = true;
               setCarritoAbierto(false);
               onVolver();
             } catch (e) {
@@ -153,6 +154,7 @@ function PosScreenInner({ mesaId, onVolver }) {
     setTrasladando(true);
     try {
       await trasladarMesaOrden(ordenActiva.id, mesaDestino.id);
+      mesaLiberadaRef.current = true;
       setModalTrasladoVisible(false);
       setCarritoAbierto(false);
       onVolver();
@@ -243,6 +245,13 @@ function PosScreenInner({ mesaId, onVolver }) {
   const wsRef = useRef(null);
   const estadoMesaRef = useRef('libre');
   const totalMesaRef = useRef(0);
+  // 🛠️ Cobrar/cancelar/trasladar ya avisan por su cuenta al backend, que
+  // transmite el estado correcto (libre, total 0) a todas las pantallas
+  // ANTES de que esta pantalla se desmonte. Sin esta bandera, el mensaje de
+  // "reposo" del desmontaje (más abajo) pisaba ese aviso correcto con el
+  // último estado que tenía esta pantalla en memoria ('ocupada' + el monto
+  // ya cobrado) — la mesa volvía a verse ocupada en el salón hasta recargar.
+  const mesaLiberadaRef = useRef(false);
   const [wsListo, setWsListo] = useState(false);
 
   useEffect(() => {
@@ -282,7 +291,7 @@ function PosScreenInner({ mesaId, onVolver }) {
       // (no fusiona) lo que ven las demás pantallas, salir de una mesa ocupada
       // borraba el monto a cobrar hasta que alguien recargaba la app. Se manda
       // el total real (totalMesaRef, actualizado en cada render).
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN && !mesaLiberadaRef.current) {
         ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado: estadoMesaRef.current, total: totalMesaRef.current }));
       }
       ws?.close();
@@ -1006,7 +1015,10 @@ function PosScreenInner({ mesaId, onVolver }) {
         visible={modalCobroVisible}
         onClose={(info) => {
           setModalCobroVisible(false);
-          if (info?.pagado) onVolver();
+          if (info?.pagado) {
+            mesaLiberadaRef.current = true;
+            onVolver();
+          }
         }}
         total={totalMesa}
         ordenId={ordenActiva?.id}
