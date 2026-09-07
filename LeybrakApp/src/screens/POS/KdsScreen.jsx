@@ -166,7 +166,10 @@ export default function KdsScreen({ onCerrarTurno }) {
         return {
           kds_id: `mem_${o.id}_${Math.random()}`,
           id: o.id,
-          origen: o.mesa ? `Mesa ${o.mesa}` : `LLEVAR - ${o.cliente_nombre || 'Cliente'}`,
+          // 🛠️ o.mesa es el id autoincremental GLOBAL de la fila de mesa
+          // (no el número real de la mesa del negocio) — usar mesa_nombre
+          // (numero_o_nombre, ya viene del serializer).
+          origen: o.mesa ? `Mesa ${o.mesa_nombre || o.mesa}` : `LLEVAR - ${o.cliente_nombre || 'Cliente'}`,
           is_delivery: !o.mesa,
           minutos: isNaN(minutos) ? 0 : minutos,
           estacion: 'COCINA',
@@ -227,7 +230,7 @@ export default function KdsScreen({ onCerrarTurno }) {
                   kds_id: `ws_${data.orden.id}_${Date.now()}`,
                   id: data.orden.id,
                   real_id: data.orden.real_id || data.orden.id,
-                  origen: data.orden.mesa ? `Mesa ${data.orden.mesa}` : `DELIVERY - ${data.orden.cliente_nombre || 'Cliente'}`,
+                  origen: data.orden.mesa ? `Mesa ${data.orden.mesa_nombre || data.orden.mesa}` : `DELIVERY - ${data.orden.cliente_nombre || 'Cliente'}`,
                   is_delivery: !data.orden.mesa,
                   minutos: 0,
                   estacion: 'COCINA',
