@@ -71,6 +71,7 @@ export const usePosSearch = (productosBase, categoriasReales) => {
 
         if (!palabras.length) {
           plato._coincidenciaVariacion = null;
+          plato._coincidenciaOpcion = null;
           return { plato, puntaje: 0 };
         }
 
@@ -83,7 +84,7 @@ export const usePosSearch = (productosBase, categoriasReales) => {
         // mozo realmente busca ("Gordita" para Inka Cola) son las opciones de
         // grupos_variacion del propio producto (GrupoVariacion → OpcionVariacion),
         // que ya vienen embebidas en cada producto desde el backend.
-        const opcionesDelPlato = (plato.grupos_variacion || []).flatMap(g => g.opciones || []);
+        const opcionesDelPlato = (plato.grupos_variacion || []).flatMap(g => (g.opciones || []).map(o => ({ ...o, _grupoId: g.id })));
         const variacionCoincidente = opcionesDelPlato
           .map(m => ({ m, puntaje: puntuarCoincidencia(normalizar(m.nombre), palabras) }))
           .filter(({ puntaje }) => puntaje !== null)
@@ -91,7 +92,13 @@ export const usePosSearch = (productosBase, categoriasReales) => {
 
         if (puntajeNombre === null && !variacionCoincidente) return null;
 
-        plato._coincidenciaVariacion = (puntajeNombre === null && variacionCoincidente) ? variacionCoincidente.m.nombre : null;
+        const matchoSoloPorVariacion = puntajeNombre === null && variacionCoincidente;
+        plato._coincidenciaVariacion = matchoSoloPorVariacion ? variacionCoincidente.m.nombre : null;
+        // Grupo+opción exactos que calzaron — para poder preseleccionarlos
+        // al abrir el modal de variantes (ver ProductCard.jsx/abrirModalParaNuevo).
+        plato._coincidenciaOpcion = matchoSoloPorVariacion
+          ? { grupoId: variacionCoincidente.m._grupoId, opcionId: variacionCoincidente.m.id }
+          : null;
 
         // Un match por nombre siempre pesa más que uno por variación —
         // buscar "pollo" debe mostrar primero los platos de pollo, no un

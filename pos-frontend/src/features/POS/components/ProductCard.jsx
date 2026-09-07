@@ -34,7 +34,8 @@ export default function ProductCard({
   restarDesdeGrid,
   notificarEstadoMesa,
   formatearSoles,
-  happyHours
+  happyHours,
+  limpiarBusqueda,
 }) {
   const isDark = tema === 'dark';
   const totalCantidadProd = carrito.filter(item => item.id === prod.id).reduce((acc, curr) => acc + curr.cantidad, 0);
@@ -53,7 +54,9 @@ export default function ProductCard({
       <button
         onClick={() => {
             if (prod.disponible) {
-                abrirModalParaNuevo(prod);
+                // Si se llegó buscando el nombre de una variante (ej.
+                // "gordita"), el modal se abre con esa opción ya elegida.
+                abrirModalParaNuevo(prod, prod._coincidenciaOpcion || null);
                 aprenderSeleccion(prod.id, busqueda);
             }
         }}
@@ -124,8 +127,16 @@ export default function ProductCard({
     <div
       onClick={() => {
         if (prod.disponible) {
-          if (ordenActiva) notificarEstadoMesa('tomando_pedido', totalMesa);
-          agregarProducto(prod);
+          if (prod._coincidenciaOpcion) {
+            // Se buscó el nombre de una variante (ej. "gordita") en vez del
+            // producto — abre el modal con esa opción ya seleccionada en
+            // lugar de agregar el producto base sin variante.
+            abrirModalParaNuevo(prod, prod._coincidenciaOpcion);
+          } else {
+            if (ordenActiva) notificarEstadoMesa('tomando_pedido', totalMesa);
+            agregarProducto(prod);
+            limpiarBusqueda?.();
+          }
           aprenderSeleccion(prod.id, busqueda);
         }
       }}

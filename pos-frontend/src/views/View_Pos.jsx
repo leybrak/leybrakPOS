@@ -52,6 +52,10 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
   const [modalModsAbierto, setModalModsAbierto] = useState(false);
   const [productoParaModificar, setProductoParaModificar] = useState(null);
+  // Grupo+opción a preseleccionar cuando el modal se abre porque se buscó
+  // el nombre de una variante (ej. "gordita") en vez del producto (ver
+  // usePosSearch.js → _coincidenciaOpcion).
+  const [preseleccionVariante, setPreseleccionVariante] = useState(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [mostrarExito, setMostrarExito] = useState(false);
@@ -303,15 +307,19 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
       toast.error('No se pudo liberar la mesa. Revisa tu conexión.');
     }
   };
-  const abrirModalParaNuevo = (producto) => {
+  const abrirModalParaNuevo = (producto, preseleccion = null) => {
     if (ordenActiva) notificarEstadoMesa('pidiendo', totalMesa); // 👈 Corregido
     setProductoParaModificar(producto);
+    setPreseleccionVariante(preseleccion);
     setModalModsAbierto(true);
   };
-  
+
   const manejarAgregarAlCarritoDesdeModal = (itemCompleto) => {
+      // Se agregó algo al carrito — si venía de una búsqueda, se limpia
+      // para poder escribir la siguiente de una sin tener que borrar.
+      setBusqueda('');
       const existeItem = carrito.find(i => i.cart_id === itemCompleto.cart_id);
-      if (existeItem) { actualizarItemCompleto(itemCompleto); } 
+      if (existeItem) { actualizarItemCompleto(itemCompleto); }
       else { agregarProducto(itemCompleto); }
   };
   
@@ -354,9 +362,10 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
           ordenActiva={ordenActiva} 
           totalMesa={totalMesa} 
           busqueda={busqueda} 
-          abrirModalParaNuevo={abrirModalParaNuevo} 
-          aprenderSeleccion={aprenderSeleccion} 
-          agregarProducto={agregarProducto} 
+          abrirModalParaNuevo={abrirModalParaNuevo}
+          aprenderSeleccion={aprenderSeleccion}
+          agregarProducto={agregarProducto}
+          limpiarBusqueda={() => setBusqueda('')}
           restarDesdeGrid={restarDesdeGrid} 
           notificarEstadoMesa={notificarEstadoMesa} 
           formatearSoles={formatearSoles} 
@@ -391,7 +400,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
         ordenActiva={ordenActiva} 
         manejarAnularItem={manejarAnularItem} 
         procesando={procesando} 
-        abrirModalParaEditar={(item) => { setProductoParaModificar(item); setModalModsAbierto(true); }} 
+        abrirModalParaEditar={(item) => { setProductoParaModificar(item); setPreseleccionVariante(null); setModalModsAbierto(true); }}
         restarProducto={restarProducto} 
         sumarUnidad={sumarUnidad} 
         manejarEnviarCocina={manejarEnviarCocina} 
@@ -468,11 +477,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
         </div>
       )}
       
-      <ModalModificadores 
-        isOpen={modalModsAbierto} 
-        onClose={() => setModalModsAbierto(false)} 
-        producto={productoParaModificar} 
-        modificadoresGlobales={modificadoresGlobales} 
+      <ModalModificadores
+        isOpen={modalModsAbierto}
+        onClose={() => { setModalModsAbierto(false); setPreseleccionVariante(null); }}
+        producto={productoParaModificar}
+        preseleccion={preseleccionVariante}
+        modificadoresGlobales={modificadoresGlobales}
         onAgregarAlCarrito={manejarAgregarAlCarritoDesdeModal}
         happyHours={happyHours}
       />
