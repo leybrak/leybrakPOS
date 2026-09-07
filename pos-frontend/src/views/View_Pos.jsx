@@ -47,6 +47,13 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   const wsRef = useRef(null);
   const estadoMesaRef = useRef('libre'); // Soluciona el error de mutación del Linter
   const totalMesaRef = useRef(0);
+  // 🛠️ Cobrar/cancelar ya avisan al backend, que transmite el estado correcto
+  // (libre, total 0) a todas las pantallas ANTES de que este componente se
+  // desmonte. Sin esta bandera, el mensaje de "reposo" del desmontaje (más
+  // abajo) pisaba ese aviso correcto con el último estado en memoria acá
+  // ('ocupada' + el monto ya cobrado) — la mesa volvía a verse ocupada en
+  // el salón hasta recargar la página.
+  const mesaLiberadaRef = useRef(false);
 
   useEffect(() => {
     if (esParaLlevar || !mesaId || !sedeActualId) return;
@@ -93,7 +100,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       // fusiona) lo que ven las demás pantallas, así que salir de una mesa
       // ocupada borraba el monto a cobrar en el grid del salón hasta que
       // alguien recargaba la página. Se manda el total real (totalMesaRef).
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN && !mesaLiberadaRef.current) {
         ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaId, estado: estadoMesaRef.current, total: totalMesaRef.current }));
       }
       ws?.close();
@@ -218,15 +225,16 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       try {
         setProcesando(true);
         // 1. Informamos al backend para que libere la mesa y cancele la orden
-        await actualizarOrden(ordenActiva.id, { 
+        await actualizarOrden(ordenActiva.id, {
           estado: 'cancelado',
-          notas_cocina: 'Anulación total desde el POS' 
+          notas_cocina: 'Anulación total desde el POS'
         });
 
         // 2. Limpieza total del estado local
+        mesaLiberadaRef.current = true;
         vaciarCarrito();
         setCarritoAbierto(false);
-        
+
         // 3. Volvemos al salón
         onVolver();
         
@@ -402,6 +410,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
               setModalCobroAbierto(false);
               if (info?.pagado) {
                 // Cierre tras un cobro exitoso: limpiamos y volvemos a mesas.
+                mesaLiberadaRef.current = true;
                 vaciarCarrito();
                 setCarritoAbierto(false);
                 onVolver();
