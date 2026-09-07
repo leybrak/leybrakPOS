@@ -10,6 +10,7 @@ import useAppStore from '../../store/useAppStore';
 import api, { emitirComprobante, enviarTicketWhatsapp } from '../../api/api';
 import { useYapePlinListener } from '../../hooks/useYapePlinListener';
 import { usePagosWS } from '../../hooks/usePagosWS';
+import { useConfirm } from '../../context/ConfirmContext';
 import ModalEmitirComprobante from './ModalEmitirComprobante';
 
 export default function ModalCobro({
@@ -22,6 +23,7 @@ export default function ModalCobro({
   onCobroExitoso,
 }) {
   const { configuracionGlobal } = useAppStore();
+  const confirmar = useConfirm();
   const isDark = configuracionGlobal?.temaFondo !== 'light';
   const color  = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const yapeNumero = configuracionGlobal?.yape_numero || '';
@@ -221,20 +223,16 @@ export default function ModalCobro({
   // sistema no sabe cuál mesa mandó cuál Yape, solo el cajero puede
   // verificarlo leyendo el nombre/código. Con un solo pago en pantalla no
   // hay ambigüedad posible, así que no se agrega este paso de más.
-  const confirmarConAmbiguedad = (notificacion) => new Promise((resolve) => {
+  const confirmarConAmbiguedad = (notificacion) => {
     const esYape = notificacion.tipo === 'YAPE';
     const detalle = esYape && notificacion.codigo_seguridad
       ? `el código de seguridad es ${notificacion.codigo_seguridad}`
       : `el nombre es "${notificacion.nombre_cliente}"`;
-    Alert.alert(
-      'Hay más de un pago con este monto',
+    return confirmar(
       `Verifica con el cliente que ${detalle} antes de confirmar — hay otro pago de S/ ${parseFloat(notificacion.monto).toFixed(2)} esperando al mismo tiempo.`,
-      [
-        { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-        { text: 'Sí, coincide', onPress: () => resolve(true) },
-      ],
+      { titulo: 'Hay más de un pago con este monto', peligroso: false, icono: 'exclamation-triangle', textoConfirmar: 'Sí, coincide' },
     );
-  });
+  };
 
   const confirmarNotificacion = async (notificacion) => {
     if (notificaciones.length >= 2) {

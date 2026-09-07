@@ -15,6 +15,7 @@ import api, {
   crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden, trasladarMesaOrden,
 } from '../../api/api';
 import { leerMenuCache, refrescarMenuCache, esCacheReciente } from '../../services/menuCache';
+import { useConfirm } from '../../context/ConfirmContext';
 const { NotificationModule } = NativeModules;
 const eventEmitter = new NativeEventEmitter(NotificationModule);
 
@@ -86,6 +87,7 @@ export default function PosScreen(props) {
 
 function PosScreenInner({ mesaId, onVolver }) {
   const t = useTema();
+  const confirmar = useConfirm();
   const insets = useSafeAreaInsets();
   const [modalCobroVisible, setModalCobroVisible] = useState(false);
   const esParaLlevar = typeof mesaId === 'object' && mesaId?.id === 'llevar';
@@ -131,31 +133,23 @@ function PosScreenInner({ mesaId, onVolver }) {
   const [cargandoMesas, setCargandoMesas]               = useState(false);
   const [trasladando, setTrasladando]                   = useState(false);
 
-  const handleCancelarPedido = () => {
+  const handleCancelarPedido = async () => {
     if (!ordenActiva) return;
-    Alert.alert(
-      'Cancelar pedido',
-      'Esto cancela TODO el pedido y libera la mesa. No se puede deshacer.',
-      [
-        { text: 'Volver', style: 'cancel' },
-        {
-          text: 'Sí, cancelar', style: 'destructive',
-          onPress: async () => {
-            try {
-              await actualizarOrden(ordenActiva.id, {
-                estado: 'cancelado',
-                notas_cocina: 'Anulación total desde el POS (mobile)',
-              });
-              mesaLiberadaRef.current = true;
-              setCarritoAbierto(false);
-              onVolver();
-            } catch (e) {
-              Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar el pedido.');
-            }
-          },
-        },
-      ],
-    );
+    const ok = await confirmar('Esto cancela TODO el pedido y libera la mesa. No se puede deshacer.', {
+      titulo: 'Cancelar pedido', peligroso: true, textoConfirmar: 'Sí, cancelar',
+    });
+    if (!ok) return;
+    try {
+      await actualizarOrden(ordenActiva.id, {
+        estado: 'cancelado',
+        notas_cocina: 'Anulación total desde el POS (mobile)',
+      });
+      mesaLiberadaRef.current = true;
+      setCarritoAbierto(false);
+      onVolver();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar el pedido.');
+    }
   };
 
   // Trae las mesas de la sede sin un pedido activo, para elegir el destino.
@@ -569,27 +563,17 @@ function PosScreenInner({ mesaId, onVolver }) {
   };
 
   // ─── Anular item ──────────────────────────────────────────
-  const anularItem = (detalle) => {
-    Alert.alert(
-      'Anular plato',
-      `¿Anular "${detalle.producto_nombre}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Anular', style: 'destructive',
-          onPress: async () => {
-            try {
-              const res = await anularItemDeOrden(ordenActiva.id, {
-                detalle_id:      detalle.id,
-                motivo:          'Anulado desde app',
-                empleado_nombre: empleadoNombre || 'Staff',
-              });
-              setOrdenActiva(res.data.orden || res.data);
-            } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo anular.'); }
-          },
-        },
-      ]
-    );
+  const anularItem = async (detalle) => {
+    const ok = await confirmar(`¿Anular "${detalle.producto_nombre}"?`, { titulo: 'Anular plato', peligroso: true, textoConfirmar: 'Anular' });
+    if (!ok) return;
+    try {
+      const res = await anularItemDeOrden(ordenActiva.id, {
+        detalle_id:      detalle.id,
+        motivo:          'Anulado desde app',
+        empleado_nombre: empleadoNombre || 'Staff',
+      });
+      setOrdenActiva(res.data.orden || res.data);
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo anular.'); }
   };
 
   // ─── Cobrar ───────────────────────────────────────────────

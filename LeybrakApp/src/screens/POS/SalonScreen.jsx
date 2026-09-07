@@ -20,6 +20,7 @@ import api, {
   registrarMovimientoCaja, validarPinEmpleado
 } from '../../api/api';
 import { refrescarMenuCache } from '../../services/menuCache';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // ─── Hook de tema (Alineado con los colores de tu Web) ───
 const useTema = () => {
@@ -168,6 +169,7 @@ function ModalCliente({ visible, t, color, onConfirmar, onCerrar }) {
 // ─── Pantalla principal ───
 export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno, mesaIdActiva }) {
   const t = useTema();
+  const confirmar = useConfirm();
   const { estadoCaja, setEstadoCaja } = useAppStore();
 
   const [mesas, setMesas]                 = useState([]);
@@ -468,16 +470,13 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
     setModalCierreAbierto(true);
   };
 
-  const handleCancelarOrdenLlevar = (id) => {
-    Alert.alert('Cancelar pedido', '¿Estás seguro?', [
-      { text: 'Volver', style: 'cancel' },
-      { text: 'Confirmar', style: 'destructive', onPress: async () => {
-        try {
-          await actualizarOrden(id, { estado: 'cancelado', cancelado: true });
-          cargar();
-        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
-      }},
-    ]);
+  const handleCancelarOrdenLlevar = async (id) => {
+    const ok = await confirmar('¿Estás seguro?', { titulo: 'Cancelar pedido', peligroso: true, textoConfirmar: 'Confirmar' });
+    if (!ok) return;
+    try {
+      await actualizarOrden(id, { estado: 'cancelado', cancelado: true });
+      cargar();
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
   };
 
   // 🛠️ Antes: onPress={() => {}} — el botón de check no hacía nada.
@@ -636,10 +635,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
             {onCerrarTurno && (
               <TouchableOpacity
                 style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
-                onPress={() => Alert.alert('Terminar turno', '¿Terminar tu turno? Se marcará tu salida.', [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Terminar', style: 'destructive', onPress: onCerrarTurno },
-                ])}
+                onPress={async () => { if (await confirmar('¿Terminar tu turno? Se marcará tu salida.', { titulo: 'Terminar turno', peligroso: true, textoConfirmar: 'Terminar' })) onCerrarTurno(); }}
               >
                 <Icon name="sign-out" size={16} color="#ef4444" />
               </TouchableOpacity>

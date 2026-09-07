@@ -12,6 +12,7 @@ import {
   getRendimientoEmpleados // Asegúrate de exportar esto en tu api.js
 } from '../../api/api';
 import useAppStore from '../../store/useAppStore';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // ─── Hook de tema ─────────────────────────────────────────────
 const useTema = () => {
@@ -325,6 +326,7 @@ function ModalEmpleado({ visible, empleado, roles, sedes, t, onGuardar, onCerrar
 // ─── Pantalla principal ───────────────────────────────────────
 export default function PersonalScreen() {
   const t = useTema();
+  const confirmar = useConfirm();
 
   const [empleados, setEmpleados]   = useState([]);
   const [roles, setRoles]           = useState([]);
@@ -391,25 +393,17 @@ export default function PersonalScreen() {
   };
 
   const handleToggleActivo = async (emp) => {
-    Alert.alert(
-      emp.activo ? 'Desactivar empleado' : 'Reactivar empleado',
-      `¿Deseas ${emp.activo ? 'desactivar' : 'reactivar'} a ${emp.nombre}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          style: emp.activo ? 'destructive' : 'default',
-          onPress: async () => {
-            try {
-              await actualizarEmpleado(emp.id, { activo: !emp.activo });
-              await cargar();
-            } catch (e) {
-              Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar el estado.');
-            }
-          },
-        },
-      ]
-    );
+    const ok = await confirmar(`¿Deseas ${emp.activo ? 'desactivar' : 'reactivar'} a ${emp.nombre}?`, {
+      titulo: emp.activo ? 'Desactivar empleado' : 'Reactivar empleado',
+      peligroso: emp.activo,
+    });
+    if (!ok) return;
+    try {
+      await actualizarEmpleado(emp.id, { activo: !emp.activo });
+      await cargar();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar el estado.');
+    }
   };
 
   if (cargando) {

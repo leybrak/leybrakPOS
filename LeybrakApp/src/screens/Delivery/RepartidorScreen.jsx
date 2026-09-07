@@ -9,6 +9,7 @@ import useAppStore from '../../store/useAppStore';
 import {
   getPedidosDelivery, tomarPedidoDelivery, actualizarEstadoDelivery, avisarClienteDelivery,
 } from '../../api/api';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const ESTADOS = {
   pendiente: { label: 'Disponible', color: '#3b82f6' },
@@ -24,6 +25,7 @@ const MENSAJES = [
 ];
 
 export default function RepartidorScreen({ onLogout }) {
+  const confirmar = useConfirm();
   const { configuracionGlobal } = useAppStore();
   const isDark = configuracionGlobal?.temaFondo !== 'light';
   const color  = configuracionGlobal?.colorPrimario || '#ff5a1f';
@@ -130,10 +132,10 @@ export default function RepartidorScreen({ onLogout }) {
   };
   const tomar    = (p) => ejecutar(p.id, () => tomarPedidoDelivery(p.id));
   const enCamino = (p) => ejecutar(p.id, () => actualizarEstadoDelivery(p.id, 'en_camino'));
-  const entregar = (p) => Alert.alert('Confirmar entrega', `¿Marcar el pedido #${p.id} como entregado?`, [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Entregado', onPress: () => ejecutar(p.id, () => actualizarEstadoDelivery(p.id, 'entregado')) },
-  ]);
+  const entregar = async (p) => {
+    const ok = await confirmar(`¿Marcar el pedido #${p.id} como entregado?`, { titulo: 'Confirmar entrega', peligroso: false, icono: 'check-circle', textoConfirmar: 'Entregado' });
+    if (ok) ejecutar(p.id, () => actualizarEstadoDelivery(p.id, 'entregado'));
+  };
 
   const hayRuta = pedidos.some(p => p.estado_delivery === 'asignado' || p.estado_delivery === 'en_camino');
 

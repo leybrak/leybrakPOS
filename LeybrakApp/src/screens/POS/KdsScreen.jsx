@@ -9,6 +9,7 @@ import useAppStore from '../../store/useAppStore';
 import api, { getOrdenes, actualizarOrden, getNegocio } from '../../api/api';
 import ModalAlertaBot from '../../components/modals/ModalAlertaBot';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // ─── Hook de tema (mismo patrón que SalonScreen/MenuScreen) ───
 const useTema = () => {
@@ -123,6 +124,7 @@ function TicketCard({ orden, t, color, onTacharItem, onDespachar }) {
 export default function KdsScreen({ onCerrarTurno }) {
   const t = useTema();
   const toast = useToast();
+  const confirmar = useConfirm();
 
   const [verificandoAcceso, setVerificandoAcceso] = useState(true);
   const [accesoPermitido, setAccesoPermitido] = useState(false);
@@ -332,10 +334,7 @@ export default function KdsScreen({ onCerrarTurno }) {
         {onCerrarTurno && (
           <TouchableOpacity
             style={[k.btnDespachar, { backgroundColor: t.color, marginTop: 24, width: '100%' }]}
-            onPress={() => Alert.alert('Terminar turno', '¿Terminar tu turno? Se marcará tu salida.', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Terminar', style: 'destructive', onPress: onCerrarTurno },
-            ])}
+            onPress={async () => { if (await confirmar('¿Terminar tu turno? Se marcará tu salida.', { titulo: 'Terminar turno', peligroso: true, textoConfirmar: 'Terminar' })) onCerrarTurno(); }}
           >
             <Text style={k.btnDespacharText}>TERMINAR TURNO</Text>
           </TouchableOpacity>
@@ -366,10 +365,7 @@ export default function KdsScreen({ onCerrarTurno }) {
           {onCerrarTurno && (
             <TouchableOpacity
               style={[k.headerBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
-              onPress={() => Alert.alert('Terminar turno', '¿Terminar tu turno? Se marcará tu salida.', [
-                { text: 'Cancelar', style: 'cancel' },
-                { text: 'Terminar', style: 'destructive', onPress: onCerrarTurno },
-              ])}
+              onPress={async () => { if (await confirmar('¿Terminar tu turno? Se marcará tu salida.', { titulo: 'Terminar turno', peligroso: true, textoConfirmar: 'Terminar' })) onCerrarTurno(); }}
             >
               <Icon name="sign-out" size={16} color="#ef4444" />
             </TouchableOpacity>
