@@ -421,6 +421,7 @@ function POSLayout({ onVolver, onCerrarTurno }) {
         onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
         onVolver={onVolver}
         onCerrarTurno={onCerrarTurno}
+        mesaIdActiva={typeof mesaActiva === 'object' ? mesaActiva?.id : mesaActiva}
       />
       {mesaActiva && (
         <View style={StyleSheet.absoluteFill}>

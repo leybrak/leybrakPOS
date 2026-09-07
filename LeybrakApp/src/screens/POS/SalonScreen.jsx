@@ -166,7 +166,7 @@ function ModalCliente({ visible, t, color, onConfirmar, onCerrar }) {
 }
 
 // ─── Pantalla principal ───
-export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno }) {
+export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno, mesaIdActiva }) {
   const t = useTema();
   const { estadoCaja, setEstadoCaja } = useAppStore();
 
@@ -289,6 +289,42 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
   }, []);
 
   useEffect(() => { cargar(); }, []);
+
+  // 🛡️ Red de seguridad contra el "pidiendo" que se queda pegado: al tocar
+  // una mesa, manejarClickMesa avisa 'pidiendo' al instante por ESTE mismo
+  // WS (persistente, siempre conectado). La corrección de vuelta la manda
+  // PosScreen por SU PROPIA conexión (nueva cada vez que se entra a una
+  // mesa) al salir — pero si el mozo entra y sale muy rápido, esa conexión
+  // puede no alcanzar a abrirse a tiempo, y entonces nadie corrige el aviso
+  // optimista. Apenas se detecta que se volvió de una mesa (mesaIdActiva
+  // pasó de tener valor a null) se verifica el estado real contra el
+  // backend, sin depender de qué haya alcanzado a decir el WS.
+  const refrescarEstadoMesa = useCallback(async (mesaId) => {
+    if (!mesaId || mesaId === 'llevar' || !sedeId) return;
+    try {
+      const resOrdenes = await getOrdenes({ sede_id: sedeId, mesa: mesaId });
+      const ordenViva = (resOrdenes.data || []).find(o => o.estado !== 'completado' && o.estado !== 'cancelado');
+      setMesas(prev => prev.map(m => {
+        if (String(m.id) !== String(mesaId) || m.mesa_principal) return m;
+        return {
+          ...m,
+          estado: ordenViva ? 'ocupada' : 'libre',
+          total_orden: ordenViva ? parseFloat(ordenViva.total || 0) : 0,
+        };
+      }));
+    } catch (e) {
+      // silencioso — si falla, queda lo que el WS haya logrado dejar
+    }
+  }, [sedeId]);
+
+  const mesaAnteriorRef = useRef(null);
+  useEffect(() => {
+    const anterior = mesaAnteriorRef.current;
+    mesaAnteriorRef.current = mesaIdActiva;
+    if (anterior && !mesaIdActiva) {
+      refrescarEstadoMesa(anterior);
+    }
+  }, [mesaIdActiva, refrescarEstadoMesa]);
 
   // WebSocket
   useEffect(() => {
