@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Alert, Modal, FlatList,
@@ -17,6 +17,36 @@ import api, {
 import { leerMenuCache, refrescarMenuCache, esCacheReciente } from '../../services/menuCache';
 const { NotificationModule } = NativeModules;
 const eventEmitter = new NativeEventEmitter(NotificationModule);
+
+// ─── Buscador rápido (espejo de usePosSearch.js en la web) ────────────
+// Rango Unicode "Combining Diacritical Marks" (U+0300–U+036F), armado con
+// String.fromCharCode para no depender de que el archivo conserve bien
+// esos bytes no-ASCII.
+const DIACRITICOS = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g');
+// Quita tildes y pasa a minúsculas — sin esto, buscar "limon" (sin tilde,
+// lo normal escribiendo rápido durante el servicio) no encontraba "Limón".
+const normalizarBusqueda = (texto) => (texto || '')
+  .normalize('NFD')
+  .replace(DIACRITICOS, '')
+  .toLowerCase()
+  .trim();
+
+// Puntaje de relevancia: null si no coincide con TODAS las palabras
+// buscadas (así "pollo chaufa" encuentra "Chaufa de Pollo" sin importar
+// el orden), y más alto cuanto más al principio calza cada palabra.
+const puntuarCoincidencia = (textoNormalizado, palabras) => {
+  if (!palabras.length) return 0;
+  if (!palabras.every(p => textoNormalizado.includes(p))) return null;
+
+  const palabrasTexto = textoNormalizado.split(/\s+/);
+  let puntaje = 0;
+  for (const p of palabras) {
+    if (textoNormalizado.startsWith(p)) puntaje += 30;
+    else if (palabrasTexto.some(w => w.startsWith(p))) puntaje += 15;
+    else puntaje += 5;
+  }
+  return puntaje;
+};
 // ─── Hook de tema ─────────────────────────────────────────────
 const useTema = () => {
   const { configuracionGlobal } = useAppStore();
@@ -437,11 +467,25 @@ function PosScreenInner({ mesaId, onVolver }) {
   };
 
   // ─── Filtros ──────────────────────────────────────────────
-  const productosFiltrados = productos.filter(p => {
-    const matchBusqueda  = !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase());
-    const matchCategoria = categoriaActiva === 'todas' || String(p.categoria) === String(categoriaActiva);
-    return matchBusqueda && matchCategoria && p.disponible;
-  });
+  // 🛠️ Antes: substring exacto sobre el string completo — "limon" no
+  // encontraba "Limón", y "pollo chaufa" no encontraba "Chaufa de Pollo"
+  // (el orden de las palabras no calzaba). Ahora normaliza tildes y exige
+  // que TODAS las palabras buscadas aparezcan (en cualquier orden),
+  // ordenando primero los que calzan más al principio del nombre — mismo
+  // criterio que usePosSearch.js en la web.
+  const productosFiltrados = useMemo(() => {
+    const palabras = normalizarBusqueda(busqueda).split(/\s+/).filter(Boolean);
+
+    return productos
+      .filter(p => p.disponible && (categoriaActiva === 'todas' || String(p.categoria) === String(categoriaActiva)))
+      .map(p => {
+        const puntaje = puntuarCoincidencia(normalizarBusqueda(p.nombre), palabras);
+        return puntaje === null ? null : { p, puntaje };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.puntaje - a.puntaje)
+      .map(({ p }) => p);
+  }, [productos, categoriaActiva, busqueda]);
 
   // ─── Enviar a cocina ──────────────────────────────────────
   const enviarACocina = async () => {
