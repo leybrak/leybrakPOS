@@ -92,8 +92,14 @@ export default function TerminalMesasGrid({
 
                   {icono && !modoUnir && !mesa.esGigante && <span className="opacity-70 text-sm">{icono}</span>}
                 </div>
-                <div className="flex-1 flex items-center justify-center w-full">
+                <div className="flex-1 flex flex-col items-center justify-center w-full gap-1">
                   <h3 className={`font-black tracking-tight leading-none ${mesa.esGigante ? 'text-2xl' : 'text-xl'} ${titleClass}`}>{mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : mesa.numero}</h3>
+                  {/* 🛠️ Mobile ya muestra el monto a cobrar en la tarjeta de la mesa
+                      (ver SalonScreen.jsx → TarjetaMesa → mesa.total_orden) — la web
+                      no lo mostraba en ningún lado del grid, solo al entrar a la mesa. */}
+                  {mesa.totalConsumido > 0 && !modoUnir && (
+                    <span className={`text-xs font-black ${titleClass}`}>S/ {parseFloat(mesa.totalConsumido).toFixed(2)}</span>
+                  )}
                 </div>
               </button>
             );
@@ -121,8 +127,14 @@ export default function TerminalMesasGrid({
 
                 {icono && !modoUnir && !mesa.esGigante && <span className="opacity-50 text-sm">{icono}</span>}
               </div>
-              <div className="flex-1 flex items-center justify-center w-full">
+              <div className="flex-1 flex flex-col items-center justify-center w-full gap-1">
                 <h3 className={`font-black tracking-tight ${mesa.esGigante ? 'text-4xl' : 'text-3xl'} ${titleClass}`}>{mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : `Mesa ${mesa.numero}`}</h3>
+                {/* 🛠️ El mozo pidió esto directamente: mobile ya muestra el monto a
+                    cobrar en la tarjeta de la mesa (SalonScreen.jsx), la web no lo
+                    mostraba en ningún lado del grid — solo al entrar a la mesa. */}
+                {mesa.totalConsumido > 0 && !modoUnir && (
+                  <span className={`text-sm font-black ${titleClass}`}>S/ {parseFloat(mesa.totalConsumido).toFixed(2)}</span>
+                )}
               </div>
               <div className={`w-full flex justify-center items-center gap-1.5 mt-2 ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-400'}`}>
                 <i className="fi fi-rr-users text-[10px] mt-0.5"></i>
