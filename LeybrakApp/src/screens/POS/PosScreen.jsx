@@ -242,6 +242,7 @@ function PosScreenInner({ mesaId, onVolver }) {
   // que hace View_Pos.jsx en la web. ──────────────────────────────────
   const wsRef = useRef(null);
   const estadoMesaRef = useRef('libre');
+  const totalMesaRef = useRef(0);
   const [wsListo, setWsListo] = useState(false);
 
   useEffect(() => {
@@ -277,8 +278,12 @@ function PosScreenInner({ mesaId, onVolver }) {
       clearTimeout(reconnectTimeout);
       // Al salir, restauramos el estado "de reposo" de la mesa (libre u ocupada)
       // para que no se quede mostrando "pidiendo"/"cobrando" en las demás pantallas.
+      // 🛠️ Antes mandaba total:0 a lo bruto — como este mensaje SOBREESCRIBE
+      // (no fusiona) lo que ven las demás pantallas, salir de una mesa ocupada
+      // borraba el monto a cobrar hasta que alguien recargaba la app. Se manda
+      // el total real (totalMesaRef, actualizado en cada render).
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado: estadoMesaRef.current, total: 0 }));
+        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado: estadoMesaRef.current, total: totalMesaRef.current }));
       }
       ws?.close();
     };
@@ -296,14 +301,33 @@ function PosScreenInner({ mesaId, onVolver }) {
 
     if (ordenActiva) {
       estadoMesaRef.current = 'ocupada';
-      const estadoActual = carrito.length > 0 ? 'pidiendo' : 'cobrando';
-      notificarEstadoMesa(estadoActual, parseFloat(ordenActiva.total || 0));
+      // 🛠️ Antes: carrito vacío → 'cobrando' a ciegas, aunque nadie hubiera
+      // abierto el modal de cobro todavía (por ejemplo, justo después de
+      // enviar un pedido a cocina). Eso pintaba la mesa como "cobrando" en
+      // el salón sin que fuera cierto. 'cobrando' ahora se avisa aparte,
+      // solo cuando el modal de cobro está realmente abierto (ver abajo);
+      // acá solo se avisa 'pidiendo' mientras hay cosas nuevas sin enviar.
+      if (carrito.length > 0) {
+        notificarEstadoMesa('pidiendo', totalMesa);
+      } else if (!modalCobroVisible) {
+        notificarEstadoMesa('ocupada', totalMesa);
+      }
     } else {
       estadoMesaRef.current = 'libre';
       notificarEstadoMesa('pidiendo', 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargando, ordenActiva, carrito.length, wsListo]);
+  }, [cargando, ordenActiva, carrito.length, wsListo, modalCobroVisible]);
+
+  // Avisa 'cobrando' apenas se abre el modal de cobro — igual que
+  // View_Pos.jsx en la web (notificarEstadoMesa('cobrando', ...) atado a
+  // modalCobroAbierto), en vez de adivinarlo por si el carrito está vacío.
+  useEffect(() => {
+    if (modalCobroVisible && !esParaLlevar) {
+      notificarEstadoMesa('cobrando', totalMesa);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalCobroVisible]);
 
   useEffect(() => {
     const subscripcion = eventEmitter.addListener('PagoYapeRecibido', (mensaje) => {
@@ -339,6 +363,12 @@ function PosScreenInner({ mesaId, onVolver }) {
   const totalMesa  = totalCarrito + totalOrdenActiva;
   const cantItems  = carrito.reduce((s, i) => s + i.cantidad, 0)
     + (ordenActiva?.detalles.reduce((s, d) => s + d.cantidad, 0) || 0);
+
+  // Mantiene el total real a mano para el mensaje de "reposo" que se manda
+  // al salir de la mesa (ver limpieza del WS más arriba) — sin esto habría
+  // que declarar ese efecto después de totalMesa, con más riesgo de tocar
+  // el orden de los hooks sin querer.
+  useEffect(() => { totalMesaRef.current = totalMesa; }, [totalMesa]);
 
   const agregarAlCarrito = (producto) => {
     // Solo forzar modal si la selección es OBLIGATORIA
