@@ -244,8 +244,13 @@ export default function LoginScreen({ onLoginExitoso }) {
 
       // Ingreso obligatorio solo para roles operativos (mesero/cajero/cocinero)
       // — el dueño/admin no marca asistencia, y el repartidor tiene su propia app.
+      // 🛠️ Antes se pedía SIEMPRE, aunque el empleado ya hubiera marcado su
+      // ingreso antes y no hubiera marcado su salida — si tenía que volver a
+      // entrar con el PIN a mitad de turno, le volvía a aparecer "marca tu
+      // ingreso" sin sentido. El login ahora dice si el turno ya está abierto.
       const rolLimpio = (empleado.rol || '').toLowerCase().trim();
-      const requiereIngreso = !empleado.puede_repartir && !['dueño', 'dueno', 'admin', 'administrador'].includes(rolLimpio);
+      const requiereIngreso = !empleado.puede_repartir && !empleado.turno_abierto
+        && !['dueño', 'dueno', 'admin', 'administrador'].includes(rolLimpio);
       const datosSesion = { ...empleado, tipo: 'empleado', es_repartidor: !!empleado.puede_repartir };
 
       if (requiereIngreso) {
