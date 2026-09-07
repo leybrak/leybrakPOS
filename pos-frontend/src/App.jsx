@@ -12,6 +12,7 @@ import StaffDashboard from './views/View_Staff';
 import PublicMenu from './features/public/PublicMenu';
 import api from '../src/api/api';
 import usePosStore from './store/usePosStore';
+import ActualizacionDisponible from './components/ActualizacionDisponible';
 
 if (typeof window !== 'undefined') {
   window.__getStoreConfig = () => usePosStore.getState().configuracionGlobal;
@@ -362,6 +363,7 @@ export default function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
+        <ActualizacionDisponible />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<VistaInternaPOS />} />

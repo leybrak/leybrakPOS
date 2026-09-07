@@ -6,7 +6,19 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 🛠️ Antes: 'autoUpdate' + skipWaiting:true — el SW nuevo se activaba
+      // solo, sin avisar a nadie. Una pestaña ya abierta seguía corriendo el
+      // JS viejo mientras el SW nuevo (con assets nuevos) tomaba control por
+      // debajo — mezcla silenciosa de versión vieja de código con cache
+      // nueva. 'prompt' deja el SW nuevo "esperando" hasta que el usuario
+      // confirma (ver useActualizacionDisponible.js + BannerActualizacion.jsx),
+      // momento en el que recién se le manda skipWaiting y se recarga limpio.
+      registerType: 'prompt',
+      // El registro lo hace a mano ActualizacionDisponible.jsx (useRegisterSW)
+      // para poder mostrar el aviso y esperar la confirmación del usuario —
+      // con el script auto-inyectado (default) se registraría el SW por
+      // duplicado sin ese control.
+      injectRegister: false,
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       workbox: {
         // Rutas que NO son de la SPA: el SW no debe servir index.html aquí,
@@ -19,8 +31,7 @@ export default defineConfig({
           /^\/legal\.html/,  // página legal estática
         ],
         runtimeCaching: [],
-        skipWaiting: true,      // ← AGREGA
-        clientsClaim: true,     // ← AGREGA
+        clientsClaim: true,     // apenas el usuario confirma y el SW nuevo activa, toma control ya mismo
       },
       manifest: {
         name: 'Brava POS ERP',
