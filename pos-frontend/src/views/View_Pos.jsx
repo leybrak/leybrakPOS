@@ -28,7 +28,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   const [telefonoLlevar] = useState('');
 
   // 1. DATA HOOK
-  const { productosBase, combosPromocionalesHoy, happyHours, reglasNegocio, categoriasReales, modificadoresGlobales, ordenActiva, setOrdenActiva, cargando } = usePosData(sedeActualId, mesaId, vaciarCarrito);
+  const { productosBase, combosPromocionalesHoy, happyHours, reglasNegocio, categoriasReales, modificadoresGlobales, ordenActiva, setOrdenActiva, cargando, cargandoOrden } = usePosData(sedeActualId, mesaId, vaciarCarrito);
 
   // 2. SEARCH & FILTER HOOK
   const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales, modificadoresGlobales);
@@ -105,9 +105,11 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   // Notificar al Salón apenas termine de cargar la data
   // Notificar al Salón basándose en la carga de datos, el carrito y el WebSocket
   useEffect(() => {
-    // 🚨 FRENO DE SEGURIDAD: 
-    // Esperamos a que la base de datos cargue Y que el WebSocket esté conectado
-    if (cargando || !wsListo) return; 
+    // 🚨 FRENO DE SEGURIDAD:
+    // Esperamos a que la orden de ESTA mesa cargue Y que el WebSocket esté
+    // conectado — el catálogo (cargando) puede ya estar listo desde cache
+    // sin que sepamos aún si la mesa tiene una orden activa o no.
+    if (cargandoOrden || !wsListo) return;
     
     if (ordenActiva) {
       // 1. La mesa ya tiene un pedido en la base de datos
@@ -126,7 +128,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargando, ordenActiva, carrito.length, wsListo]); // 👈 Dependencias clave
+  }, [cargandoOrden, ordenActiva, carrito.length, wsListo]); // 👈 Dependencias clave
 
   // ====================== CÁLCULOS ======================
   const totalOrdenActiva = ordenActiva ? ordenActiva.detalles.reduce((acc, d) => acc + parseFloat(d.precio_unitario || 0) * (d.cantidad || 1), 0) : 0;
