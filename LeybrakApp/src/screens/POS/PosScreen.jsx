@@ -203,8 +203,17 @@ function PosScreenInner({ mesaId, onVolver }) {
       const [resOrdenes] = await Promise.all([
         // Las órdenes de la mesa SIEMPRE se piden frescas — eso sí puede
         // cambiar en cualquier momento y no se cachea.
+        // 🛠️ Antes se filtraba por estado:'preparando' — si cocina ya había
+        // marcado la orden como 'listo' (o seguía 'pendiente'), esta consulta
+        // no la encontraba, ordenActiva quedaba null, y al enviar más platos
+        // se creaba una orden NUEVA para la misma mesa en vez de agregarle a
+        // la existente. Resultado: dos órdenes activas en la misma mesa — la
+        // vieja quedaba "invisible" (parecía que se "sobreescribía" la cuenta)
+        // y, aunque se cobrara la nueva, la vieja seguía sin pagar y la mesa
+        // nunca se liberaba. La web nunca filtró por estado (usePosData.js);
+        // se iguala ese criterio acá.
         !esParaLlevar && mesaIdReal
-          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal, estado: 'preparando' })
+          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal })
           : Promise.resolve({ data: [] }),
         esCacheReciente(cache?.timestamp) ? null : refrescarMenuCache(negocioId, sedeId).then((fresco) => {
           setProductos(fresco.productos);
@@ -214,7 +223,10 @@ function PosScreenInner({ mesaId, onVolver }) {
       ]);
 
       const ordenes = resOrdenes.data || [];
-      if (ordenes.length > 0) setOrdenActiva(ordenes[0]);
+      const ordenViva = ordenes.find(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado' && o.estado_pago !== 'pagado'
+      );
+      if (ordenViva) setOrdenActiva(ordenViva);
 
     } catch (e) {
       console.error('Error cargando POS:', e);
