@@ -114,6 +114,10 @@ function PosScreenInner({ mesaId, onVolver }) {
   const [empleadoNombre, setEmpleadoNombre] = useState('');
   const [productoParaVariar, setProductoParaVariar] = useState(null);
   const [modalVariacionesVisible, setModalVariacionesVisible] = useState(false);
+  // Grupo+opción a preseleccionar cuando el modal se abre porque se buscó
+  // el nombre de una variante (ej. "gordita") en vez del producto (ver
+  // productosFiltrados → _coincidenciaOpcion).
+  const [preseleccionVariante, setPreseleccionVariante] = useState(null);
 
   // ─── Cancelar pedido / trasladar mesa ───────────────────────
   // 🛠️ Antes, si el cliente se arrepentía, el único camino era anular los
@@ -410,9 +414,12 @@ function PosScreenInner({ mesaId, onVolver }) {
   useEffect(() => { totalMesaRef.current = totalMesa; }, [totalMesa]);
 
   const agregarAlCarrito = (producto) => {
-    // Solo forzar modal si la selección es OBLIGATORIA
-    if (producto.requiere_seleccion) {
+    // Se busca el nombre de una variante (ej. "gordita" para Inka Cola) en
+    // vez del producto — el modal se abre con esa opción ya seleccionada,
+    // igual que si la selección fuera obligatoria.
+    if (producto.requiere_seleccion || producto._coincidenciaOpcion) {
       setProductoParaVariar(producto);
+      setPreseleccionVariante(producto._coincidenciaOpcion || null);
       setModalVariacionesVisible(true);
       return;
     }
@@ -433,6 +440,9 @@ function PosScreenInner({ mesaId, onVolver }) {
         notas_cocina: '',
       }];
     });
+    // Se agregó algo al carrito — si venía de una búsqueda, se limpia para
+    // poder escribir la siguiente de una, sin tener que borrar a mano.
+    setBusqueda('');
   };
 
   const agregarConVariaciones = (productoConOpciones) => {
@@ -486,7 +496,7 @@ function PosScreenInner({ mesaId, onVolver }) {
         // plato — "gordita" antes no encontraba nada. grupos_variacion ya
         // viene embebido en cada producto (ver ModalModificadores), no hace
         // falta pedir nada nuevo.
-        const opciones = (p.grupos_variacion || []).flatMap(g => g.opciones || []);
+        const opciones = (p.grupos_variacion || []).flatMap(g => (g.opciones || []).map(o => ({ ...o, _grupoId: g.id })));
         const variacionCoincidente = opciones
           .map(o => ({ o, puntaje: puntuarCoincidencia(normalizarBusqueda(o.nombre), palabras) }))
           .filter(({ puntaje }) => puntaje !== null)
@@ -496,7 +506,13 @@ function PosScreenInner({ mesaId, onVolver }) {
 
         // Un match por el nombre del plato siempre pesa más que uno por
         // una de sus variantes.
-        p._coincidenciaVariacion = (puntajeNombre === null && variacionCoincidente) ? variacionCoincidente.o.nombre : null;
+        const matchoSoloPorVariacion = puntajeNombre === null && variacionCoincidente;
+        p._coincidenciaVariacion = matchoSoloPorVariacion ? variacionCoincidente.o.nombre : null;
+        // Grupo+opción exactos que calzaron — para preseleccionarlos al
+        // abrir el modal de variantes (ver agregarAlCarrito).
+        p._coincidenciaOpcion = matchoSoloPorVariacion
+          ? { grupoId: variacionCoincidente.o._grupoId, opcionId: variacionCoincidente.o.id }
+          : null;
         const puntaje = puntajeNombre !== null ? puntajeNombre + 1000 : (variacionCoincidente?.puntaje || 0);
         return { p, puntaje };
       })
@@ -737,7 +753,16 @@ function PosScreenInner({ mesaId, onVolver }) {
                 placeholderTextColor={t.textMuted}
                 autoFocus
               />
-              <TouchableOpacity onPress={() => { setBusquedaActiva(false); setBusqueda(''); }}>
+              {/* 🛠️ Antes el ícono solo (18px) era el área de toque completa —
+                  muy chico para tocarlo con confianza. Mismo tamaño que los
+                  demás botones del header (44x44, ver s.backBtn) + hitSlop
+                  de respaldo. */}
+              <TouchableOpacity
+                onPress={() => { setBusquedaActiva(false); setBusqueda(''); }}
+                style={[s.backBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
                 <Icon name="times" size={18} color={t.textSec} />
               </TouchableOpacity>
             </View>
@@ -1121,21 +1146,22 @@ function PosScreenInner({ mesaId, onVolver }) {
       <ModalModificadores
         visible={modalVariacionesVisible}
         producto={productoParaVariar}
+        preseleccion={preseleccionVariante}
         modificadoresGlobales={modificadores}
         onAgregarAlCarrito={(item, esEdicion) => {
           const cartId = esEdicion ? item.cart_id : `var_${item.id}_${Date.now()}`;
           const precioFinal = parseFloat(
-            item.precio_unitario_calculado || 
-            item.precio || 
-            item.precio_base || 
+            item.precio_unitario_calculado ||
+            item.precio ||
+            item.precio_base ||
             0
           );
           if (esEdicion) {
-            setCarrito(prev => prev.map(i => 
+            setCarrito(prev => prev.map(i =>
               i.cart_id === cartId ? { ...item, cart_id: cartId, precio: precioFinal } : i
             ));
           } else {
-            
+
             setCarrito(prev => [...prev, {
               cart_id:               cartId,
               id:                    item.id,
@@ -1147,8 +1173,11 @@ function PosScreenInner({ mesaId, onVolver }) {
               notas_cocina:          item.notas_cocina || '',
             }]);
           }
+          // Se agregó/editó algo desde el buscador — se limpia para poder
+          // escribir la siguiente búsqueda sin tener que borrar a mano.
+          setBusqueda('');
         }}
-        onClose={() => setModalVariacionesVisible(false)}
+        onClose={() => { setModalVariacionesVisible(false); setPreseleccionVariante(null); }}
       />
 
       {/* ─── MODAL ÉXITO ─────────────────────────────────── */}

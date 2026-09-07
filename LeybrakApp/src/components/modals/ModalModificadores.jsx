@@ -12,6 +12,7 @@ const formatearSoles = (monto) => `S/ ${parseFloat(monto || 0).toFixed(2)}`;
 export default function ModalModificadores({
   visible,
   producto,
+  preseleccion = null,
   modificadoresGlobales = [],
   onAgregarAlCarrito,
   onClose,
@@ -45,12 +46,14 @@ export default function ModalModificadores({
         setNotaLibre(producto.notas_y_modificadores.nota_libre || '');
       } else {
         setCantidad(1);
-        setSelecciones({});
+        // Si se llegó buscando el nombre de una variante (ej. "gordita"),
+        // esa opción ya arranca marcada — solo falta confirmar.
+        setSelecciones(preseleccion ? { [preseleccion.grupoId]: [preseleccion.opcionId] } : {});
         setChipsActivos([]);
         setNotaLibre('');
       }
     }
-  }, [visible, producto]);
+  }, [visible, producto, preseleccion]);
 
   if (!producto) return null;
 
