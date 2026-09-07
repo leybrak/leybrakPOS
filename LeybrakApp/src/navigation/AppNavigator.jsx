@@ -404,27 +404,34 @@ function POSLayout({ onVolver, onCerrarTurno }) {
     return () => sub.remove();
   }, [mesaActiva, onVolver]);
 
-  // Sin mesa seleccionada → mapa de mesas
-  if (!mesaActiva) {
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Botón volver al ERP */}
-        <SalonScreen
-          onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
-          onVolver={onVolver}
-          onCerrarTurno={onCerrarTurno}
-        />
-      </View>
-    );
-  }
-
-  // Mesa seleccionada → PosScreen real
+  // 🛠️ Antes esto era un if/else: entrar a una mesa DESMONTABA SalonScreen
+  // por completo, y volver la volvía a MONTAR desde cero — recargando las 5
+  // llamadas de cargar() (mesas, sedes, órdenes para llevar, órdenes activas,
+  // negocio) cada vez, con su pantalla de "CONECTANDO SISTEMA..." de por
+  // medio. De ahí la demora al salir del POS, y el flash de "sin mesas" en
+  // el remontaje. El Salón ya se mantiene al día EN VIVO por WebSocket
+  // mientras se está dentro de una mesa (mesa_actualizada en cada acción:
+  // enviar a cocina, anular, cancelar, trasladar, cobrar — ver
+  // orden_views.py), así que no hace falta recargar nada al volver: basta
+  // con no desmontarlo y dejar que el WS lo mantenga correcto. PosScreen se
+  // dibuja encima como overlay de pantalla completa cuando hay mesa activa.
   return (
-    <PosScreen
-      key={typeof mesaActiva === 'object' ? mesaActiva.id : mesaActiva}
-      mesaId={mesaActiva}
-      onVolver={() => setMesaActiva(null)}
-    />
+    <View style={{ flex: 1 }}>
+      <SalonScreen
+        onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
+        onVolver={onVolver}
+        onCerrarTurno={onCerrarTurno}
+      />
+      {mesaActiva && (
+        <View style={StyleSheet.absoluteFill}>
+          <PosScreen
+            key={typeof mesaActiva === 'object' ? mesaActiva.id : mesaActiva}
+            mesaId={mesaActiva}
+            onVolver={() => setMesaActiva(null)}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
