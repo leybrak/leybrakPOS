@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import usePosStore from '../store/usePosStore';
 import { useToast } from '../context/ToastContext';
+import { useConfirm, usePrompt } from '../context/ConfirmContext';
 import ModalCobro from '../components/modals/ModalCobro';
 import ModalModificadores from '../components/modals/ModalModificadores';
 import { crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden } from '../api/api';
@@ -19,6 +20,8 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
   // Al momento en que el empleado inicia sesión en la terminal de sala:
   localStorage.setItem('modo_dispositivo', 'terminal');
   const toast = useToast();
+  const confirmar = useConfirm();
+  const prompt = usePrompt();
   const { estadoCaja, configuracionGlobal, carrito, agregarProducto, agregarCombo, esDueño, sedes, manejarCambioSede, restarProducto, obtenerTotalItems, restarDesdeGrid, obtenerTotalDinero, vaciarCarrito, actualizarItemCompleto, sumarUnidad } = usePosStore();  const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const [wsListo, setWsListo] = useState(false);
@@ -236,11 +239,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
       return;
     }
 
-    const confirmar = window.confirm(
-      "⚠️ ¿ESTÁS SEGURO DE ANULAR TODO EL PEDIDO?\nEsta acción liberará la mesa y quedará registrada en la auditoría."
+    const confirmado = await confirmar(
+      'Esta acción liberará la mesa y quedará registrada en la auditoría.',
+      { titulo: '¿Anular todo el pedido?', peligroso: true, textoConfirmar: 'Sí, anular' }
     );
 
-    if (confirmar) {
+    if (confirmado) {
       try {
         setProcesando(true);
         // 1. Informamos al backend para que libere la mesa y cancele la orden
@@ -267,7 +271,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
   };
 
   const manejarAnularItem = async (detalleId, nombrePlato) => {
-    const motivo = window.prompt(`¿Motivo de anulación para "${nombrePlato}"?`);
+    const motivo = await prompt(`Se anulará "${nombrePlato}" de la cuenta.`, {
+      titulo: 'Motivo de anulación',
+      peligroso: true,
+      textoConfirmar: 'Anular',
+      pedirTexto: { placeholder: 'Ej: se equivocó el mesero...' },
+    });
     if (!motivo) return;
     setProcesando(true);
     try {
@@ -289,7 +298,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
     if (!ordenActiva) return;
     
     // Pequeña confirmación por seguridad
-    if (!window.confirm('¿Estás seguro de cancelar esta orden vacía y liberar la mesa?')) return;
+    if (!(await confirmar('¿Cancelar esta orden vacía y liberar la mesa?', { titulo: 'Liberar mesa', peligroso: true }))) return;
 
     try {
       // 1. Le decimos a Django que cancele la orden

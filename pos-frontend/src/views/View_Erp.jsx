@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useErpDashboard } from '../features/ERP/useErpDashboard';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { cerrarSesionGlobal, getAlertasNegocio } from '../api/api';
 import Erp_ModalPerfil from '../features/ERP/Erp_ModalPerfil';
 
@@ -40,6 +41,7 @@ const NIVEL_ESTILO = {
 
 const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario, manejarCambioVista }) => {
   const isDark = tema === 'dark';
+  const confirmar = useConfirm();
 
   // Extraemos la data real de la sesión activa
   const [usuarioNombre, setUsuarioNombre] = React.useState(localStorage.getItem('usuario_nombre') || 'Administrador');
@@ -79,7 +81,7 @@ const Topbar = ({ vistaActiva, setMenuAbierto, tema, colorPrimario, manejarCambi
   }, []);
 
   const handleCerrarSesion = async () => {
-    if (window.confirm('¿Estás seguro que deseas cerrar sesión?')) {
+    if (await confirmar('¿Estás seguro que deseas cerrar sesión?', { titulo: 'Cerrar sesión', peligroso: false, icono: 'fi-rr-sign-out-alt' })) {
       await cerrarSesionGlobal();
     }
   };

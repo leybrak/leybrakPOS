@@ -4,8 +4,10 @@ import PedidoTimeline from '../PedidoTimeline';
 import ModalRecibirPedido from './ModalRecibirPedido';
 import ModalAvisarProveedor from './ModalAvisarProveedor';
 import { solicitarOrdenCompra, confirmarOrdenCompra, enCaminoOrdenCompra, cancelarOrdenCompra } from '../../api/api';
+import { usePrompt } from '../../context/ConfirmContext';
 
 export default function ModalDetallePedido({ isOpen, onClose, onSuccess, config, orden: ordenProp }) {
+  const prompt = usePrompt();
   const colorBtn = config?.colorPrimario || '#ff5a1f';
   const [orden, setOrden] = useState(ordenProp);
   const [procesando, setProcesando] = useState(false);
@@ -134,8 +136,19 @@ export default function ModalDetallePedido({ isOpen, onClose, onSuccess, config,
             {!['recibido', 'cancelado'].includes(orden.estado) && (
               <button
                 disabled={procesando}
-                onClick={() => {
-                  const motivo = window.prompt('¿Motivo de la cancelación? (opcional)') || '';
+                onClick={async () => {
+                  // 🛠️ Antes esto SIEMPRE cancelaba el pedido (incluso tocando
+                  // "Cancelar" del prompt del navegador, que devuelve null →
+                  // caía al `|| ''` igual) — el prompt nunca funcionó como
+                  // gate de confirmación, solo como recolector de texto
+                  // opcional. Ahora "Cancelar" del diálogo sí aborta.
+                  const motivo = await prompt('Esta acción no se puede deshacer.', {
+                    titulo: '¿Cancelar este pedido?',
+                    peligroso: true,
+                    textoConfirmar: 'Sí, cancelar',
+                    pedirTexto: { placeholder: 'Motivo (opcional)', obligatorio: false },
+                  });
+                  if (motivo === null) return;
                   ejecutar(() => cancelarOrdenCompra(orden.id, { motivo }));
                 }}
                 className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 flex items-center gap-2 disabled:opacity-50"

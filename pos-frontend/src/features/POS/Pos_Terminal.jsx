@@ -3,7 +3,7 @@ import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimi
 import { abrirCajaBD } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
 import api from '../../api/api';
-import { useConfirm } from '../../context/ConfirmContext';
+import { useConfirm, usePrompt } from '../../context/ConfirmContext';
 // Modales y Drawers
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
@@ -28,6 +28,7 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   
   const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
   const confirmar = useConfirm();
+  const prompt = usePrompt();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
@@ -130,8 +131,8 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
 
   // ✨ NUEVO: Lógica para desarmar un grupo de mesas
   const manejarSepararMesa = async (mesaPadre) => {
-    const confirmar = window.confirm(`¿Estás seguro de que quieres desarmar el grupo de la Mesa ${mesaPadre.numero}?`);
-    if (!confirmar) return;
+    const confirmado = await confirmar(`¿Desarmar el grupo de la Mesa ${mesaPadre.numero}?`, { titulo: 'Separar mesas', peligroso: false });
+    if (!confirmado) return;
 
     try {
       // 1. Buscamos todas las mesas que están unidas a este padre usando el estado local
@@ -166,7 +167,12 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   };
 
   const manejarCancelacion = async (id) => {
-    const motivo = window.prompt('¿Por qué se cancela el pedido?');
+    const motivo = await prompt('Esta acción libera la mesa y queda registrada en la auditoría.', {
+      titulo: '¿Por qué se cancela el pedido?',
+      peligroso: true,
+      textoConfirmar: 'Cancelar pedido',
+      pedirTexto: { placeholder: 'Motivo...' },
+    });
     if (motivo) {
       try { await actualizarOrden(id, { estado: 'cancelado', cancelado: true, motivo_cancelacion: motivo }); setTriggerRecarga((p) => !p); }
       catch { console.error('Error al cancelar'); }

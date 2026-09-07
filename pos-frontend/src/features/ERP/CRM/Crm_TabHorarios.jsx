@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Plus, Trash2, Pencil, Search, ShoppingBag, Check, CalendarDays, X, Save, Eye, Percent, Gift, DollarSign } from 'lucide-react';
 import api from '../../../api/api';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 const DIAS = [
   { id: 0, l: 'Lun' }, { id: 1, l: 'Mar' }, { id: 2, l: 'Mié' },
@@ -458,6 +459,7 @@ function FormHappyHour({ hh, isDark, colorPrimario, productosReales, sedesReales
 
 // ── Componente principal ──────────────────────────────────────
 export default function Crm_TabHorarios({ isDark, colorPrimario, productosReales = [], categoriasReales = [], sedesReales = [] }) {
+  const confirmar = useConfirm();
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -505,7 +507,7 @@ export default function Crm_TabHorarios({ isDark, colorPrimario, productosReales
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar esta happy hour?')) return;
+    if (!(await confirmar('¿Eliminar esta happy hour?', { titulo: 'Eliminar happy hour', peligroso: true }))) return;
     try {
       await api.delete(`/happy-hours/${id}/`);
       await cargar();

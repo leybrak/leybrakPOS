@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { Bike, Trash2, Pencil, Loader2, MapPin, AlertTriangle, Check, Plus } from 'lucide-react';
 import api from '../../../api/api';
 import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 const iconoPin = new L.Icon({
   iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
@@ -19,6 +20,7 @@ const VACIO = { nombre: '', radio_max_km: '2', costo_envio: '', pedido_minimo: '
 
 export default function Bot_Delivery({ sede, isDark, colorPrimario }) {
   const toast = useToast();
+  const confirmar = useConfirm();
   const sedeId = sede?.id;
   const lat = sede?.latitud != null ? Number(sede.latitud) : null;
   const lng = sede?.longitud != null ? Number(sede.longitud) : null;
@@ -81,7 +83,7 @@ export default function Bot_Delivery({ sede, isDark, colorPrimario }) {
   };
 
   const eliminar = async (z) => {
-    if (!window.confirm(`¿Eliminar la zona "${z.nombre}"?`)) return;
+    if (!(await confirmar(`¿Eliminar la zona "${z.nombre}"?`, { titulo: 'Eliminar zona', peligroso: true }))) return;
     setAccionId(z.id);
     try { await api.delete(`/zonas-delivery/${z.id}/`); toast.success('Zona eliminada.'); cargar(); }
     catch { toast.error('No se pudo eliminar.'); }

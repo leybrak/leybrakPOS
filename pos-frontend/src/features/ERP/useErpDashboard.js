@@ -513,7 +513,8 @@ export const useErpDashboard = () => {
   };
 
   const toggleActivo = async (emp) => {
-    if (!window.confirm(`¿Seguro?`)) return;
+    const accion = emp.activo ? 'desactivar' : 'reactivar';
+    if (!(await confirmar(`¿Deseas ${accion} a ${emp.nombre}?`, { titulo: emp.activo ? 'Desactivar empleado' : 'Reactivar empleado', peligroso: emp.activo }))) return;
     try {
       await actualizarEmpleado(emp.id, { activo: !emp.activo });
       setEmpleadosReales(prev => prev.map(e => e.id === emp.id ? { ...e, activo: !emp.activo } : e));

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 export default function TerminalHeader({
   colorPrimario, vistaLocal, mesaSeleccionada, esDueño,
@@ -7,6 +8,7 @@ export default function TerminalHeader({
   ordenesLlevar, setDrawerVentaRapidaAbierto, rolUsuario, onIrAErp,
   setModalMovimientosAbierto, manejarCierreCajaSeguro, onCerrarTurno
 }) {
+  const confirmar = useConfirm();
   return (
     // Estilo ERP: Fondo sólido oscuro, borde tenue, sin sombras ni blur
     <header className={`px-4 py-3 md:px-6 md:py-4 sticky top-0 z-10 border-b bg-[#111] border-[#222] transition-all ${mesaSeleccionada ? 'hidden lg:block' : 'block'}`}>
@@ -115,7 +117,7 @@ export default function TerminalHeader({
             {/* Terminar mi turno (todos los roles — marca la salida y vuelve al PIN) */}
             {onCerrarTurno && (
               <button
-                onClick={() => { if (window.confirm('¿Terminar tu turno? Se marcará tu salida.')) onCerrarTurno(); }}
+                onClick={async () => { if (await confirmar('¿Terminar tu turno? Se marcará tu salida.', { titulo: 'Terminar turno', peligroso: false, icono: 'fi-rr-sign-out-alt', textoConfirmar: 'Terminar' })) onCerrarTurno(); }}
                 className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all bg-[#141414] border-[#333] text-red-500/70 hover:text-red-500 hover:border-red-500/50"
                 title="Terminar mi turno"
               >

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Plus, Phone, Mail, Truck } from 'lucide-react';
 import { crearProveedor, actualizarProveedor } from '../../api/api';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export default function Erp_Proveedores({ isOpen, onClose, proveedores, onCambio, config }) {
+  const confirmar = useConfirm();
   const colorBtn = config?.colorPrimario || '#ff5a1f';
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({ nombre: '', telefono: '', email: '', ruc: '', direccion: '' });
@@ -39,7 +41,7 @@ export default function Erp_Proveedores({ isOpen, onClose, proveedores, onCambio
   };
 
   const desactivar = async (p) => {
-    if (!window.confirm(`¿Desactivar a "${p.nombre}"? No aparecerá al crear nuevos pedidos.`)) return;
+    if (!(await confirmar('No aparecerá al crear nuevos pedidos.', { titulo: `¿Desactivar a "${p.nombre}"?`, peligroso: true }))) return;
     await actualizarProveedor(p.id, { activo: false });
     onCambio?.();
   };

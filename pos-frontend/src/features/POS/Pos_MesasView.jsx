@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
-import { useConfirm } from '../../context/ConfirmContext';
+import { useConfirm, usePrompt } from '../../context/ConfirmContext';
 
 // Modales
 import ModalCobro from '../../components/modals/ModalCobro';
@@ -21,6 +21,7 @@ import { useMesasWS } from './hooks/useMesasWS';
 export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId }) {
   const { estadoCaja, configuracionGlobal, setConfiguracionGlobal, setEstadoCaja } = usePosStore();
   const confirmar = useConfirm();
+  const prompt = usePrompt();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const isDark = tema === 'dark'; // ✨ Helper para el nuevo diseño
@@ -72,7 +73,12 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
   };
 
   const manejarCancelacion = async (id) => {
-    const motivo = window.prompt("¿Por qué se cancela el pedido?");
+    const motivo = await prompt('Esta acción libera la mesa y queda registrada en la auditoría.', {
+      titulo: '¿Por qué se cancela el pedido?',
+      peligroso: true,
+      textoConfirmar: 'Cancelar pedido',
+      pedirTexto: { placeholder: 'Motivo...' },
+    });
     if (motivo) {
       try {
         await actualizarOrden(id, { estado: 'cancelado', cancelado: true, motivo_cancelacion: motivo });
