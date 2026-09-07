@@ -46,6 +46,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   // ====================== WEBSOCKET LOGIC ======================
   const wsRef = useRef(null);
   const estadoMesaRef = useRef('libre'); // Soluciona el error de mutación del Linter
+  const totalMesaRef = useRef(0);
 
   useEffect(() => {
     if (esParaLlevar || !mesaId || !sedeActualId) return;
@@ -88,8 +89,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       unmounted = true;
       clearTimeout(reconnectTimeout);
       // Restaurar estado de mesa al salir
+      // 🛠️ Antes mandaba total:0 a lo bruto — este mensaje SOBREESCRIBE (no
+      // fusiona) lo que ven las demás pantallas, así que salir de una mesa
+      // ocupada borraba el monto a cobrar en el grid del salón hasta que
+      // alguien recargaba la página. Se manda el total real (totalMesaRef).
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaId, estado: estadoMesaRef.current, total: 0 }));
+        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaId, estado: estadoMesaRef.current, total: totalMesaRef.current }));
       }
       ws?.close();
     };
@@ -114,13 +119,19 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
     if (ordenActiva) {
       // 1. La mesa ya tiene un pedido en la base de datos
       estadoMesaRef.current = 'ocupada';
-      
-      // 2. ¿Hay cosas nuevas en el carrito? 
-      // Si carrito.length es 0, solo estamos viendo la cuenta -> 'cobrando'
-      // Si es > 0, el mesero está marcando algo nuevo -> 'pidiendo'
-      const estadoActual = carrito.length > 0 ? 'pidiendo' : 'cobrando';
-      
-      notificarEstadoMesa(estadoActual, parseFloat(ordenActiva.total || 0));
+
+      // 2. ¿Hay cosas nuevas en el carrito?
+      // 🛠️ Antes: carrito vacío → 'cobrando' a ciegas, aunque nadie hubiera
+      // abierto el modal de cobro (por ejemplo, justo después de enviar un
+      // pedido a cocina). 'cobrando' ya se avisa aparte, atado a
+      // modalCobroAbierto (ver el efecto de más abajo) — acá solo se avisa
+      // si hay cosas nuevas sin enviar ('pidiendo'); si no, se deja el
+      // estado real ('ocupada') salvo que el modal de cobro esté abierto.
+      if (carrito.length > 0) {
+        notificarEstadoMesa('pidiendo', totalMesa);
+      } else if (!modalCobroAbierto) {
+        notificarEstadoMesa('ocupada', totalMesa);
+      }
     } else {
       // 3. Mesa libre -> El mesero entró a tomar el primer pedido
       estadoMesaRef.current = 'libre';
@@ -128,12 +139,16 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargandoOrden, ordenActiva, carrito.length, wsListo]); // 👈 Dependencias clave
+  }, [cargandoOrden, ordenActiva, carrito.length, wsListo, modalCobroAbierto]); // 👈 Dependencias clave
 
   // ====================== CÁLCULOS ======================
   const totalOrdenActiva = ordenActiva ? ordenActiva.detalles.reduce((acc, d) => acc + parseFloat(d.precio_unitario || 0) * (d.cantidad || 1), 0) : 0;
   const totalMesa = totalOrdenActiva + obtenerTotalDinero();
-  
+
+  // Mantiene el total real a mano para el mensaje de "reposo" que se manda
+  // al salir de la mesa (ver limpieza del WS más arriba).
+  useEffect(() => { totalMesaRef.current = totalMesa; }, [totalMesa]);
+
   const cantItemsMesa = (ordenActiva ? ordenActiva.detalles.reduce((acc, el) => acc + el.cantidad, 0) : 0) + obtenerTotalItems();
   const hhActivas = happyHours.filter(happyHourActivaAhora);
   const todosLosItemsParaHH = [
