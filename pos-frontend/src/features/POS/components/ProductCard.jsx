@@ -7,7 +7,7 @@ import { UtensilsCrossed } from 'lucide-react';
 // ícono si el producto no tiene foto), el resto del contenido queda igual.
 function ImagenProducto({ prod, isDark }) {
   return (
-    <div className={`h-24 sm:h-28 w-full shrink-0 overflow-hidden ${isDark ? 'bg-[#0a0a0a]' : 'bg-gray-100'}`}>
+    <div className={`h-20 sm:h-24 w-full shrink-0 overflow-hidden ${isDark ? 'bg-[#0a0a0a]' : 'bg-gray-100'}`}>
       {prod.imagen ? (
         <img src={prod.imagen} alt={prod.nombre} className="w-full h-full object-cover pointer-events-none" />
       ) : (
@@ -61,7 +61,7 @@ export default function ProductCard({
             }
         }}
         disabled={!prod.disponible}
-        className={`relative rounded-3xl transition-all flex flex-col text-left overflow-hidden h-60 sm:h-72 border ${
+        className={`relative rounded-3xl transition-all flex flex-col text-left overflow-hidden h-52 sm:h-60 border ${
           tieneHappyHour ? 'border-amber-500/30' :  // 👈 agrega esto primero
           prod.disponible
             ? (isDark ? 'bg-[#141414] border-[#222] hover:border-[#333] hover:-translate-y-1 cursor-pointer' : 'bg-white border-gray-200 hover:border-gray-300 hover:-translate-y-1 cursor-pointer')
@@ -76,9 +76,9 @@ export default function ProductCard({
 
         <ImagenProducto prod={prod} isDark={isDark} />
 
-        <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between pointer-events-none">
+        <div className="flex-1 p-2.5 sm:p-3 flex flex-col justify-between pointer-events-none">
           <div className="flex flex-col">
-            <span className={`font-bold leading-tight text-[14px] sm:text-[16px] line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <span className={`font-bold leading-tight text-[13px] sm:text-[14px] line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               {prod.nombre}
             </span>
 
@@ -99,15 +99,14 @@ export default function ProductCard({
             </p>
           </div>
 
-          <div className="flex justify-between items-end w-full mt-1 shrink-0">
-              <span className={`text-[9px] sm:text-[10px] uppercase font-black tracking-widest px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 ${isDark ? 'text-neutral-400 bg-[#1a1a1a] border-[#333]' : 'text-gray-500 bg-gray-100 border-gray-200'}`}>
-                <i className="fi fi-rr-list text-[10px] mt-0.5"></i> Opciones
-              </span>
-              {totalCantidadProd > 0 && (
-                  <div className="text-white w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-sm sm:text-base" style={{ backgroundColor: colorPrimario }}>
-                    {totalCantidadProd}
-                  </div>
-              )}
+          {/* Mismo botón "VER OPCIONES" de ancho completo que usa mobile
+              (PosScreen.jsx → s.opcionesBtn) — antes era una chip chica
+              "Opciones" + un contador aparte, con menos presencia. */}
+          <div
+            className="w-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-2 sm:py-2.5 rounded-xl border flex items-center justify-center gap-1.5 mt-1 shrink-0"
+            style={{ color: colorPrimario, backgroundColor: colorPrimario + '15', borderColor: colorPrimario + '30' }}
+          >
+            <i className="fi fi-rr-list text-xs mt-0.5"></i> VER OPCIONES
           </div>
         </div>
       </button>
@@ -140,7 +139,7 @@ export default function ProductCard({
           aprenderSeleccion(prod.id, busqueda);
         }
       }}
-      className={`relative rounded-3xl transition-all flex flex-col text-left overflow-hidden h-60 sm:h-72 border ${
+      className={`relative rounded-3xl transition-all flex flex-col text-left overflow-hidden h-52 sm:h-60 border ${
         prod.disponible
           ? (isDark ? 'bg-[#141414] border-[#222] hover:border-[#333] hover:-translate-y-1 cursor-pointer' : 'bg-white border-gray-200 hover:border-gray-300 hover:-translate-y-1 cursor-pointer')
           : (isDark ? 'bg-[#0a0a0a] border-[#1a1a1a] opacity-50 cursor-not-allowed' : 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed')
@@ -154,8 +153,8 @@ export default function ProductCard({
 
       <ImagenProducto prod={prod} isDark={isDark} />
 
-      <div className="flex-1 mb-1 p-3 sm:p-4 pointer-events-none flex flex-col">
-        <span className={`font-bold leading-tight text-[14px] sm:text-[16px] line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+      <div className="flex-1 mb-1 p-2.5 sm:p-3 pointer-events-none flex flex-col">
+        <span className={`font-bold leading-tight text-[13px] sm:text-[14px] line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           {prod.nombre}
         </span>
         {prod.es_combo && (
@@ -186,33 +185,33 @@ export default function ProductCard({
         </p>
       </div>
 
-      <div className={`flex flex-row items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4 pt-2 border-t shrink-0 ${!prod.disponible ? 'pointer-events-none' : ''} ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
-          
+      <div className={`flex flex-row items-center justify-between gap-1.5 px-2.5 pb-2.5 sm:px-3 sm:pb-3 pt-2 border-t shrink-0 ${!prod.disponible ? 'pointer-events-none' : ''} ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+
           {totalCantidadProd > 0 && (
             <div className="flex-1 flex items-center justify-between gap-1.5">
               {/* Botón Restar */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); restarDesdeGrid(prod.id); }} 
-                disabled={!prod.disponible} 
+              <button
+                onClick={(e) => { e.stopPropagation(); restarDesdeGrid(prod.id); }}
+                disabled={!prod.disponible}
                 className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-lg transition-all border disabled:opacity-50 ${isDark ? 'bg-[#1a1a1a] text-red-400 border-[#333] hover:bg-red-500/10 hover:border-red-500/30' : 'bg-gray-50 text-red-500 border-gray-200 hover:bg-red-50 hover:border-red-200'}`}
               >
                 -
               </button>
-              
+
               {/* Contador Central */}
               <span className={`flex-1 h-8 sm:h-10 rounded-xl font-black text-sm sm:text-base flex items-center justify-center border transition-all relative ${isDark ? 'bg-[#1a1a1a] text-white border-[#333]' : 'bg-gray-50 text-gray-900 border-gray-200'}`}>
                   {totalCantidadProd}
                   {tieneVariantes && (
                     <span className="absolute top-1 right-1">
-                      <i className="fi fi-rr-settings text-[8px]" style={{ color: colorPrimario }}></i>
+                      <i className="fi fi-rr-sliders text-[8px]" style={{ color: colorPrimario }}></i>
                     </span>
                   )}
               </span>
-              
+
               {/* Botón Sumar */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); agregarProducto(prod); }} 
-                disabled={!prod.disponible} 
+              <button
+                onClick={(e) => { e.stopPropagation(); agregarProducto(prod); }}
+                disabled={!prod.disponible}
                 className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-lg transition-all border disabled:opacity-50`}
                 style={{ backgroundColor: `${colorPrimario}15`, borderColor: `${colorPrimario}30`, color: colorPrimario }}
               >
@@ -220,50 +219,41 @@ export default function ProductCard({
               </button>
             </div>
           )}
-          
-          {/* BOTONES DE CONFIGURACIÓN (Variaciones / Notas) */}
-          {prod.tiene_variaciones ? (
-            totalCantidadProd > 0 ? (
-              <button 
-                onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }} 
-                disabled={!prod.disponible} 
-                className={`shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-xl border transition-colors flex items-center justify-center hover:brightness-110 disabled:opacity-50`} 
-                style={{ color: colorPrimario, backgroundColor: colorPrimario + '15', borderColor: colorPrimario + '30' }}
-                title="Configurar Variaciones"
-              >
-                <i className="fi fi-rr-settings text-sm mt-0.5"></i>
-              </button>
-            ) : (
-              <button 
-                onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }} 
-                disabled={!prod.disponible} 
-                className={`w-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-2.5 sm:py-3 rounded-xl border transition-colors hover:brightness-110 flex items-center justify-center gap-1.5`} 
-                style={{ color: colorPrimario, backgroundColor: colorPrimario + '15', borderColor: colorPrimario + '30' }}
-              >
-                <i className="fi fi-rr-settings text-xs mt-0.5"></i> Variantes
-              </button>
-            )
+
+          {/* Botón de nota/variantes — mismo botón sin importar si el producto
+              tiene variantes opcionales o no (igual que mobile: un único ícono
+              que abre ModalModificadores, que ya maneja ambas cosas). Antes
+              acá se elegía entre un ícono de "settings" o de "comment-alt"
+              según tiene_variaciones — dos botones distintos para la misma
+              acción, sin necesidad. */}
+          {totalCantidadProd > 0 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }}
+              disabled={!prod.disponible}
+              className={`shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-xl border transition-colors flex items-center justify-center disabled:opacity-50 ${isDark ? 'bg-[#1a1a1a] border-[#333] text-neutral-400 hover:text-white hover:border-[#444]' : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-900'}`}
+              title="Editar nota / variantes"
+            >
+              <i className="fi fi-rr-note text-base mt-0.5"></i>
+            </button>
+          ) : prod.tiene_variaciones ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }}
+              disabled={!prod.disponible}
+              className={`w-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-2 sm:py-2.5 rounded-xl border transition-colors hover:brightness-110 flex items-center justify-center gap-1.5`}
+              style={{ color: colorPrimario, backgroundColor: colorPrimario + '15', borderColor: colorPrimario + '30' }}
+            >
+              <i className="fi fi-rr-sliders text-xs mt-0.5"></i> + CON OPCIONES
+            </button>
           ) : (
-            totalCantidadProd > 0 ? (
-              <button 
-                onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }} 
-                disabled={!prod.disponible} 
-                className={`shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-xl border transition-colors flex items-center justify-center disabled:opacity-50 ${isDark ? 'bg-[#1a1a1a] border-[#333] text-neutral-400 hover:text-white hover:border-[#444]' : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-900'}`} 
-                title="Agregar Nota"
+            <div className="w-full flex justify-end">
+              <button
+                onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }}
+                disabled={!prod.disponible}
+                className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl border transition-colors flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest disabled:opacity-50 ${isDark ? 'text-neutral-500 bg-[#1a1a1a] border-[#333] hover:text-white hover:border-[#444]' : 'text-gray-500 bg-gray-50 border-gray-200 hover:text-gray-900'}`}
               >
-                <i className="fi fi-rr-comment-alt text-sm mt-0.5"></i>
+                <i className="fi fi-rr-note text-xs mt-0.5"></i> <span>Nota</span>
               </button>
-            ) : (
-              <div className="w-full flex justify-end">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); abrirModalParaNuevo(prod); }} 
-                  disabled={!prod.disponible} 
-                  className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-colors flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest disabled:opacity-50 ${isDark ? 'text-neutral-500 bg-[#1a1a1a] border-[#333] hover:text-white hover:border-[#444]' : 'text-gray-500 bg-gray-50 border-gray-200 hover:text-gray-900'}`}
-                >
-                  <i className="fi fi-rr-comment-alt text-xs mt-0.5"></i> <span className="hidden sm:inline">Nota</span>
-                </button>
-              </div>
-            )
+            </div>
           )}
       </div>
     </div>
