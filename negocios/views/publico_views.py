@@ -234,6 +234,20 @@ def login_empleado_pin(request):
         empleado_valido.ultimo_ingreso = timezone.now()
         empleado_valido.save(update_fields=['ultimo_ingreso'])
 
+    # 🛠️ El frontend (web y mobile) obligaba a "Marcar Ingreso" en CADA
+    # entrada por PIN, sin importar si el empleado ya había marcado su
+    # ingreso antes y todavía no marcó su salida — si la sesión se perdía
+    # (cookie expirada, error de red pasajero) y volvía a entrar con el
+    # PIN a mitad de turno, le volvía a pedir "registrar asistencia" de
+    # nuevo. Se expone si el turno ya está abierto para que el frontend
+    # se salte ese paso en ese caso.
+    turno_abierto = bool(
+        empleado_valido.ultimo_ingreso and (
+            not empleado_valido.ultima_salida or
+            empleado_valido.ultima_salida < empleado_valido.ultimo_ingreso
+        )
+    )
+
     response = Response({
         'id': empleado_valido.id,                 # ← lo necesita el header X-Empleado-ID
         'nombre': empleado_valido.nombre,
@@ -241,6 +255,7 @@ def login_empleado_pin(request):
         'puede_repartir': puede_repartir,         # ← rutea al repartidor a su app dedicada
         'caja_abierta': caja_abierta,
         'sede_id': sede_id,
+        'turno_abierto': turno_abierto,
     })
     # Cookie HttpOnly igual que los JWT del dueño
     response.set_cookie(
