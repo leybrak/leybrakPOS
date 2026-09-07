@@ -195,7 +195,11 @@ export const getModificadores      = (params)   => api.get('/modificadores-rapid
 export const crearModificador      = (data)     => api.post('/modificadores-rapidos/', data);
 export const actualizarModificador = (id, data) => api.put(`/modificadores-rapidos/${id}/`, data);
 export const eliminarModificador   = (id)       => api.delete(`/modificadores-rapidos/${id}/`);
-export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params: { ...params, tipo: 'llevar', estado: 'preparando' } });
+// Sin filtro de estado de cocina: una orden para llevar sigue pendiente de
+// cobro aunque cocina ya la haya marcado 'listo'/'completado'. El estado
+// 'preparando' solo era el de cocina; filtrar por eso la hacía desaparecer
+// de esta pantalla en cuanto estaba lista, antes de cobrarla.
+export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params: { ...params, tipo: 'llevar' } });
 
 // ─── Inventario ───────────────────────────────────────────────
 export const getCatalogoGlobal      = (params) => api.get('/insumo-base/', { params });

@@ -9,6 +9,7 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import api, { emitirComprobante, enviarTicketWhatsapp } from '../../api/api';
 import { useYapePlinListener } from '../../hooks/useYapePlinListener';
+import { usePagosWS } from '../../hooks/usePagosWS';
 import ModalEmitirComprobante from './ModalEmitirComprobante';
 
 export default function ModalCobro({
@@ -111,20 +112,26 @@ export default function ModalCobro({
   useEffect(() => {
     if (visible && ordenId) fetchPreview(metodo);
   }, [metodo, visible, ordenId, fetchPreview]);
-  // Escuchar pagos Yape/Plin desde notificaciones del celular
-  useYapePlinListener(
-    visible && paso === 'qr' && (metodo === 'yape' || metodo === 'plin') && confirmacionAutomatica,
-    (data) => {
-      const montoNotif = parseFloat(data.monto);
-      const montoEsp   = parseFloat(montoCobroRef.current.toFixed(2));
-      if (Math.abs(montoNotif - montoEsp) < 0.01) {
-        setNotificaciones(prev => {
-          if (prev.some(n => n.notificacion_id === data.notificacion_id)) return prev;
-          return [...prev, data];
-        });
-      }
+  // Callback compartido: llega el pago por notificación nativa (este mismo
+  // celular tiene Yape/Plin instalado) O por WebSocket (lo capturó OTRO
+  // dispositivo del negocio). Sin el WS, un tablet de cobro sin Yape propio
+  // se quedaba "esperando" para siempre aunque el pago ya hubiera llegado.
+  const manejarPagoEntrante = useCallback((data) => {
+    const montoNotif = parseFloat(data.monto);
+    const montoEsp   = parseFloat(montoCobroRef.current.toFixed(2));
+    if (Math.abs(montoNotif - montoEsp) < 0.01) {
+      setNotificaciones(prev => {
+        if (prev.some(n => n.notificacion_id === data.notificacion_id)) return prev;
+        return [...prev, data];
+      });
     }
-  );
+  }, []);
+
+  const escuchaActiva = visible && paso === 'qr' && (metodo === 'yape' || metodo === 'plin') && confirmacionAutomatica;
+  // Escuchar pagos Yape/Plin desde notificaciones del celular (mismo dispositivo)
+  useYapePlinListener(escuchaActiva, manejarPagoEntrante);
+  // Escuchar pagos Yape/Plin capturados por otro dispositivo del negocio
+  usePagosWS(escuchaActiva, manejarPagoEntrante);
   // ─── Cálculos ─────────────────────────────────────────────
   const totalEfectivo = preview ? preview.total : total;
   const totalPagado   = pagosAcumulados.reduce((s, p) => s + p.monto, 0);

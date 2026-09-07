@@ -83,7 +83,7 @@ export default function PosScreen({ mesaId, onVolver }) {
         getProductos({ negocio_id: negocioId, sede_id: sedeId, disponible: true }),
         getCategorias({ negocio_id: negocioId }),
         !esParaLlevar && mesaIdReal
-          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal, estado: 'preparando' })
+          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal })
           : Promise.resolve({ data: [] }),
         getModificadores({ negocio_id: negocioId }),
       ]);
@@ -92,8 +92,14 @@ export default function PosScreen({ mesaId, onVolver }) {
       setCategorias(resCat.data || []);
       setModificadores(resMods.data || []);
 
-      const ordenes = resOrdenes.data || [];
-      console.warn('MESA:', mesaIdReal, '| ÓRDENES:', JSON.stringify(ordenes.map(o => ({ id: o.id, mesa: o.mesa }))))
+      // La cuenta de la mesa sigue abierta mientras la orden no esté cobrada
+      // o cancelada, sin importar el estado de cocina (pendiente/preparando/
+      // listo). Filtrar solo por estado:'preparando' hacía que, apenas cocina
+      // marcaba el pedido como listo, esta pantalla dejara de verlo y creara
+      // una orden NUEVA al enviar más platos — duplicando la cuenta de la mesa.
+      const ordenes = (resOrdenes.data || []).filter(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado' && o.estado_pago !== 'pagado'
+      );
       if (ordenes.length > 0) setOrdenActiva(ordenes[0]);
 
     } catch (e) {

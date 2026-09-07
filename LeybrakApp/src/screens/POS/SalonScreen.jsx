@@ -227,10 +227,18 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
         getMesas(params),
         getSedes({ negocio_id: negocioId }),
         getOrdenesLlevar(params),
-        getOrdenes({ negocio_id: negocioId, sede_id: savedSede, estado: 'preparando' }),
+        getOrdenes({ negocio_id: negocioId, sede_id: savedSede }),
       ]);
+      // Una mesa sigue ocupada mientras tenga una orden viva, sin importar el
+      // estado de cocina (pendiente/preparando/listo): solo libera cuando se
+      // cobra o se cancela. Filtrar por estado:'preparando' hacía que una orden
+      // ya lista/entregada mostrara la mesa como libre y, al mandar más platos,
+      // se creara una orden nueva en vez de sumarla a la cuenta abierta.
+      const ordenesVivas = (resOrdenesActivas.data || []).filter(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado' && o.estado_pago !== 'pagado'
+      );
       const mesasConEstado = resMesas.data.map(mesa => {
-        const ordenActiva = resOrdenesActivas.data?.find(o => String(o.mesa) === String(mesa.id));
+        const ordenActiva = ordenesVivas.find(o => String(o.mesa) === String(mesa.id));
         return {
           ...mesa,
           estado:      ordenActiva ? 'ocupada' : 'libre',
@@ -240,7 +248,12 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
 
       setMesas(mesasConEstado);
       setSedes(resSedes.data);
-      setOrdenesLlevar(resOrdenes.data || []);
+      // Mismo criterio que las mesas: pendiente de cobro = no cancelada y no
+      // pagada, sin importar el estado de cocina (getOrdenesLlevar ya no filtra
+      // por 'preparando' para no ocultar pedidos 'listos' aún no cobrados).
+      setOrdenesLlevar((resOrdenes.data || []).filter(o =>
+        o.estado !== 'cancelado' && o.estado_pago !== 'pagado'
+      ));
 
       const { configuracionGlobal } = useAppStore.getState();
       const mods = configuracionGlobal?.modulos || {};
@@ -269,23 +282,26 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       try {
         const res   = await api.get('/verificar-sesion/');
         const token = res.data.ws_token;
-        // Token en header en vez de URL para no exponerlo en logs de servidor
-        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/`, null, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // El middleware de Channels solo lee el token desde la cookie o el
+        // query string (?token=); un header 'Authorization' lo ignora por
+        // completo y la conexión queda como AnonymousUser (cierra con 4001,
+        // reintenta cada 4s para siempre sin autenticar nunca).
+        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/?token=${token}`);
         wsRef.current = ws;
 
         ws.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'mesa_estado') {
+            // El consumer retransmite como 'mesa_actualizada' (no 'mesa_estado',
+            // que es solo el mensaje que ESTA app manda al servidor).
+            if (data.type === 'mesa_actualizada') {
               setMesas(prev => prev.map(m =>
                 String(m.id) === String(data.mesa_id)
                   ? { ...m, estado: data.estado, total_orden: data.total ?? m.total_orden }
                   : m
               ));
             }
-            if (data.type === 'orden_llevar') cargar();
+            if (data.type === 'orden_llevar_actualizada') cargar();
           } catch {}
         };
         ws.onerror  = () => ws.close();
@@ -557,14 +573,14 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
               <Text style={s.btnNuevaOrdenText}>NUEVA ORDEN PARA LLEVAR</Text>
             </TouchableOpacity>
 
-            {ordenesLlevar.filter(o => o.estado !== 'pagado').length === 0 ? (
+            {ordenesLlevar.length === 0 ? (
               <View style={[s.emptyState, { borderColor: t.border }]}>
                 <Icon name="shopping-bag" size={40} color={t.textMuted} style={{ opacity: 0.5 }} />
                 <Text style={[s.emptyTitulo, { color: t.textPrim }]}>SIN PEDIDOS ACTIVOS</Text>
                 <Text style={[s.emptySub, { color: t.textMuted }]}>Las órdenes para llevar aparecerán aquí</Text>
               </View>
             ) : (
-              ordenesLlevar.filter(o => o.estado !== 'pagado').map(orden => (
+              ordenesLlevar.map(orden => (
                 <View key={orden.id} style={[s.llevarCard, { backgroundColor: t.bgCard, borderColor: t.border }]}>
                   <View style={s.llevarHeader}>
                     <View>
