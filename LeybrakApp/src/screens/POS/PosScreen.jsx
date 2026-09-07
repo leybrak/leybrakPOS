@@ -479,8 +479,26 @@ function PosScreenInner({ mesaId, onVolver }) {
     return productos
       .filter(p => p.disponible && (categoriaActiva === 'todas' || String(p.categoria) === String(categoriaActiva)))
       .map(p => {
-        const puntaje = puntuarCoincidencia(normalizarBusqueda(p.nombre), palabras);
-        return puntaje === null ? null : { p, puntaje };
+        const puntajeNombre = puntuarCoincidencia(normalizarBusqueda(p.nombre), palabras);
+
+        // Un plato con variantes (ej. "Inka Cola" → Personal/Gordita/Litro)
+        // se busca instintivamente por el nombre de la variante, no del
+        // plato — "gordita" antes no encontraba nada. grupos_variacion ya
+        // viene embebido en cada producto (ver ModalModificadores), no hace
+        // falta pedir nada nuevo.
+        const opciones = (p.grupos_variacion || []).flatMap(g => g.opciones || []);
+        const variacionCoincidente = opciones
+          .map(o => ({ o, puntaje: puntuarCoincidencia(normalizarBusqueda(o.nombre), palabras) }))
+          .filter(({ puntaje }) => puntaje !== null)
+          .sort((a, b) => b.puntaje - a.puntaje)[0];
+
+        if (puntajeNombre === null && !variacionCoincidente) return null;
+
+        // Un match por el nombre del plato siempre pesa más que uno por
+        // una de sus variantes.
+        p._coincidenciaVariacion = (puntajeNombre === null && variacionCoincidente) ? variacionCoincidente.o.nombre : null;
+        const puntaje = puntajeNombre !== null ? puntajeNombre + 1000 : (variacionCoincidente?.puntaje || 0);
+        return { p, puntaje };
       })
       .filter(Boolean)
       .sort((a, b) => b.puntaje - a.puntaje)
@@ -605,6 +623,14 @@ function PosScreenInner({ mesaId, onVolver }) {
         <View style={s.prodBody}>
           {catNombre ? <Text style={[s.prodCateg, { color: t.textMuted }]}>{catNombre.toUpperCase()}</Text> : null}
           <Text style={[s.prodNombre, { color: t.textPrim }]} numberOfLines={2}>{item.nombre}</Text>
+          {/* Se busca "gordita" (nombre de una variante) en vez de "Inka Cola" (el
+              plato) — mostrar cuál variante calzó para que quede claro por qué
+              apareció este resultado. */}
+          {item._coincidenciaVariacion && (
+            <Text style={{ fontSize: 10, fontWeight: '900', color: t.color, textTransform: 'uppercase' }} numberOfLines={1}>
+              ↳ {item._coincidenciaVariacion}
+            </Text>
+          )}
           {item.es_combo && (
             <View style={[s.comboBadge, { backgroundColor: `${t.color}20`, borderColor: `${t.color}30` }]}>
               <Text style={[s.comboBadgeText, { color: t.color }]}>COMBO</Text>
