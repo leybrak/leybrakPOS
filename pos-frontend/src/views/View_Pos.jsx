@@ -31,7 +31,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
   const { productosBase, combosPromocionalesHoy, happyHours, reglasNegocio, categoriasReales, modificadoresGlobales, ordenActiva, setOrdenActiva, cargando, cargandoOrden } = usePosData(sedeActualId, mesaId, vaciarCarrito);
 
   // 2. SEARCH & FILTER HOOK
-  const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales, modificadoresGlobales);
+  const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales);
 
   // Ctrl/Cmd+K abre el buscador — el header (modo terminal/PC) ya insinuaba
   // este atajo con el texto "Ctrl + K", pero no hacía nada. El input real

@@ -34,7 +34,7 @@ const puntuarCoincidencia = (textoNormalizado, palabras) => {
   return puntaje;
 };
 
-export const usePosSearch = (productosBase, categoriasReales, modificadoresGlobales) => {
+export const usePosSearch = (productosBase, categoriasReales) => {
   const [busqueda, setBusqueda] = useState('');
   const [inputBusquedaActivo, setInputBusquedaActivo] = useState(false);
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
@@ -76,8 +76,15 @@ export const usePosSearch = (productosBase, categoriasReales, modificadoresGloba
 
         const puntajeNombre = puntuarCoincidencia(normalizar(plato.nombre), palabras);
 
-        const modificadoresDelPlato = modificadoresGlobales.filter(m => String(m.producto_id) === String(plato.id) || String(m.producto) === String(plato.id));
-        const variacionCoincidente = modificadoresDelPlato
+        // 🛠️ Antes buscaba en modificadoresGlobales (ModificadorRapido: "extra
+        // queso", "sin cebolla") — un modelo SIN relación a Producto (sin FK
+        // producto/producto_id), así que este filtro siempre daba vacío y
+        // _coincidenciaVariacion nunca se disparaba en la práctica. Lo que el
+        // mozo realmente busca ("Gordita" para Inka Cola) son las opciones de
+        // grupos_variacion del propio producto (GrupoVariacion → OpcionVariacion),
+        // que ya vienen embebidas en cada producto desde el backend.
+        const opcionesDelPlato = (plato.grupos_variacion || []).flatMap(g => g.opciones || []);
+        const variacionCoincidente = opcionesDelPlato
           .map(m => ({ m, puntaje: puntuarCoincidencia(normalizar(m.nombre), palabras) }))
           .filter(({ puntaje }) => puntaje !== null)
           .sort((a, b) => b.puntaje - a.puntaje)[0];
@@ -103,7 +110,7 @@ export const usePosSearch = (productosBase, categoriasReales, modificadoresGloba
         return 0;
       })
       .map(({ plato }) => plato);
-  }, [productosBase, categoriasReales, categoriaActiva, busqueda, modificadoresGlobales, cerebroBusqueda]);
+  }, [productosBase, categoriasReales, categoriaActiva, busqueda, cerebroBusqueda]);
 
   return {
     busqueda,
