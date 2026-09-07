@@ -33,6 +33,21 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false, nume
   // 2. SEARCH & FILTER HOOK
   const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales, modificadoresGlobales);
 
+  // Ctrl/Cmd+K abre el buscador — el header (modo terminal/PC) ya insinuaba
+  // este atajo con el texto "Ctrl + K", pero no hacía nada. El input real
+  // tiene autoFocus, así que con solo activar inputBusquedaActivo ya
+  // aparece enfocado y listo para escribir.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setInputBusquedaActivo(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [setInputBusquedaActivo]);
+
   // ESTADOS LOCALES DE LA VISTA
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
   const [modalModsAbierto, setModalModsAbierto] = useState(false);
