@@ -321,6 +321,11 @@ class Sede(models.Model):
 
     whatsapp_instancia = models.CharField(max_length=50, null=True, blank=True, help_text="Nombre exacto en Evolution API")
     whatsapp_numero = models.CharField(max_length=20, null=True, blank=True, help_text="Número del bot")
+    bot_token = models.CharField(
+        max_length=64, blank=True, default='',
+        help_text="Secreto propio de esta sede para BotTokenAuthentication (n8n). "
+                   "Se genera solo; NUNCA se comparte entre sedes/negocios."
+    )
     enlace_carta_virtual = models.URLField(max_length=500, null=True, blank=True, help_text="Link a tu menú digital, Canva, Drive o Instagram")
     carta_pdf = models.FileField(upload_to='cartas_pdf/', null=True, blank=True, help_text="Sube tu carta en formato PDF")
     hora_apertura = models.TimeField(null=True, blank=True)
@@ -392,6 +397,8 @@ class Sede(models.Model):
                 })
 
     def save(self, *args, **kwargs):
+        if not self.bot_token:
+            self.bot_token = secrets.token_urlsafe(32)
         self.full_clean()  # Dispara clean() antes de guardar
         if self.direccion and '+' in self.direccion:
             try:

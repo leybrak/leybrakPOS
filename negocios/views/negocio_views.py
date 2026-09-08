@@ -399,6 +399,10 @@ class SedeViewSet(viewsets.ModelViewSet):
         if not sede:
             return Response({'error': 'Instancia no registrada en ninguna Sede'}, status=404)
 
+        if not sede.bot_token:
+            # Por si la sede se creó antes de este campo y aún no pasó por save().
+            sede.save()
+
         # ✨ 1. OBTENEMOS LA HORA Y DÍA ACTUAL
         ahora = timezone.localtime() # Obtiene la hora en la zona de Perú (America/Lima)
         hora_actual = ahora.time()
@@ -447,6 +451,10 @@ class SedeViewSet(viewsets.ModelViewSet):
             'negocio_id':    negocio.id,
             'nombre_sede':   sede.nombre,
             'nombre_negocio': negocio.nombre,
+            # 🔑 Secreto propio de ESTA sede para las llamadas siguientes del bot
+            # (header X-Bot-Token, ver BotTokenAuthentication). No es el token
+            # global de arranque que protege este mismo endpoint.
+            'bot_token':     sede.bot_token,
             # 👇 EL CEREBRO DEL BOT 👇
             'esta_abierto':  esta_abierto,
             'hora_apertura': str_apertura,

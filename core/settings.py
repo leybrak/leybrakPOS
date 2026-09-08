@@ -213,9 +213,14 @@ SECURE_HSTS_PRELOAD             = _https
 # ============================================================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        # ✅ Solo CookieJWTAuthentication — lee el token desde la cookie HttpOnly
-        # El JWTAuthentication estándar (que lee el header Authorization) ya no es necesario
+        # ✅ CookieJWTAuthentication — lee el token desde la cookie HttpOnly (POS/ERP).
+        # El JWTAuthentication estándar (que lee el header Authorization) ya no es necesario.
         'negocios.authentication.CookieJWTAuthentication',
+        # 🤖 BotTokenAuthentication — X-Bot-Token + sede_id, para que el bot de
+        # WhatsApp (n8n) llame a los mismos endpoints sin un JWT atado a un
+        # único negocio. Solo se activa si la request trae X-Bot-Token; no
+        # interfiere con el flujo normal de cookie del POS/ERP.
+        'negocios.authentication.BotTokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
