@@ -89,3 +89,38 @@ class OrdenBotSeguridadTest(APITestCase):
         self.assertEqual(r.status_code, 200, r.data)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, 'aprobada')
+
+    # ── accion 'nota': regresión de AttributeError (Orden.notas_cocina no
+    # existía) — modificar_desde_bot y resolver_solicitud_bot devolvían 500
+    # tanto para pedidos 'pendiente' (nota directa) como 'preparando'
+    # (nota vía SolicitudCambio aprobada por el staff en el KDS). ──
+    def test_nota_directa_en_pedido_pendiente_no_rompe(self):
+        self.orden_a.estado = 'pendiente'
+        self.orden_a.save(update_fields=['estado'])
+        self.client.force_authenticate(user=self.user_a)
+        r = self.client.post(f'/api/ordenes/{self.orden_a.id}/modificar_desde_bot/', {
+            'accion': 'nota', 'datos': {'nota': 'agregar una gaseosa'},
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data['status'], 'aprobado')
+        self.orden_a.refresh_from_db()
+        self.assertIn('agregar una gaseosa', self.orden_a.notas_cocina)
+
+    def test_nota_en_pedido_preparando_queda_en_revision_y_se_aprueba_sin_romper(self):
+        self.orden_a.estado = 'preparando'
+        self.orden_a.save(update_fields=['estado'])
+        self.client.force_authenticate(user=self.user_a)
+
+        r1 = self.client.post(f'/api/ordenes/{self.orden_a.id}/modificar_desde_bot/', {
+            'accion': 'nota', 'datos': {'nota': 'agregar una gaseosa gordita'},
+        }, format='json')
+        self.assertEqual(r1.status_code, 200, r1.data)
+        self.assertEqual(r1.data['status'], 'en_revision')
+
+        solicitud = SolicitudCambio.objects.get(orden=self.orden_a, tipo_accion='nota')
+        r2 = self.client.post(f'/api/ordenes/{self.orden_a.id}/resolver_solicitud_bot/', {
+            'solicitud_id': solicitud.id, 'decision': 'aprobar',
+        }, format='json')
+        self.assertEqual(r2.status_code, 200, r2.data)
+        self.orden_a.refresh_from_db()
+        self.assertIn('agregar una gaseosa gordita', self.orden_a.notas_cocina)

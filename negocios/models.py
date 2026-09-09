@@ -621,6 +621,11 @@ class Orden(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     # Evita acreditar puntos/CRM dos veces si la orden pasa por varias vías de pago.
     puntos_otorgados = models.BooleanField(default=False)
+    # Nota general del pedido completo (ej. pedidos de último momento por el
+    # bot: "agregar una gaseosa") — distinto de DetalleOrden.notas_cocina,
+    # que es por plato. La escriben modificar_desde_bot/resolver_solicitud_bot
+    # en orden_views.py.
+    notas_cocina = models.TextField(blank=True, null=True)
 
     class Meta:
         indexes = [

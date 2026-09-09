@@ -348,7 +348,7 @@ class OrdenSerializer(serializers.ModelSerializer):
             'cliente_nombre', 'cliente_telefono',
             'motivo_cancelacion', 'creado_en', 'detalles',
             'direccion_entrega', 'latitud', 'longitud',
-            'costo_envio', 'metodo_pago_esperado'
+            'costo_envio', 'metodo_pago_esperado', 'notas_cocina'
         ]
 
 class PagoSerializer(serializers.ModelSerializer):
