@@ -347,6 +347,37 @@ MP_ACCESS_TOKEN   = os.getenv('MP_ACCESS_TOKEN', '')   # TEST-... (sandbox) / AP
 MP_SANDBOX        = os.getenv('MP_SANDBOX', 'True') == 'True'
 BACKEND_URL       = os.getenv('BACKEND_URL', 'http://localhost:8000')
 
+# ============================================================
+# LOGGING
+# ============================================================
+# Sin esto, el logging por defecto de Django en producción (DEBUG=False) NO
+# imprime las excepciones no capturadas a stdout/stderr — solo intenta
+# mandarlas por email a ADMINS (que acá no está configurado). Resultado: un
+# 500 real no dejaba NINGÚN rastro en `docker compose logs backend`,
+# imposible de diagnosticar. Con esto, cualquier excepción de una vista
+# (django.request) y cualquier logger propio del proyecto quedan en consola,
+# que Docker sí captura.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
 # ── Facturación electrónica (Nubefact) — credenciales del entorno DEMO ──────
 # (En producción cada negocio usa su propia ruta/token, guardados encriptados.)
 NUBEFACT_DEMO_RUTA  = os.getenv('NUBEFACT_DEMO_RUTA',  '')
