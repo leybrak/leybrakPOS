@@ -499,11 +499,20 @@ export const useErpDashboard = () => {
       }));
 
       alert("✅ ¡Configuración guardada!");
-    } catch (error) { 
+    } catch (error) {
       console.error(error);
-      alert("❌ Error al guardar. Verifica la consola."); 
-    } finally { 
-      setGuardandoConfig(false); 
+      // El backend puede bloquear el guardado con un motivo puntual (ej. no
+      // se puede activar Delivery sin zonas configuradas) — sin esto, ese
+      // mensaje se perdía y solo se veía un "revisa la consola" inútil.
+      const data = error?.response?.data;
+      let mensaje = null;
+      if (data && typeof data === 'object') {
+        const primero = Object.values(data)[0];
+        mensaje = Array.isArray(primero) ? primero[0] : primero;
+      }
+      alert(typeof mensaje === 'string' ? `❌ ${mensaje}` : "❌ Error al guardar. Verifica la consola.");
+    } finally {
+      setGuardandoConfig(false);
     }
   };
 

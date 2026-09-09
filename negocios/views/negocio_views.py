@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 
-from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede, Orden, InsumoSede, Comprobante
+from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede, Orden, InsumoSede, Comprobante, ZonaDelivery
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
 from .historia_views import _token_bot_valido
 from ..services import precargar_modulos_por_plan
@@ -72,6 +72,20 @@ class NegocioViewSet(viewsets.ModelViewSet):
         return Negocio.objects.none()
 
     def perform_update(self, serializer):
+        # 🚧 Bloqueo duro: no se puede activar Delivery sin al menos una zona
+        # configurada. Sin esto, el bot cae siempre a "un agente humano
+        # validará el envío" (Consultar_Delivery en cliente_views.py) para
+        # TODOS los pedidos delivery, en silencio, hasta que alguien lo note.
+        if serializer.validated_data.get('mod_delivery_activo') is True:
+            tiene_zonas = ZonaDelivery.objects.filter(
+                sede__negocio=serializer.instance, activa=True).exists()
+            if not tiene_zonas:
+                raise ValidationError({
+                    'mod_delivery_activo': 'Antes de activar Delivery, configura al menos una zona '
+                                            'de delivery (con su costo de envío) — si no, el bot no '
+                                            'va a poder cotizar el envío automáticamente.'
+                })
+
         # Si cambia el plan (ej. el panel de staff edita un negocio), precarga
         # los módulos que ese plan incluye — misma regla que NegocioAdmin.save_model
         # (negocios/services.py), para que no dependa de por dónde se edite.

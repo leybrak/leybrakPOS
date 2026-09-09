@@ -19,7 +19,7 @@ from negocios.views.app_version_views import app_version, descargar_apk
 from negocios.views.facturacion_views import emitir_comprobante, obtener_comprobante, listar_comprobantes, enviar_ticket_whatsapp_view
 from negocios.views.delivery_views import pedidos_delivery, tomar_pedido, actualizar_estado_delivery, avisar_cliente
 from negocios.views.historia_views import historias, cancelar_historia, historias_pendientes_bot, marcar_historia_bot
-from negocios.views.cliente_views import geocodificar_bot, registrar_feedback_bot, listar_canjes, stickers_view, eliminar_sticker
+from negocios.views.cliente_views import geocodificar_bot, registrar_feedback_bot, listar_canjes, stickers_view, eliminar_sticker, carritos_pendientes_bot, marcar_carrito_bot
 from negocios.views.staff_views import (
     TicketSoporteViewSet, metricas_staff, salud_bot, salud_servidor,
     crear_negocio_staff, pagos_pendientes_staff, pagos_historial_staff,
@@ -143,6 +143,9 @@ urlpatterns = [
     # Consumidos por el cron de n8n (token X-Bot-Token):
     path('bot/historias-pendientes/',           historias_pendientes_bot, name='historias-pendientes-bot'),
     path('bot/historias-marcar/',               marcar_historia_bot,      name='marcar-historia-bot'),
+    # Recordatorio de carrito abandonado (mismo token, mismo cron):
+    path('bot/carritos-pendientes/',            carritos_pendientes_bot,  name='carritos-pendientes-bot'),
+    path('bot/carritos-marcar/',                marcar_carrito_bot,       name='marcar-carrito-bot'),
 
     # ==========================================
     # 🛠️ PANEL DE STAFF (Leybrak) — solo superusuario

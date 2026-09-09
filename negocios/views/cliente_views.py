@@ -1,6 +1,7 @@
 import math
 import logging
 import requests
+from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework import viewsets
@@ -12,6 +13,7 @@ from django.conf import settings
 
 from ..models import Cliente, ZonaDelivery, ReglaNegocio, Sede
 from ..serializers import ClienteSerializer, ZonaDeliverySerializer, ReglaNegocioSerializer
+from ..authentication import bot_token_valido
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +261,84 @@ def registrar_feedback_bot(request):
         orden=orden, calificacion=cal, comentario=comentario,
     )
     return Response({'ok': True, 'mensaje': '¡Gracias por tu opinión! La registramos.'})
+
+
+# ─── Recordatorio de carrito abandonado (cron de n8n, token compartido) ──
+# Mismo patrón que historias_pendientes_bot/marcar_historia_bot
+# (negocios/views/historia_views.py): AllowAny + bot_token_valido, porque
+# este cron barre TODOS los negocios de una vez, no una sede puntual.
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def carritos_pendientes_bot(request):
+    """
+    Clientes que cotizaron un pedido por el bot (tool Cotizar_Pedido, ver
+    cotizar_bot en orden_views.py) hace entre 30 y 60 minutos y nunca
+    volvieron: ni se les mandó ya un recordatorio, ni terminaron pagando.
+    El mensaje va armado acá (texto fijo, sin gastar otra llamada a Gemini)
+    para que n8n solo tenga que reenviarlo.
+    """
+    from ..models import Orden
+    from ..whatsapp_ticket import _normalizar_telefono
+
+    if not bot_token_valido(request):
+        return Response({'error': 'Token inválido.'}, status=403)
+
+    ahora = timezone.localtime()
+    desde = ahora - timedelta(minutes=60)
+    hasta = ahora - timedelta(minutes=30)
+
+    candidatos = (
+        Cliente.objects
+        .filter(
+            bot_ultima_actividad__gte=desde,
+            bot_ultima_actividad__lte=hasta,
+            bot_recordatorio_enviado=False,
+        )
+        .exclude(bot_ultima_sede__isnull=True)
+        .exclude(bot_ultima_sede__whatsapp_instancia__isnull=True)
+        .exclude(bot_ultima_sede__whatsapp_instancia='')
+        .select_related('bot_ultima_sede', 'negocio')[:100]
+    )
+
+    pendientes = []
+    for cliente in candidatos:
+        sede = cliente.bot_ultima_sede
+        ya_pago = Orden.objects.filter(
+            sede=sede, cliente_telefono__icontains=cliente.telefono[-9:],
+            creado_en__gte=cliente.bot_ultima_actividad,
+        ).exists()
+        if ya_pago:
+            continue
+
+        nombre = (cliente.nombre or '').strip()
+        saludo = f'¡Hola {nombre}!' if nombre and nombre.lower() != 'cliente pos' else '¡Hola!'
+        bot_nombre = (cliente.negocio.bot_nombre or '').strip()
+        firma = f' — {bot_nombre}' if bot_nombre else ''
+        mensaje = f'{saludo} 😊 ¿Seguimos con tu pedido? Cuando quieras, retomamos donde quedamos.{firma}'
+
+        pendientes.append({
+            'cliente_id': cliente.id,
+            'telefono': _normalizar_telefono(cliente.telefono),
+            'instancia': sede.whatsapp_instancia,
+            'mensaje': mensaje,
+        })
+
+    return Response({'pendientes': pendientes})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def marcar_carrito_bot(request):
+    """n8n reporta que ya mandó el recordatorio: {cliente_id}. Uno solo por sesión inactiva."""
+    if not bot_token_valido(request):
+        return Response({'error': 'Token inválido.'}, status=403)
+
+    cliente_id = request.data.get('cliente_id')
+    actualizado = Cliente.objects.filter(id=cliente_id).update(bot_recordatorio_enviado=True)
+    if not actualizado:
+        return Response({'error': 'Cliente no encontrado.'}, status=404)
+    return Response({'ok': True})
 
 
 class ZonaDeliveryViewSet(viewsets.ModelViewSet):

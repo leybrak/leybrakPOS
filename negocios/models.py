@@ -1041,9 +1041,23 @@ class Cliente(models.Model):
         help_text="Estado actual: INICIO, ESPERANDO_PAGO, ESPERANDO_UBICACION, etc."
     )
     bot_memoria = models.JSONField(
-        default=dict, 
-        blank=True, 
+        default=dict,
+        blank=True,
         help_text="Guarda el carrito temporal, coordenadas y datos de la sesión actual."
+    )
+
+    # 🔔 Recordatorio automático si deja el pedido a medias (cotizó y no volvió)
+    bot_ultima_actividad = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Última vez que cotizó un pedido por el bot. La marca cotizar_bot."
+    )
+    bot_ultima_sede = models.ForeignKey(
+        'Sede', null=True, blank=True, on_delete=models.SET_NULL,
+        help_text="Sede (y por lo tanto instancia de WhatsApp) de esa última actividad."
+    )
+    bot_recordatorio_enviado = models.BooleanField(
+        default=False,
+        help_text="Ya se le mandó el recordatorio de 'seguimos con tu pedido' para esta sesión inactiva."
     )
 
     class Meta:

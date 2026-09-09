@@ -466,6 +466,16 @@ class OrdenViewSet(viewsets.ModelViewSet):
         finally:
             transaction.savepoint_rollback(sid)
 
+        # 🔔 Marca actividad FUERA del savepoint (que se revierte arriba): si
+        # cotiza y luego desaparece, el cron de recordatorios
+        # (carritos_pendientes_bot en cliente_views.py) lo detecta más tarde.
+        if cliente is not None:
+            cliente.bot_ultima_actividad = timezone.now()
+            cliente.bot_ultima_sede = sede
+            cliente.bot_recordatorio_enviado = False
+            cliente.save(update_fields=[
+                'bot_ultima_actividad', 'bot_ultima_sede', 'bot_recordatorio_enviado'])
+
         return Response(resultado)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
