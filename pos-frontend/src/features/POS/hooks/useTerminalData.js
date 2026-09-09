@@ -105,7 +105,10 @@ export const useTerminalData = (sedeActualId, triggerRecarga, setConfiguracionGl
         setTodasLasOrdenesActivas(ordenesVivas);
         setOrdenesLlevar(
           resOrdenes.data
-            .filter((o) => o.tipo === 'llevar' && o.estado !== 'completado' && o.estado !== 'cancelado')
+            // 🛠️ Antes solo 'llevar' — las órdenes 'delivery' (bot de WhatsApp)
+            // quedaban afuera de esta pestaña y solo aparecían (mal) en el
+            // resumen genérico de "Órdenes en curso" del costado.
+            .filter((o) => (o.tipo === 'llevar' || o.tipo === 'delivery') && o.estado !== 'completado' && o.estado !== 'cancelado')
             .reverse()
             .slice(0, 10)
         );

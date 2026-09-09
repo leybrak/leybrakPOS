@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl, Modal, TextInput,
@@ -9,14 +9,18 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
 import ModalMovimientoCaja from '../../components/modals/ModalMovimientoCaja';
+import ModalCobro from '../../components/modals/ModalCobro';
+import ModalVentaRapida from '../../components/modals/ModalVentaRapida';
 // ─── IMPORTACIONES DE API Y POS ───
 import api, {
-  getMesas, getSedes, getOrdenesLlevar, getOrdenes,
+  getMesas, getSedes, getOrdenesLlevar, getOrdenes, getNegocio,
   actualizarOrden, actualizarMesa,
   abrirCajaBD, getEstadoCaja,
   crearOrden, crearPago,
   registrarMovimientoCaja, validarPinEmpleado
 } from '../../api/api';
+import { refrescarMenuCache } from '../../services/menuCache';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // ─── Hook de tema (Alineado con los colores de tu Web) ───
 const useTema = () => {
@@ -37,10 +41,13 @@ const useTema = () => {
   };
 };
 
-// ─── Colores de estado de mesa (Igual a tu Grid web) ───
+// ─── Colores de estado de mesa (idéntico a TerminalMesasGrid.jsx en la web) ───
+// 🛠️ Antes usaba emoji (🍴📝💳); la web real (Pos_Terminal → TerminalMesasGrid.jsx)
+// usa icon-font (fi-rr-restaurant/edit/credit-card), no emoji — se cambió a
+// react-native-vector-icons/FontAwesome para verse igual.
 const getMesaStyles = (estado, colorPrimario, isDark) => {
   const est = estado?.toLowerCase() || 'libre';
-  
+
   if (est === 'ocupada') {
     return { bg: isDark ? `${colorPrimario}15` : `${colorPrimario}10`, border: `${colorPrimario}60`, textPrim: isDark ? '#fff' : '#000', badgeBg: `${colorPrimario}20`, badgeText: colorPrimario, icon: 'cutlery' };
   }
@@ -84,12 +91,16 @@ function TarjetaMesa({ mesa, t, color, onPress, seleccionada, modoUnir, ancho })
             {mesa.esGigante ? 'GRUPO' : labelEstado(mesa.estado).toUpperCase()}
           </Text>
         </View>
-        {styles.icon && !modoUnir && <Icon name={styles.icon} size={12} color={styles.badgeText} style={{ opacity: 0.7 }} />}
+        {styles.icon && !modoUnir && <Icon name={styles.icon} size={13} color={styles.textPrim} style={{ opacity: 0.7 }} />}
       </View>
 
       <View style={s.mesaCardBody}>
-        <Text style={[s.mesaNumero, { color: seleccionada ? '#fff' : styles.textPrim }]}>
-          {mesa.numero_o_nombre}
+        <Text
+          style={[s.mesaNumero, mesa.esGigante && s.mesaNumeroGrupo, { color: seleccionada ? '#fff' : styles.textPrim }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : mesa.numero_o_nombre}
         </Text>
       </View>
 
@@ -97,14 +108,6 @@ function TarjetaMesa({ mesa, t, color, onPress, seleccionada, modoUnir, ancho })
         <Text style={[s.mesaTotal, { color: seleccionada ? '#fff' : styles.textPrim }]}>
           S/ {parseFloat(mesa.total_orden).toFixed(2)}
         </Text>
-      )}
-
-      {/* Indicador de mesas unidas */}
-      {mesa.unida_a && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-          <Icon name="link" size={10} color={seleccionada ? '#fff' : t.textMuted} style={{ marginRight: 4 }} />
-          <Text style={{ fontSize: 9, fontWeight: '700', color: seleccionada ? '#fff' : t.textMuted }}>Unida a {mesa.unida_a}</Text>
-        </View>
       )}
     </TouchableOpacity>
   );
@@ -164,8 +167,9 @@ function ModalCliente({ visible, t, color, onConfirmar, onCerrar }) {
 }
 
 // ─── Pantalla principal ───
-export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
+export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno, mesaIdActiva }) {
   const t = useTema();
+  const confirmar = useConfirm();
   const { estadoCaja, setEstadoCaja } = useAppStore();
 
   const [mesas, setMesas]                 = useState([]);
@@ -183,11 +187,13 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
   const [abriendoCaja, setAbriendoCaja]     = useState(false);
   const [modoUnir, setModoUnir]             = useState(false);
   const [mesaPrincipal, setMesaPrincipal]   = useState(null);
+  const [mostrarPuerta, setMostrarPuerta]   = useState(false);
 
   const [modalClienteVisible, setModalClienteVisible]         = useState(false);
   const [drawerVentaRapidaAbierto, setDrawerVentaRapidaAbierto] = useState(false);
   const [modalMovimientosAbierto, setModalMovimientosAbierto] = useState(false);
   const [modalCierreAbierto, setModalCierreAbierto]           = useState(false);
+  const [ordenACobrar, setOrdenACobrar]                       = useState(null);
 
   const cajaAbierta  = estadoCaja === 'abierto' || estadoCaja?.estado === 'abierto';
   const esDueno      = ['dueño', 'admin', 'administrador'].includes(rolUsuario.toLowerCase());
@@ -223,29 +229,58 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
 
       const params = { negocio_id: negocioId, sede_id: savedSede };
 
-      const [resMesas, resSedes, resOrdenes, resOrdenesActivas] = await Promise.all([
+      const [resMesas, resSedes, resOrdenes, resOrdenesActivas, resNegocio] = await Promise.all([
         getMesas(params),
         getSedes({ negocio_id: negocioId }),
         getOrdenesLlevar(params),
-        getOrdenes({ negocio_id: negocioId, sede_id: savedSede, estado: 'preparando' }),
+        getOrdenes({ negocio_id: negocioId, sede_id: savedSede }),
+        getNegocio(negocioId),
       ]);
+      // 🛠️ Antes solo miraba estado:'preparando' — una orden 'pendiente' o 'listo'
+      // (aún no tomada por cocina, o ya lista pero no cobrada) no marcaba la mesa
+      // como ocupada. Igual que useMesasData.js en la web: cualquier orden que no
+      // esté completada/cancelada mantiene la mesa ocupada.
+      const ordenesVivas = (resOrdenesActivas.data || []).filter(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado'
+      );
       const mesasConEstado = resMesas.data.map(mesa => {
-        const ordenActiva = resOrdenesActivas.data?.find(o => String(o.mesa) === String(mesa.id));
+        const ordenActiva = ordenesVivas.find(o =>
+          o.mesa != null && (String(o.mesa) === String(mesa.id) || String(o.mesa) === String(mesa.mesa_principal))
+        );
+        let estado = 'libre';
+        if (mesa.mesa_principal) estado = 'unida';
+        else if (ordenActiva) estado = 'ocupada';
         return {
           ...mesa,
-          estado:      ordenActiva ? 'ocupada' : 'libre',
+          estado,
+          unida_a:     mesa.mesa_principal || null,
           total_orden: ordenActiva ? parseFloat(ordenActiva.total || 0) : 0,
         };
       });
 
       setMesas(mesasConEstado);
       setSedes(resSedes.data);
-      setOrdenesLlevar(resOrdenes.data || []);
+      // 🛠️ 'delivery' (bot de WhatsApp) entra en el mismo balde que 'llevar' —
+      // antes quedaba afuera de esta pestaña por completo.
+      setOrdenesLlevar(
+        (resOrdenes.data || []).filter(o =>
+          (o.tipo === 'llevar' || o.tipo === 'delivery') &&
+          o.estado !== 'completado' && o.estado !== 'cancelado'
+        )
+      );
 
-      const { configuracionGlobal } = useAppStore.getState();
-      const mods = configuracionGlobal?.modulos || {};
-      setModulos({ salon: mods.salon !== false, delivery: mods.delivery !== false });
-      setVistaLocal(mods.salon !== false ? 'salon' : 'llevar');
+      // 🛠️ Antes leía configuracionGlobal.modulos (calculado en App.tsx), que
+      // para "delivery" exige además el flag del plan (plan.modulo_delivery)
+      // — eso es correcto para el menú del ERP, pero la pestaña "Para Llevar"
+      // del POS en la web (useMesasData.js/useTerminalData.js) solo depende
+      // del interruptor crudo mod_delivery_activo del negocio, sin mirar el
+      // plan. Si el plan no traía modulo_delivery, el botón desaparecía en
+      // mobile aunque en la web sí se viera.
+      const dataNegocio = resNegocio.data || {};
+      const modSalon    = dataNegocio.mod_salon_activo !== false;
+      const modDelivery = dataNegocio.mod_delivery_activo !== false;
+      setModulos({ salon: modSalon, delivery: modDelivery });
+      setVistaLocal(modSalon ? 'salon' : 'llevar');
 
     } catch (e) {
       setVistaLocal('salon');
@@ -256,6 +291,42 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
   }, []);
 
   useEffect(() => { cargar(); }, []);
+
+  // 🛡️ Red de seguridad contra el "pidiendo" que se queda pegado: al tocar
+  // una mesa, manejarClickMesa avisa 'pidiendo' al instante por ESTE mismo
+  // WS (persistente, siempre conectado). La corrección de vuelta la manda
+  // PosScreen por SU PROPIA conexión (nueva cada vez que se entra a una
+  // mesa) al salir — pero si el mozo entra y sale muy rápido, esa conexión
+  // puede no alcanzar a abrirse a tiempo, y entonces nadie corrige el aviso
+  // optimista. Apenas se detecta que se volvió de una mesa (mesaIdActiva
+  // pasó de tener valor a null) se verifica el estado real contra el
+  // backend, sin depender de qué haya alcanzado a decir el WS.
+  const refrescarEstadoMesa = useCallback(async (mesaId) => {
+    if (!mesaId || mesaId === 'llevar' || !sedeId) return;
+    try {
+      const resOrdenes = await getOrdenes({ sede_id: sedeId, mesa: mesaId });
+      const ordenViva = (resOrdenes.data || []).find(o => o.estado !== 'completado' && o.estado !== 'cancelado');
+      setMesas(prev => prev.map(m => {
+        if (String(m.id) !== String(mesaId) || m.mesa_principal) return m;
+        return {
+          ...m,
+          estado: ordenViva ? 'ocupada' : 'libre',
+          total_orden: ordenViva ? parseFloat(ordenViva.total || 0) : 0,
+        };
+      }));
+    } catch (e) {
+      // silencioso — si falla, queda lo que el WS haya logrado dejar
+    }
+  }, [sedeId]);
+
+  const mesaAnteriorRef = useRef(null);
+  useEffect(() => {
+    const anterior = mesaAnteriorRef.current;
+    mesaAnteriorRef.current = mesaIdActiva;
+    if (anterior && !mesaIdActiva) {
+      refrescarEstadoMesa(anterior);
+    }
+  }, [mesaIdActiva, refrescarEstadoMesa]);
 
   // WebSocket
   useEffect(() => {
@@ -269,23 +340,35 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       try {
         const res   = await api.get('/verificar-sesion/');
         const token = res.data.ws_token;
-        // Token en header en vez de URL para no exponerlo en logs de servidor
-        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/`, null, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // El middleware del backend solo lee el token de una cookie HttpOnly o de
+        // ?token= en la URL — nunca de un header Authorization (eso quedaba mudo:
+        // la conexión autenticaba como AnonymousUser y el server la cerraba con 4001).
+        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/?token=${token}`);
         wsRef.current = ws;
 
         ws.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'mesa_estado') {
+            // El backend siempre retransmite como 'mesa_actualizada' / 'orden_llevar_actualizada'
+            // (ver negocios/consumers.py) — nunca 'mesa_estado'/'orden_llevar', así que las
+            // actualizaciones de otras pantallas (incluida la web) se perdían en silencio.
+            if (data.type === 'mesa_actualizada') {
               setMesas(prev => prev.map(m =>
                 String(m.id) === String(data.mesa_id)
                   ? { ...m, estado: data.estado, total_orden: data.total ?? m.total_orden }
                   : m
               ));
             }
-            if (data.type === 'orden_llevar') cargar();
+            if (data.type === 'orden_llevar_actualizada') cargar();
+            // La carta cambió (alguien activó/desactivó o editó un producto
+            // desde el ERP) — refrescamos la cache local en segundo plano
+            // para que la próxima mesa que se abra ya la tenga al día
+            // (ver negocios/signals.py: avisar_menu_actualizado_*).
+            if (data.type === 'menu_actualizado') {
+              EncryptedStorage.getItem('negocio_id').then((negocioId) => {
+                if (negocioId) refrescarMenuCache(negocioId, sedeId);
+              });
+            }
           } catch {}
         };
         ws.onerror  = () => ws.close();
@@ -297,6 +380,18 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
 
     conectar();
     return () => { unmounted = true; clearTimeout(retry); ws?.close(); };
+  }, [sedeId]);
+
+  // Red de seguridad: si el WS se perdió el evento (reconexión, app en
+  // segundo plano, etc.), igual refrescamos la carta cada 10 minutos.
+  useEffect(() => {
+    if (!sedeId) return;
+    const intervalo = setInterval(() => {
+      EncryptedStorage.getItem('negocio_id').then((negocioId) => {
+        if (negocioId) refrescarMenuCache(negocioId, sedeId);
+      });
+    }, 10 * 60 * 1000);
+    return () => clearInterval(intervalo);
   }, [sedeId]);
 
   useEffect(() => {
@@ -352,7 +447,16 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       if (mesa.estado === 'libre' && wsRef.current) {
         wsRef.current.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesa.id, estado: 'pidiendo' }));
       }
-      onSeleccionarMesa(mesa.id);
+      // 🛠️ Antes se pasaba solo mesa.id (el id de la fila en la BD, un
+      // autoincremental GLOBAL de todo el sistema) y PosScreen lo mostraba
+      // tal cual como "MESA {id}" — con pocas mesas en el negocio, ese id
+      // fácilmente es un número como 20 aunque el negocio solo tenga 7
+      // mesas numeradas 1-7. Ahora mandamos también el número/nombre real
+      // de la mesa (numero_o_nombre) para que PosScreen muestre ese, no el id.
+      onSeleccionarMesa({
+        id: mesa.id,
+        numero: mesa.esGigante ? mesa.mesasInvolucradas.join(' + ') : mesa.numero_o_nombre,
+      });
     }
   };
 
@@ -366,25 +470,65 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
     setModalCierreAbierto(true);
   };
 
-  const handleCancelarOrdenLlevar = (id) => {
-    Alert.alert('Cancelar pedido', '¿Estás seguro?', [
-      { text: 'Volver', style: 'cancel' },
-      { text: 'Confirmar', style: 'destructive', onPress: async () => {
-        try {
-          await actualizarOrden(id, { estado: 'cancelado', cancelado: true });
-          cargar();
-        } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
-      }},
-    ]);
+  const handleCancelarOrdenLlevar = async (id) => {
+    const ok = await confirmar('¿Estás seguro?', { titulo: 'Cancelar pedido', peligroso: true, textoConfirmar: 'Confirmar' });
+    if (!ok) return;
+    try {
+      await actualizarOrden(id, { estado: 'cancelado', cancelado: true });
+      cargar();
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar.'); }
   };
 
-  // ── Cálculo de columnas ──
+  // 🛠️ Antes: onPress={() => {}} — el botón de check no hacía nada.
+  const handleEntregarOrdenLlevar = async (id) => {
+    try {
+      await actualizarOrden(id, { estado: 'completado' });
+      cargar();
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo marcar como entregado.'); }
+  };
+
+  // ── Columnas y agrupación de mesas unidas — igual a MesasGrid.jsx en la web ──
   const mesasFiltradas = mesas.filter(m => sedeId ? String(m.sede) === String(sedeId) : true);
-  const maxColumna     = mesasFiltradas.length > 0 ? Math.max(...mesasFiltradas.map(m => m.posicion_x || 0)) + 1 : 2;
-  const numColumnas    = Math.max(2, Math.min(3, maxColumna)); 
-  const anchoCelda     = `${Math.floor(100 / numColumnas) - 3}%`;
-  
+
+  const mesasAgrupadas = useMemo(() => {
+    return mesasFiltradas.filter(m => m.estado !== 'unida').map(mesaPadre => {
+      const hijas = mesasFiltradas.filter(m => m.unida_a === mesaPadre.id);
+      return {
+        ...mesaPadre,
+        mesasInvolucradas: [mesaPadre.numero_o_nombre, ...hijas.map(h => h.numero_o_nombre)],
+        esGigante: hijas.length > 0,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesas, sedeId]);
+
   const sedeActualInfo = sedes?.find(s => String(s.id) === String(sedeId));
+  // Sede.columnas_salon es configurable por el dueño (default 3, igual que la web).
+  const numColumnas    = sedeActualInfo?.columnas_salon || 3;
+  const anchoCelda     = `${Math.floor(100 / numColumnas) - 3}%`;
+
+  // 🛠️ Antes solo ordenaba las mesas por posicion_x/posicion_y y las renderizaba
+  // en fila — respetaba las columnas pero no la posición real (huecos, mesas
+  // movidas). Igual que MesasGrid.jsx en la web: arma un "plano" con huecos
+  // vacíos en las posiciones sin mesa, usando posicion_x como índice de casilla.
+  const { mapaMesas, totalCasillas } = useMemo(() => {
+    let maxPos = 0;
+    const mapa = {};
+    mesasAgrupadas.forEach(mesa => {
+      let pos = mesa.posicion_x;
+      if (pos === undefined || pos === null || mapa[pos] !== undefined) {
+        pos = 0;
+        while (mapa[pos] !== undefined) pos++;
+      }
+      mapa[pos] = mesa;
+      if (pos > maxPos) maxPos = pos;
+    });
+    const baseCasillas = Math.max(maxPos + 1, mesasAgrupadas.length, 12);
+    const total = Math.ceil(baseCasillas / numColumnas) * numColumnas;
+    return { mapaMesas: mapa, totalCasillas: total };
+  }, [mesasAgrupadas, numColumnas]);
+
+  const casillas = Array.from({ length: totalCasillas }, (_, i) => i);
 
   if (vistaLocal === null || cargando) {
     return (
@@ -455,51 +599,63 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
           </View>
         </View>
 
-        {/* 2. Contenedor de Botones (Columna que agrupa las 2 filas) */}
+        {/* 2. Contenedor de Botones — mismo orden y agrupamiento que MesasHeader.jsx en la web */}
         <View style={{ flexDirection: 'column', gap: 6 }}>
-          
-          {/* FILA 1: Config, Venta Rápida, Unir Mesas */}
+
+          {/* FILA 1: Unir Mesas → cambiar vista Salón/Llevar → Venta Rápida */}
           <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
-            {esDueno && onVolver && (
-              <TouchableOpacity style={[s.actionBtn, { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }]} onPress={onVolver}>
-                <Icon name="cog" size={18} color="#3b82f6" />
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
-              <Icon name="bolt" size={18} color={t.color} />
-            </TouchableOpacity>
-            
             {vistaLocal === 'salon' && (
-              <TouchableOpacity 
-                style={[s.actionBtn, { backgroundColor: t.bgCard, borderColor: t.border }, modoUnir && { backgroundColor: t.color, borderColor: t.color }]} 
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: t.bgCard2, borderColor: t.border }, modoUnir && { backgroundColor: t.color, borderColor: t.color }]}
                 onPress={() => { setModoUnir(!modoUnir); setMesaPrincipal(null); }}
               >
                 <Icon name="link" size={16} color={modoUnir ? '#fff' : t.textSec} />
               </TouchableOpacity>
             )}
+
+            {modulos.salon !== false && modulos.delivery !== false && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                onPress={() => setVistaLocal(vistaLocal === 'salon' ? 'llevar' : 'salon')}
+              >
+                <Icon name={vistaLocal === 'salon' ? 'shopping-bag' : 'table'} size={16} color={t.textSec} />
+                {vistaLocal === 'salon' && ordenesLlevar.length > 0 && (
+                  <View style={[s.badgeNotif, { backgroundColor: t.color }]}>
+                    <Text style={s.badgeNotifText}>{ordenesLlevar.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
+              <Icon name="bolt" size={16} color={t.color} />
+            </TouchableOpacity>
+
+            {/* Terminar mi turno — marca la salida y vuelve al PIN (mesero/cajero/cocinero) */}
+            {onCerrarTurno && (
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+                onPress={async () => { if (await confirmar('¿Terminar tu turno? Se marcará tu salida.', { titulo: 'Terminar turno', peligroso: true, textoConfirmar: 'Terminar' })) onCerrarTurno(); }}
+              >
+                <Icon name="sign-out" size={16} color="#ef4444" />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* FILA 2: Cambiar Vista, Caja Chica, Cerrar Caja */}
+          {/* FILA 2 (solo cajero/admin/dueño): ERP → Caja Chica → Cerrar Turno */}
           <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
-            <TouchableOpacity 
-              style={[s.actionBtn, { backgroundColor: t.bgCard, borderColor: t.border }]} 
-              onPress={() => setVistaLocal(vistaLocal === 'salon' ? 'llevar' : 'salon')}
-            >
-              <Icon name={vistaLocal === 'salon' ? 'shopping-bag' : 'table'} size={16} color={t.textSec} />
-              {vistaLocal === 'salon' && ordenesLlevar.length > 0 && (
-                <View style={[s.badgeNotif, { backgroundColor: t.color }]}>
-                  <Text style={s.badgeNotifText}>{ordenesLlevar.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            
+            {esDueno && onVolver && (
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }]} onPress={onVolver}>
+                <Icon name="th-large" size={16} color="#3b82f6" />
+              </TouchableOpacity>
+            )}
+
             {['cajero', 'administrador', 'admin', 'dueño'].includes(rolUsuario.toLowerCase()) && (
               <TouchableOpacity
                 style={[s.actionBtn, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.3)' }]}
                 onPress={() => setModalMovimientosAbierto(true)}
               >
-                <Icon name="money" size={18} color="#10b981" />
+                <Icon name="money" size={16} color="#10b981" />
               </TouchableOpacity>
             )}
 
@@ -508,7 +664,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                 style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
                 onPress={handleCierreCajaSeguro}
               >
-                <Icon name="lock" size={18} color="#ef4444" />
+                <Icon name="lock" size={16} color="#ef4444" />
               </TouchableOpacity>
             )}
           </View>
@@ -530,22 +686,49 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
                 </Text>
               </View>
             )}
-            
+
+            <View style={{ alignItems: 'flex-end', marginBottom: 16 }}>
+              <TouchableOpacity
+                style={[
+                  s.orientacionBtn,
+                  mostrarPuerta
+                    ? { backgroundColor: t.color, borderColor: t.color }
+                    : { backgroundColor: `${t.color}1A`, borderColor: `${t.color}40` },
+                ]}
+                onPress={() => setMostrarPuerta(!mostrarPuerta)}
+                activeOpacity={0.85}
+              >
+                <Text style={[s.orientacionBtnText, { color: mostrarPuerta ? '#fff' : t.color }]}>
+                  {mostrarPuerta ? 'OCULTAR ORIENTACIÓN' : '📍 ACTIVAR ORIENTACIÓN'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {mostrarPuerta && (
+              <View style={[s.puertaBanner, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}>
+                <Text style={[s.puertaBannerText, { color: t.textMuted }]}>ENTRADA PRINCIPAL 🚪</Text>
+              </View>
+            )}
+
             <View style={s.mesasGrid}>
-              {mesasFiltradas
-                .sort((a, b) => a.posicion_y !== b.posicion_y ? a.posicion_y - b.posicion_y : a.posicion_x - b.posicion_x)
-                .map(mesa => (
+              {casillas.map(i => {
+                const mesa = mapaMesas[i];
+                if (!mesa) {
+                  return <View key={`hueco-${i}`} style={{ width: anchoCelda, height: 128 }} pointerEvents="none" />;
+                }
+                return (
                   <TarjetaMesa
                     key={mesa.id}
                     mesa={mesa}
                     t={t}
                     color={t.color}
-                    ancho={anchoCelda}
+                    ancho={mesa.esGigante ? `${(100 / numColumnas) * 2 - 3}%` : anchoCelda}
                     onPress={manejarClickMesa}
                     seleccionada={mesaPrincipal === mesa.id}
                     modoUnir={modoUnir}
                   />
-                ))}
+                );
+              })}
             </View>
           </>
         )}
@@ -557,39 +740,56 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
               <Text style={s.btnNuevaOrdenText}>NUEVA ORDEN PARA LLEVAR</Text>
             </TouchableOpacity>
 
-            {ordenesLlevar.filter(o => o.estado !== 'pagado').length === 0 ? (
+            {ordenesLlevar.length === 0 ? (
               <View style={[s.emptyState, { borderColor: t.border }]}>
                 <Icon name="shopping-bag" size={40} color={t.textMuted} style={{ opacity: 0.5 }} />
                 <Text style={[s.emptyTitulo, { color: t.textPrim }]}>SIN PEDIDOS ACTIVOS</Text>
                 <Text style={[s.emptySub, { color: t.textMuted }]}>Las órdenes para llevar aparecerán aquí</Text>
               </View>
             ) : (
-              ordenesLlevar.filter(o => o.estado !== 'pagado').map(orden => (
+              ordenesLlevar.map(orden => {
+                const esDelivery = orden.tipo === 'delivery';
+                const estaPagado = orden.estado_pago === 'pagado';
+                return (
                 <View key={orden.id} style={[s.llevarCard, { backgroundColor: t.bgCard, borderColor: t.border }]}>
                   <View style={s.llevarHeader}>
-                    <View>
-                      <Text style={[s.llevarNombre, { color: t.textPrim }]}>{orden.cliente_nombre || 'Cliente'}</Text>
-                      {orden.telefono && (
-                        <Text style={[s.llevarTel, { color: t.textSec }]}><Icon name="whatsapp" /> {orden.telefono}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <View style={[s.badgeTipo, { backgroundColor: esDelivery ? 'rgba(59,130,246,0.1)' : `${t.color}15` }]}>
+                          <Icon name={esDelivery ? 'motorcycle' : 'shopping-bag'} size={9} color={esDelivery ? '#3b82f6' : t.color} style={{ marginRight: 4 }} />
+                          <Text style={[s.badgeTipoText, { color: esDelivery ? '#3b82f6' : t.color }]}>{esDelivery ? 'DELIVERY' : 'PARA LLEVAR'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[s.llevarNombre, { color: t.textPrim }]}>{orden.cliente_nombre || 'Cliente sin nombre'}</Text>
+                      {orden.cliente_telefono && (
+                        <Text style={[s.llevarTel, { color: t.textSec }]}><Icon name="whatsapp" /> {orden.cliente_telefono}</Text>
+                      )}
+                      {esDelivery && orden.direccion_entrega && (
+                        <Text style={[s.llevarTel, { color: t.textMuted }]}><Icon name="map-marker" /> {orden.direccion_entrega}</Text>
                       )}
                     </View>
                     <Text style={[s.llevarTotal, { color: t.color }]}>S/ {parseFloat(orden.total || 0).toFixed(2)}</Text>
                   </View>
-                  
+
                   <View style={s.llevarActions}>
-                    <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: t.color }]} onPress={() => {}}>
-                      <Icon name="money" size={12} color="#fff" style={{ marginRight: 6 }} />
-                      <Text style={s.btnCobrarText}>COBRAR</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[s.btnActionIcon, { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)' }]} onPress={() => {}}>
-                      <Icon name="check" size={14} color="#22c55e" />
-                    </TouchableOpacity>
+                    {!estaPagado ? (
+                      <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: t.color }]} onPress={() => setOrdenACobrar(orden)}>
+                        <Icon name="money" size={12} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={s.btnCobrarText}>COBRAR</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity style={[s.btnCobrarLlevar, { backgroundColor: '#22c55e' }]} onPress={() => handleEntregarOrdenLlevar(orden.id)}>
+                        <Icon name="check" size={12} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={s.btnCobrarText}>ENTREGAR</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={[s.btnActionIcon, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.2)' }]} onPress={() => handleCancelarOrdenLlevar(orden.id)}>
                       <Icon name="trash" size={14} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))
+                );
+              })
             )}
           </View>
         )}
@@ -611,6 +811,60 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver }) {
       <ModalMovimientoCaja
         visible={modalMovimientosAbierto}
         onClose={() => setModalMovimientosAbierto(false)}
+      />
+      <ModalCobro
+        visible={!!ordenACobrar}
+        onClose={() => { setOrdenACobrar(null); cargar(); }}
+        total={ordenACobrar ? parseFloat(ordenACobrar.total || 0) : 0}
+        ordenId={ordenACobrar?.id}
+        carrito={ordenACobrar?.detalles || []}
+        esVentaRapida={ordenACobrar?.es_venta_rapida || false}
+        onCobroExitoso={async ({ pagos, telefono }) => {
+          try {
+            let idOrden = ordenACobrar.id;
+
+            // 🛠️ Igual que Pos_Terminal.jsx en la web: la venta rápida no
+            // tiene una orden real todavía, hay que crearla antes de cobrar.
+            if (idOrden === 'venta_rapida') {
+              const { data } = await crearOrden({
+                tipo: 'llevar',
+                estado: 'pendiente',
+                estado_pago: 'pendiente',
+                sede: sedeId,
+                detalles: ordenACobrar.detalles || [],
+              });
+              idOrden = data.id;
+            }
+
+            const sesionCajaId = await EncryptedStorage.getItem('sesion_caja_id');
+            const pagosManuales = pagos.filter(p => !p.yaConfirmado);
+            await api.post(`/ordenes/${idOrden}/cobrar_orden/`, {
+              pagos: pagosManuales,
+              telefono,
+              sesion_caja_id: sesionCajaId,
+            });
+            return { ordenId: idOrden };
+          } catch (err) {
+            Alert.alert('Error', err?.response?.data?.error || 'No se pudo procesar el pago.');
+            throw err;
+          }
+        }}
+      />
+
+      <ModalVentaRapida
+        visible={drawerVentaRapidaAbierto}
+        onClose={() => setDrawerVentaRapidaAbierto(false)}
+        onProcederPago={(carritoVR, totalVR) => {
+          setOrdenACobrar({
+            id: 'venta_rapida',
+            es_venta_rapida: true,
+            total: totalVR,
+            detalles: carritoVR.map(c => ({
+              producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad,
+            })),
+          });
+          setDrawerVentaRapidaAbierto(false);
+        }}
       />
     </View>
   );
@@ -660,14 +914,21 @@ const s = StyleSheet.create({
   unirBanner:      { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
   unirBannerText:  { fontSize: 12, fontWeight: '800' },
 
+  // Grid: mismo alto fijo (h-32 = 128px) y rounded-3xl (24) que la web en móvil.
   mesasGrid:       { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  mesaCard:        { aspectRatio: 0.9, borderRadius: 24, borderWidth: 1.5, padding: 14, justifyContent: 'space-between' },
+  mesaCard:        { height: 128, borderRadius: 24, borderWidth: 1.5, padding: 14, justifyContent: 'space-between' },
   mesaCardHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  mesaEstadoBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  mesaEstadoText:  { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  mesaEstadoBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  mesaEstadoText:  { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   mesaCardBody:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  mesaNumero:      { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
+  mesaNumero:      { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  mesaNumeroGrupo: { fontSize: 24 },
   mesaTotal:       { fontSize: 12, fontWeight: '900', textAlign: 'center' },
+
+  orientacionBtn:     { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1 },
+  orientacionBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  puertaBanner:       { paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', marginBottom: 16, alignItems: 'center' },
+  puertaBannerText:   { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
 
   btnNuevaOrden:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 16, paddingVertical: 18, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 4 } },
   btnNuevaOrdenText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
@@ -679,6 +940,8 @@ const s = StyleSheet.create({
   llevarHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   llevarNombre:    { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
   llevarTel:       { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  badgeTipo:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  badgeTipoText:   { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   llevarTotal:     { fontSize: 20, fontWeight: '900' },
   llevarActions:   { flexDirection: 'row', gap: 8 },
   btnCobrarLlevar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12 },

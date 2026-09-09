@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import usePosStore from '../../store/usePosStore';
-import { cerrarSesionGlobal, crearTicket } from '../../api/api';
+import { crearTicket } from '../../api/api';
 
 function ModalReportarProblema({ onClose }) {
   const [asunto, setAsunto] = useState('');
@@ -111,6 +111,7 @@ export default function Erp_Sidebar({
       titulo: "MONITOREO",
       items: [
         { id: 'dashboard', icono: 'fi-rr-apps', nombre: 'Panel de Control', show: true },
+        { id: 'analiticas', icono: 'fi-rr-chart-histogram', nombre: 'Analíticas', show: true },
       ]
     },
     {
@@ -144,12 +145,6 @@ export default function Erp_Sidebar({
     }
   ];
 
-  const handleCerrarSesion = async () => {
-    if (window.confirm("¿Estás seguro que deseas cerrar sesión?")) {
-      await cerrarSesionGlobal(); 
-    }
-  };
-
   return (
     <>
       {menuAbierto && (
@@ -173,7 +168,7 @@ export default function Erp_Sidebar({
             </h1>
             <p className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase mt-0.5">SaaS Platform</p>
           </div>
-          
+
           {isCollapsed && (
             <div className="absolute text-2xl font-black text-white bg-[#1a1a1a] w-12 h-12 rounded-xl flex items-center justify-center border border-[#333]">
               B<span style={{ color: colorPrimario }}>.</span>
@@ -291,17 +286,6 @@ export default function Erp_Sidebar({
           </button>
 
           {mostrarReporte && <ModalReportarProblema onClose={() => setMostrarReporte(false)} />}
-
-          <button
-            onClick={handleCerrarSesion}
-            className={`text-neutral-500 hover:text-red-500 hover:bg-red-500/10 transition-colors flex items-center justify-center
-              ${isCollapsed ? 'w-12 h-12 rounded-xl text-xl' : 'w-full py-2.5 rounded-xl gap-3 font-medium text-sm'}
-            `}
-            title={isCollapsed ? "Cerrar Sesión" : ""}
-          >
-            <i className="fi fi-rr-exit mt-1"></i>
-            {!isCollapsed && <span>Cerrar Sesión</span>}
-          </button>
         </div>
       </aside>
     </>

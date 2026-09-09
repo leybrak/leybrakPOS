@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Modal, FlatList, ScrollView, ActivityIndicator, StatusBar,
+  Modal, FlatList, ScrollView, ActivityIndicator, StatusBar, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
@@ -107,30 +107,28 @@ export default function ModalModificadoresCatalogo({ visible, categorias = [], t
   const modificadoresFiltrados = modificadores.filter(m => m.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()));
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar} statusBarTranslucent>
+    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
       <View style={[st.overlay, { backgroundColor: t.bg }]}>
-        <StatusBar barStyle={t.isDark ? 'light-content' : 'dark-content'} backgroundColor={t.bg} />
+        <StatusBar barStyle={t.isDark ? 'light-content' : 'dark-content'} backgroundColor={t.bgCard} />
 
-        {/* CABECERA */}
-        <View style={[st.header, { borderBottomColor: t.border, backgroundColor: t.bgCard2 }]}>
-          <View style={st.headerLeft}>
-            {vista === 'formulario' && (
-              <TouchableOpacity
-                onPress={() => { setVista('lista'); setEditando(null); }}
-                style={[st.backBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}
-              >
-                <Icon name="angle-left" size={16} color={t.textSec} />
-              </TouchableOpacity>
-            )}
-            <View style={[st.headerIcono, { backgroundColor: `${t.color}15` }]}>
-              <Icon name="sliders" size={18} color={t.color} />
-            </View>
-            <View>
-              <Text style={[st.titulo, { color: t.textPrim }]}>Modificadores Rápidos</Text>
-              <Text style={[st.subtitulo, { color: t.textMuted }]}>Extras por categoría</Text>
-            </View>
+        {/* CABECERA — mismo shell grande que Plato/Receta/Variaciones/Combos */}
+        <View style={[st.header, { backgroundColor: t.bgCard, borderBottomColor: t.border }]}>
+          {vista === 'formulario' && (
+            <TouchableOpacity
+              onPress={() => { setVista('lista'); setEditando(null); }}
+              style={[st.backBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}
+            >
+              <Icon name="arrow-left" size={14} color={t.textSec} />
+            </TouchableOpacity>
+          )}
+          <View style={[st.headerIcono, { backgroundColor: `${t.color}15` }]}>
+            <Icon name="sliders" size={18} color={t.color} />
           </View>
-          <TouchableOpacity onPress={onCerrar} style={[st.closeBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.titulo, { color: t.textPrim }]} numberOfLines={1}>Modificadores Rápidos</Text>
+            <Text style={[st.subtitulo, { color: t.textMuted }]}>EXTRAS POR CATEGORÍA</Text>
+          </View>
+          <TouchableOpacity onPress={onCerrar} style={[st.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}>
             <Icon name="times" size={14} color={t.textSec} />
           </TouchableOpacity>
         </View>
@@ -284,15 +282,14 @@ export default function ModalModificadoresCatalogo({ visible, categorias = [], t
 }
 
 const st = StyleSheet.create({
-  overlay: { flex: 1, paddingTop: StatusBar.currentHeight || 24 },
+  overlay: { flex: 1 },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  backBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  headerIcono: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  titulo: { fontSize: 16, fontWeight: '900' },
-  subtitulo: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 1 },
-  closeBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 20, borderBottomWidth: 1 },
+  backBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerIcono: { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  titulo: { fontSize: 17, fontWeight: '900' },
+  subtitulo: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
+  closeBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   listaHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10 },
   contadorTxt: { fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import usePosStore from '../../store/usePosStore';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
 import api, { enviarTicketWhatsapp, emitirComprobante } from '../../api/api';
 import { usePagosWS } from '../../features/POS/hooks/usePagosWS';
 import ModalEmitirComprobante from './ModalEmitirComprobante';
@@ -11,6 +12,7 @@ import {
 
 export default function ModalCobroMejorado({ isOpen, onClose, total, onCobroExitoso, carrito = [], esVentaRapida = false, ordenId = null }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const { configuracionGlobal } = usePosStore();
   const config = configuracionGlobal || {};
   const tema = config.temaFondo || 'dark';
@@ -58,8 +60,17 @@ export default function ModalCobroMejorado({ isOpen, onClose, total, onCobroExit
   useEffect(() => { pasoRef.current   = paso;   }, [paso]);
   useEffect(() => { metodoRef.current = metodo; }, [metodo]);
 
-  // ─── Callback que maneja pagos entrantes por WebSocket ───────
-  const manejarPagoEntrante = useCallback((data) => {
+  // ─── Callback que maneja los mensajes del canal de pagos por WS ─
+  const manejarMensajePagos = useCallback((data) => {
+    if (data.type === 'notificacion_confirmada') {
+      // Otra caja del mismo negocio ya usó esta notificación (pagó una
+      // mesa distinta con el mismo monto) — la sacamos de la lista antes
+      // de que alguien acá intente tocarla pensando que sigue disponible.
+      setNotificaciones(prev => prev.filter(n => n.notificacion_id !== data.notificacion_id));
+      return;
+    }
+
+    if (data.type !== 'pago_recibido') return;
     if (pasoRef.current   !== 'qr')   return;
     if (metodoRef.current !== 'yape' && metodoRef.current !== 'plin') return;
 
@@ -76,7 +87,7 @@ export default function ModalCobroMejorado({ isOpen, onClose, total, onCobroExit
   // ─── Hook WebSocket de pagos ──────────────────────────────────
   usePagosWS(
     usaConfirmacionAutomatica ? negocioId : null,
-    manejarPagoEntrante
+    manejarMensajePagos
   );
 
   // ─── Reset al abrir / cerrar ──────────────────────────────────
@@ -180,6 +191,26 @@ export default function ModalCobroMejorado({ isOpen, onClose, total, onCobroExit
 
   // ─── Confirmar notificación recibida por WS ───────────────────
  const confirmarNotificacion = async (notificacion) => {
+  // 🛡️ Si hay 2+ pagos del mismo monto a la vez (dos clientes pagando lo
+  // mismo casi juntos), nada impide tocar el que no corresponde — el
+  // sistema no sabe cuál mesa mandó cuál Yape, solo el cajero puede
+  // verificarlo leyendo el nombre/código. Con un solo pago en pantalla no
+  // hay ambigüedad posible, así que no agregamos este paso de más.
+  if (notificaciones.length >= 2) {
+    const esYape = notificacion.tipo === 'YAPE';
+    const detalle = esYape && notificacion.codigo_seguridad
+      ? `el código de seguridad es ${notificacion.codigo_seguridad}`
+      : `el nombre es "${notificacion.nombre_cliente}"`;
+    const ok = await confirm({
+      titulo: 'Hay más de un pago con este monto',
+      mensaje: `Verifica con el cliente que ${detalle} antes de confirmar — hay otro pago de S/ ${parseFloat(notificacion.monto).toFixed(2)} esperando al mismo tiempo.`,
+      textoConfirmar: 'Sí, coincide',
+      textoCancelar: 'Cancelar',
+      peligroso: false,
+    });
+    if (!ok) return;
+  }
+
   setNotificacionElegida(notificacion);
   try {
     await api.post('/yape/confirmar/', {
@@ -189,8 +220,8 @@ export default function ModalCobroMejorado({ isOpen, onClose, total, onCobroExit
     setNotificaciones([]);
     // ✅ Flag que indica que el backend ya procesó el pago
     registrarPago(parseFloat(notificacion.monto), 0, true);
-  } catch {
-    toast.error('Error al confirmar el pago. Intenta de nuevo.');
+  } catch (e) {
+    toast.error(e?.response?.data?.error || 'Error al confirmar el pago. Intenta de nuevo.');
     setNotificacionElegida(null);
   }
 };

@@ -1,11 +1,16 @@
 import { useEffect, useRef, useCallback } from 'react';
 import api from '../../../api/api';
 
-export const usePagosWS = (negocioId, onPagoRecibido) => {
+// onMensaje recibe CUALQUIER mensaje del canal de pagos del negocio (no solo
+// 'pago_recibido') — el llamador decide qué hacer según `data.type`. Antes
+// este hook filtraba internamente solo 'pago_recibido', así que no había
+// forma de enterarse cuando OTRA caja confirmaba una notificación (evento
+// 'notificacion_confirmada') para sacarla de la lista local a tiempo.
+export const usePagosWS = (negocioId, onMensaje) => {
   const wsRef = useRef(null);
 
-  const onPagoRecibidoRef = useRef(onPagoRecibido);
-  useEffect(() => { onPagoRecibidoRef.current = onPagoRecibido; }, [onPagoRecibido]);
+  const onMensajeRef = useRef(onMensaje);
+  useEffect(() => { onMensajeRef.current = onMensaje; }, [onMensaje]);
 
   // Expone un método para cerrar el WS manualmente (cuando se cierra el modal)
   const desconectar = useCallback(() => {
@@ -44,9 +49,7 @@ export const usePagosWS = (negocioId, onPagoRecibido) => {
         ws.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'pago_recibido') {
-              onPagoRecibidoRef.current?.(data);
-            }
+            onMensajeRef.current?.(data);
           } catch (err) {
             console.warn('⚠️ Mensaje WebSocket Pagos no válido', err);
           }

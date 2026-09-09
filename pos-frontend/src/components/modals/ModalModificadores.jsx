@@ -3,7 +3,7 @@ import usePosStore from '../../store/usePosStore';
 
 const formatearSoles = (monto) => `S/ ${parseFloat(monto || 0).toFixed(2)}`;
 
-export default function ModalModificadores({ isOpen, onClose, producto, modificadoresGlobales = [], onAgregarAlCarrito, happyHours = [] }) {
+export default function ModalModificadores({ isOpen, onClose, producto, preseleccion = null, modificadoresGlobales = [], onAgregarAlCarrito, happyHours = [] }) {
   const { configuracionGlobal } = usePosStore();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
@@ -22,12 +22,14 @@ export default function ModalModificadores({ isOpen, onClose, producto, modifica
         setNotaLibre(producto.notas_y_modificadores.nota_libre || "");
       } else {
         setCantidad(1);
-        setSelecciones({});
+        // Si se llegó buscando el nombre de una variante (ej. "gordita"),
+        // esa opción ya arranca marcada — el mozo solo confirma.
+        setSelecciones(preseleccion ? { [preseleccion.grupoId]: [preseleccion.opcionId] } : {});
         setChipsActivos([]);
         setNotaLibre("");
       }
     }
-  }, [isOpen, producto]);
+  }, [isOpen, producto, preseleccion]);
 
   if (!isOpen || !producto) return null;
 

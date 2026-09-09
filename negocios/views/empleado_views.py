@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.contrib.auth.hashers import check_password, make_password
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, permission_classes, throttle_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -13,6 +14,7 @@ from urllib3 import request
 
 from .helpers import es_valor_nulo
 from ..models import Rol, Empleado
+from ..permissions import SoloLecturaSalvoSuperUsuario
 from ..serializers import RolSerializer, EmpleadoSerializer
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,14 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 class RolViewSet(viewsets.ModelViewSet):
+    """
+    Catálogo GLOBAL de roles (Cajero, Mesero, etc.), compartido por todos los
+    negocios — no tiene FK a Negocio. Por eso el CRUD de escritura queda
+    reservado al superusuario (Leybrak); cualquier negocio solo puede leerlo
+    para armar el selector de rol al crear un empleado (ver Personal y Accesos).
+    """
     serializer_class = RolSerializer
+    permission_classes = [SoloLecturaSalvoSuperUsuario]
 
     def get_queryset(self):
         return Rol.objects.all()
@@ -37,14 +46,59 @@ class PinRateThrottle(ScopedRateThrottle):
     scope = 'intentos_pin'
 
 
+def _es_rol_dueno(rol):
+    """El rol "Dueño" es un solo registro global (Rol.objects.get(nombre='Dueño'),
+    ver login_movil en serializers_jwt.py) — no hay forma estructural de marcar
+    "este Empleado ES el propietario" más que por el nombre de su rol."""
+    return bool(rol and rol.nombre.strip().lower() == 'dueño')
+
+
 class EmpleadoViewSet(viewsets.ModelViewSet):
     serializer_class = EmpleadoSerializer
 
     def perform_create(self, serializer):
+        # 🛡️ Nada impedía crear un segundo empleado con rol "Dueño" — el catálogo
+        # de roles está bloqueado a superusuario, pero cualquiera podía ASIGNAR el
+        # rol ya existente al crear/editar un empleado.
+        if _es_rol_dueno(serializer.validated_data.get('rol')):
+            raise ValidationError({'rol': 'No se puede crear otro empleado con el rol "Dueño".'})
         if hasattr(self.request.user, 'negocio'):
             serializer.save(negocio=self.request.user.negocio)
         else:
             serializer.save()
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        rol_nuevo = serializer.validated_data.get('rol', instance.rol)
+        if _es_rol_dueno(instance.rol):
+            # Este Empleado ES el dueño (el auto-creado por login_movil): no se
+            # le puede cambiar el rol ni desactivar desde esta API.
+            if 'rol' in serializer.validated_data and not _es_rol_dueno(rol_nuevo):
+                raise ValidationError({'rol': 'No se puede cambiar el rol del Dueño.'})
+            if serializer.validated_data.get('activo') is False:
+                raise ValidationError({'activo': 'No se puede desactivar al Dueño.'})
+        elif _es_rol_dueno(rol_nuevo):
+            raise ValidationError({'rol': 'No se puede asignar el rol "Dueño" a otro empleado.'})
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if _es_rol_dueno(instance.rol):
+            raise ValidationError('No se puede eliminar al Dueño.')
+        instance.delete()
+
+    @action(detail=True, methods=['post'], url_path='marcar_ingreso')
+    def marcar_ingreso(self, request, pk=None):
+        empleado = self.get_object()
+        empleado.ultimo_ingreso = timezone.now()
+        empleado.save(update_fields=['ultimo_ingreso'])
+        return Response({'ok': True, 'ultimo_ingreso': empleado.ultimo_ingreso})
+
+    @action(detail=True, methods=['post'], url_path='marcar_salida')
+    def marcar_salida(self, request, pk=None):
+        empleado = self.get_object()
+        empleado.ultima_salida = timezone.now()
+        empleado.save(update_fields=['ultima_salida'])
+        return Response({'ok': True, 'ultima_salida': empleado.ultima_salida})
 
     def get_queryset(self):
         queryset = Empleado.objects.all()

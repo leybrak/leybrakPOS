@@ -70,7 +70,7 @@ export default function ModalReceta({ visible, plato, t, onCerrar }) {
       <View style={[s.container, { backgroundColor: t.bg }]}>
         <StatusBar barStyle={t.isDark ? 'light-content' : 'dark-content'} backgroundColor={t.bgCard} />
 
-        {/* CABECERA */}
+        {/* CABECERA — mismo shell grande que Plato/Variaciones */}
         <View style={[s.header, { backgroundColor: t.bgCard, borderBottomColor: t.border }]}>
           <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
             <Icon name="book" size={18} color={t.color} />
@@ -79,7 +79,7 @@ export default function ModalReceta({ visible, plato, t, onCerrar }) {
             <Text style={[s.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>Receta: {plato.nombre}</Text>
             <Text style={[s.headerSub, { color: t.textMuted }]}>INSUMOS QUE CONSUME ESTE PLATO</Text>
           </View>
-          <TouchableOpacity onPress={onCerrar} style={[s.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}>
+          <TouchableOpacity onPress={onCerrar} style={[s.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}>
             <Icon name="times" size={14} color={t.textSec} />
           </TouchableOpacity>
         </View>
@@ -155,11 +155,11 @@ export default function ModalReceta({ visible, plato, t, onCerrar }) {
 
 const s = StyleSheet.create({
   container:    { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 16, borderBottomWidth: 1 },
-  headerIcono:  { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  headerTitulo: { fontSize: 16, fontWeight: '900' },
-  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
-  closeBtn:     { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 20, borderBottomWidth: 1 },
+  headerIcono:  { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headerTitulo: { fontSize: 17, fontWeight: '900' },
+  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
+  closeBtn:     { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   content:      { padding: 16, paddingBottom: 30 },
   label:        { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },

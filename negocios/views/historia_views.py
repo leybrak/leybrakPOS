@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from ..models import HistoriaProgramada, Sede
+from ..authentication import bot_token_valido as _token_bot_valido
 
 logger = logging.getLogger(__name__)
 
@@ -88,15 +89,6 @@ def _destinatarios_negocio(negocio_id):
             vistos.add(jid)
             jids.append(jid)
     return jids
-
-
-def _token_bot_valido(request):
-    """Valida el token compartido del cron de n8n (header X-Bot-Token)."""
-    esperado = getattr(settings, 'BOT_API_TOKEN', '') or getattr(settings, 'EVO_GLOBAL_KEY', '')
-    if not esperado:
-        return False    # sin token configurado no se expone nada
-    recibido = request.headers.get('X-Bot-Token', '') or request.query_params.get('token', '')
-    return recibido == esperado
 
 
 # ─── Endpoints para la web (auth del dueño) ──────────────────

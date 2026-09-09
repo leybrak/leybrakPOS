@@ -174,23 +174,25 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* Filtro sedes */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.sedesScroll}>
-          {['Todas', ...sedes.map(sd => sd.nombre)].map(nombre => (
-            <TouchableOpacity
-              key={nombre}
-              style={[s.sedePill, { backgroundColor: t.pill, borderColor: t.pillBorder },
-                sedeFiltro === nombre && { borderColor: t.color, backgroundColor: t.bgCard2 }]}
-              onPress={() => setSedeFiltro(nombre)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.sedePillText, { color: t.textSec },
-                sedeFiltro === nombre && { color: t.isDark ? '#fff' : '#111' }]}>
-                {nombre}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Filtro sedes — solo tiene sentido si hay más de una para elegir */}
+        {sedes.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.sedesScroll}>
+            {['Todas', ...sedes.map(sd => sd.nombre)].map(nombre => (
+              <TouchableOpacity
+                key={nombre}
+                style={[s.sedePill, { backgroundColor: t.pill, borderColor: t.pillBorder },
+                  sedeFiltro === nombre && { borderColor: t.color, backgroundColor: t.bgCard2 }]}
+                onPress={() => setSedeFiltro(nombre)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.sedePillText, { color: t.textSec },
+                  sedeFiltro === nombre && { color: t.isDark ? '#fff' : '#111' }]}>
+                  {nombre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Filtro tiempo */}
         <View style={s.filtrosRow}>
@@ -305,10 +307,21 @@ export default function DashboardScreen() {
                 >
                   <View style={s.ordenInfo}>
                     <View style={[s.ordenIcono, { backgroundColor: t.bgCard, borderColor: t.border2 }]}>
-                      <Icon name={orden.origen?.toLowerCase().includes('delivery') ? 'truck' : 'cutlery'} size={14} color={t.textSec} />
+                      <Icon name={orden.tipo === 'delivery' ? 'truck' : 'cutlery'} size={14} color={t.textSec} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.ordenOrigen, { color: t.textPrim }]}>{orden.origen || `Mesa ${orden.mesa}`}</Text>
+                      {/* 🛠️ `orden.origen` no existe en el serializer (siempre undefined) —
+                          esto caía siempre en `Mesa ${orden.mesa}`, mostrando el id
+                          autoincremental GLOBAL de la fila de mesa (ej. "Mesa 22" en un
+                          negocio con 7 mesas) en vez del número real, y "Mesa null" en
+                          pedidos para llevar/delivery (sin mesa). Se usa mesa_nombre
+                          (numero_o_nombre real, ya viene del serializer) y, si no hay
+                          mesa, el nombre del cliente o el tipo de pedido. */}
+                      <Text style={[s.ordenOrigen, { color: t.textPrim }]}>
+                        {orden.mesa_nombre
+                          ? `Mesa ${orden.mesa_nombre}`
+                          : (orden.cliente_nombre || (orden.tipo === 'delivery' ? 'Delivery' : 'Para llevar'))}
+                      </Text>
                       <Text style={[s.ordenMeta, { color: t.textSec }]}>
                         #{orden.id} · {new Date((orden.creado_en||'').replace(' ','T')).toLocaleTimeString('es-PE', { hour:'2-digit', minute:'2-digit' })}
                       </Text>

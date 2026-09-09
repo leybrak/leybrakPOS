@@ -7,6 +7,8 @@ import unicodedata
 from decimal import Decimal
 from datetime import timedelta
 
+from django.db import transaction, IntegrityError
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -222,69 +224,92 @@ def confirmar_pago_yape(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # --- Validar que la notificación existe y aún es válida (5 min, no usada) ---
-    notificacion = NotificacionPago.objects.filter(id=notificacion_id).first()
-    if not notificacion:
-        return Response({'error': 'Notificación no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+    # 🛡️ Antes esto era un simple leer→chequear→escribir sin transacción ni
+    # lock: si dos cajas (dos pestañas/tablets del mismo negocio) confirmaban
+    # la MISMA notificación casi al mismo tiempo — típico cuando dos clientes
+    # pagan el mismo monto por Yape y ambas cajas la ven en su lista — las
+    # dos podían pasar el chequeo `es_valida` antes de que cualquiera
+    # marcara `usado=True`, y ambas intentaban crear un Pago. select_for_update
+    # bloquea la fila de la notificación durante la transacción para que la
+    # segunda request espere y vea el `usado=True` ya guardado por la primera.
+    try:
+        with transaction.atomic():
+            notificacion = NotificacionPago.objects.select_for_update().filter(id=notificacion_id).first()
+            if not notificacion:
+                return Response({'error': 'Notificación no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
-    # 🛡️ IDOR fix: no había ningún chequeo de que la notificación fuera del
-    # negocio de quien llama — cualquier negocio autenticado podía confirmar
-    # (y así "usar") la notificación de Yape/Plin de OTRO negocio contra su
-    # propia orden, marcándola pagada sin haber cobrado nada, y de paso
-    # inutilizando esa notificación para el negocio dueño real.
-    if not request.user.is_superuser and getattr(request.user, 'negocio', None) != notificacion.negocio:
-        return Response({'error': 'No tienes permiso sobre esta notificación.'}, status=status.HTTP_403_FORBIDDEN)
+            # 🛡️ IDOR fix: no había ningún chequeo de que la notificación fuera del
+            # negocio de quien llama — cualquier negocio autenticado podía confirmar
+            # (y así "usar") la notificación de Yape/Plin de OTRO negocio contra su
+            # propia orden, marcándola pagada sin haber cobrado nada, y de paso
+            # inutilizando esa notificación para el negocio dueño real.
+            if not request.user.is_superuser and getattr(request.user, 'negocio', None) != notificacion.negocio:
+                return Response({'error': 'No tienes permiso sobre esta notificación.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if not notificacion.es_valida:
-        return Response(
-            {'error': 'Esta notificación ya fue usada o expiró (5 minutos).'},
-            status=status.HTTP_409_CONFLICT
-        )
+            if not notificacion.es_valida:
+                return Response(
+                    {'error': 'Esta notificación ya fue usada o expiró (5 minutos).'},
+                    status=status.HTTP_409_CONFLICT
+                )
 
-    # --- Validar que la orden existe y pertenece al mismo negocio ---
-    orden = Orden.objects.filter(
-        id=orden_id,
-        sede__negocio=notificacion.negocio
-    ).first()
-    if not orden:
-        return Response({'error': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+            # --- Validar que la orden existe y pertenece al mismo negocio ---
+            orden = Orden.objects.filter(
+                id=orden_id,
+                sede__negocio=notificacion.negocio
+            ).first()
+            if not orden:
+                return Response({'error': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
-    if orden.estado_pago == 'pagado':
-        return Response({'error': 'Esta orden ya fue pagada.'}, status=status.HTTP_409_CONFLICT)
+            if orden.estado_pago == 'pagado':
+                return Response({'error': 'Esta orden ya fue pagada.'}, status=status.HTTP_409_CONFLICT)
 
-    # --- Obtener la sesión de caja activa ---
-    sesion_caja = SesionCaja.objects.filter(
-        sede=orden.sede,
-        estado='abierta'
-    ).first()
+            # --- Obtener la sesión de caja activa ---
+            sesion_caja = SesionCaja.objects.filter(
+                sede=orden.sede,
+                estado='abierta'
+            ).first()
 
-    # --- Crear el Pago y marcar la notificación como usada ---
-    metodo = 'yape' if notificacion.tipo == 'YAPE' else 'plin'
+            # --- Crear el Pago y marcar la notificación como usada ---
+            metodo = 'yape' if notificacion.tipo == 'YAPE' else 'plin'
 
-    Pago.objects.create(
-        orden               = orden,
-        metodo              = metodo,
-        monto               = notificacion.monto,
-        sesion_caja         = sesion_caja,
-        estado              = 'confirmado',
-        notificacion_origen = notificacion,
+            Pago.objects.create(
+                orden               = orden,
+                metodo              = metodo,
+                monto               = notificacion.monto,
+                sesion_caja         = sesion_caja,
+                estado              = 'confirmado',
+                notificacion_origen = notificacion,
+            )
+
+            notificacion.usado = True
+            notificacion.save(update_fields=['usado'])
+
+            # 🛡️ FIX: antes marcaba 'pagado' con solo ESTE pago creado, sin
+            # importar si cubría el total — un Yape parcial (ej. cuenta dividida)
+            # cerraba la orden entera. cobrar_orden() ve estado_pago=='pagado' y
+            # entra a la rama que YA NO procesa pagos_data, así que el resto de
+            # la cuenta (efectivo/tarjeta) que el cajero cobra después nunca se
+            # registraba — la plata entraba a caja pero no quedaba en ningún Pago.
+            total_cubierto = (Pago.objects.filter(orden=orden, estado='confirmado')
+                               .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
+            if total_cubierto >= orden.total:
+                orden.estado_pago = 'pagado'
+                orden.save(update_fields=['estado_pago'])
+    except IntegrityError:
+        # Última red de seguridad: el OneToOneField de Pago.notificacion_origen
+        # no deja crear un segundo Pago para la misma notificación aunque el
+        # select_for_update fallara por algún motivo (ej. backend sin soporte
+        # de locking real, como SQLite en desarrollo).
+        return Response({'error': 'Esta notificación ya fue confirmada por otra caja.'}, status=status.HTTP_409_CONFLICT)
+
+    # --- Avisar por WebSocket a las demás cajas del negocio que esta
+    # notificación ya no está disponible, para que la saquen de su lista
+    # antes de que alguien más intente tocarla. ---
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"pagos_negocio_{notificacion.negocio_id}",
+        {'type': 'notificacion_confirmada', 'notificacion_id': notificacion.id}
     )
-
-    notificacion.usado = True
-    notificacion.save(update_fields=['usado'])
-
-    # 🛡️ FIX: antes marcaba 'pagado' con solo ESTE pago creado, sin
-    # importar si cubría el total — un Yape parcial (ej. cuenta dividida)
-    # cerraba la orden entera. cobrar_orden() ve estado_pago=='pagado' y
-    # entra a la rama que YA NO procesa pagos_data, así que el resto de
-    # la cuenta (efectivo/tarjeta) que el cajero cobra después nunca se
-    # registraba — la plata entraba a caja pero no quedaba en ningún Pago.
-    from django.db.models import Sum
-    total_cubierto = (Pago.objects.filter(orden=orden, estado='confirmado')
-                       .aggregate(Sum('monto'))['monto__sum'] or Decimal('0.00'))
-    if total_cubierto >= orden.total:
-        orden.estado_pago = 'pagado'
-        orden.save(update_fields=['estado_pago'])
 
     return Response({'ok': True, 'orden_id': orden.id, 'pagado_completo': total_cubierto >= orden.total}, status=status.HTTP_200_OK)
 

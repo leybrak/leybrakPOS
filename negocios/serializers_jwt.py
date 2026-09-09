@@ -99,9 +99,18 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             rol = 'Dueño'
         else:
             rol = 'Admin'
+
+        negocio = getattr(user, 'negocio', None)
+        nombre_perfil = (negocio.nombre_propietario if negocio else '') or user.get_full_name() or user.username
+        avatar_url = None
+        if negocio and negocio.avatar_propietario:
+            avatar_url = request.build_absolute_uri(negocio.avatar_propietario.url)
+
         response_data = {
-            'negocio_id': user.negocio.id if hasattr(user, 'negocio') else None,
+            'negocio_id': negocio.id if negocio else None,
             'rol': rol,
+            'nombre': nombre_perfil,
+            'avatar': avatar_url,
             # ⚠️  Los tokens NO van aquí — viajan en las cookies HttpOnly
         }
 

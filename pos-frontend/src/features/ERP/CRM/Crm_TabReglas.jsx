@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Truck, Plus, Trash2, Pencil, Save, Package, Bike, Calendar, CreditCard, Users, Moon, Settings } from 'lucide-react';
 import api from '../../../api/api';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 const DIAS_NOMBRES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -234,6 +235,7 @@ function FormRegla({ regla, isDark, colorPrimario, onGuardar, onCancelar, guarda
 }
 
 export default function Crm_TabReglas({ isDark, colorPrimario }) {
+  const confirmar = useConfirm();
   const [lista, setLista] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -284,7 +286,7 @@ export default function Crm_TabReglas({ isDark, colorPrimario }) {
   };
 
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar esta regla de negocio?')) return;
+    if (!(await confirmar('¿Eliminar esta regla de negocio?', { titulo: 'Eliminar regla', peligroso: true }))) return;
     try {
       await api.delete(`/reglas-negocio-v2/${id}/`);
       await cargar();

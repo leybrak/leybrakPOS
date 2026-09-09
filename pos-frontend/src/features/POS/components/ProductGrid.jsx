@@ -20,6 +20,7 @@ export default function ProductGrid({
   combosPromocionalesHoy = [],
   happyHours = [],
   agregarCombo,
+  limpiarBusqueda,
 }) {
   const isDark = tema === 'dark';
 
@@ -83,6 +84,7 @@ export default function ProductGrid({
             notificarEstadoMesa={notificarEstadoMesa}
             formatearSoles={formatearSoles}
             happyHours={happyHours}
+            limpiarBusqueda={limpiarBusqueda}
           />
         ))}
       </div>

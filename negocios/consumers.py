@@ -161,6 +161,13 @@ class SalonConsumer(AsyncWebsocketConsumer):
             'orden': event['orden'],
             'accion': event['accion'],
         }))
+
+    async def menu_actualizado(self, event):
+        # La carta (Producto) cambió — le avisamos a las tablets/celulares
+        # conectados para que invaliden su cache local y la vuelvan a
+        # descargar (ver negocios/signals.py: avisar_menu_actualizado_*).
+        await self.send(text_data=json.dumps({'type': 'menu_actualizado'}))
+
     async def solicitud_cambio_nueva(self, event):
         await self.send(text_data=json.dumps(event))
     @database_sync_to_async
@@ -233,4 +240,15 @@ class PagosConsumer(AsyncWebsocketConsumer):
             'monto':             event['monto'],
             'codigo_seguridad':  event['codigo_seguridad'],  # None si es PLIN
             'nombre_cliente':    event['nombre_cliente'],
+        }))
+
+    async def notificacion_confirmada(self, event):
+        """
+        Otra caja del mismo negocio ya confirmó esta notificación — se la
+        retransmitimos a todas para que la saquen de su lista de pagos
+        pendientes (evita que alguien más intente confirmarla de nuevo).
+        """
+        await self.send(text_data=json.dumps({
+            'type':            'notificacion_confirmada',
+            'notificacion_id': event['notificacion_id'],
         }))

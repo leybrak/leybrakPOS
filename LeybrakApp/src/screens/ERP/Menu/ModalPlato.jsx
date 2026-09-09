@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Modal, ScrollView, ActivityIndicator, Switch,
+  Modal, ScrollView, ActivityIndicator, Switch, StatusBar, Platform, Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { useToast } from '../../../context/ToastContext';
 import { useConfirm } from '../../../context/ConfirmContext';
 
@@ -28,9 +29,22 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
         requiere_seleccion: plato?.requiere_seleccion || false,
         tiene_variaciones:  plato?.tiene_variaciones  || false,
         grupos_variacion:   plato?.grupos_variacion   || [],
+        imagenAsset:        null,
+        imagenPreview:      plato?.imagen || null,
       });
     }
   }, [visible, plato]);
+
+  const elegirFoto = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, (response) => {
+      if (response.didCancel || response.errorCode) return;
+      const asset = response.assets?.[0];
+      if (!asset) return;
+      setForm(f => ({ ...f, imagenAsset: asset, imagenPreview: asset.uri }));
+    });
+  };
+
+  const quitarFoto = () => setForm(f => ({ ...f, imagenAsset: null, imagenPreview: null }));
 
   const catSeleccionada = categorias.find(c => String(c.id) === String(form.categoria_id));
 
@@ -112,40 +126,38 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
-      <View style={s.overlay}>
-        <View style={[s.modal, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
+      <View style={[s.container, { backgroundColor: t.bg }]}>
+        <StatusBar barStyle={t.isDark ? 'light-content' : 'dark-content'} backgroundColor={t.bgCard} />
 
-          {/* Header */}
-          <View style={[s.header, { borderBottomColor: t.border, backgroundColor: t.bgCard2 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {paso === 2 && (
-                <TouchableOpacity
-                  onPress={() => setPaso(1)}
-                  style={[s.backBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}
-                >
-                  <Icon name="arrow-left" size={14} color={t.textSec} />
-                </TouchableOpacity>
-              )}
-              <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
-                <Icon name="cutlery" size={16} color={t.color} />
-              </View>
-              <View>
-                <Text style={[s.titulo, { color: t.textPrim }]}>
-                  {form.id ? 'Editar Plato' : 'Nuevo Plato'}
-                </Text>
-                {paso === 2 && (
-                  <Text style={[s.subtitulo, { color: t.color }]}>Paso 2 — Opciones y Precios</Text>
-                )}
-              </View>
-            </View>
+        {/* Header — mismo shell grande que Receta/Variaciones */}
+        <View style={[s.header, { backgroundColor: t.bgCard, borderBottomColor: t.border }]}>
+          {paso === 2 && (
             <TouchableOpacity
-              onPress={onCerrar}
-              style={[s.closeBtn, { backgroundColor: t.bgCard, borderColor: t.border }]}
+              onPress={() => setPaso(1)}
+              style={[s.backBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}
             >
-              <Icon name="times" size={14} color={t.textSec} />
+              <Icon name="arrow-left" size={14} color={t.textSec} />
             </TouchableOpacity>
+          )}
+          <View style={[s.headerIcono, { backgroundColor: `${t.color}15` }]}>
+            <Icon name="cutlery" size={18} color={t.color} />
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
+              {form.id ? 'Editar Plato' : 'Nuevo Plato'}
+            </Text>
+            <Text style={[s.headerSub, { color: t.textMuted }]}>
+              {paso === 2 ? 'PASO 2 — OPCIONES Y PRECIOS' : 'DATOS BÁSICOS DEL PLATO'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onCerrar}
+            style={[s.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}
+          >
+            <Icon name="times" size={14} color={t.textSec} />
+          </TouchableOpacity>
+        </View>
 
           <ScrollView
             contentContainerStyle={s.body}
@@ -222,6 +234,46 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
                       ))}
                     </View>
                   )}
+                </View>
+
+                {/* Foto del plato (opcional) */}
+                <View style={[s.fotoCard, { backgroundColor: t.bgCard2, borderColor: t.border }]}>
+                  <Text style={[s.fotoTitulo, { color: t.textPrim, borderBottomColor: t.border }]}>
+                    Foto del Plato (opcional)
+                  </Text>
+                  <View style={s.fotoRow}>
+                    <View style={[s.fotoPreview, { borderColor: t.border2, backgroundColor: t.bgCard }]}>
+                      {form.imagenPreview
+                        ? <Image source={{ uri: form.imagenPreview }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        : <Icon name="picture-o" size={22} color={t.textMuted} />
+                      }
+                    </View>
+                    <View style={{ flex: 1, gap: 8 }}>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          style={[s.fotoBtn, { borderColor: t.color }]}
+                          onPress={elegirFoto}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[s.fotoBtnText, { color: t.color }]}>
+                            {form.imagenPreview ? 'Cambiar Foto' : 'Subir Foto'}
+                          </Text>
+                        </TouchableOpacity>
+                        {form.imagenPreview && (
+                          <TouchableOpacity
+                            style={[s.fotoBtnQuitar, { borderColor: t.border2 }]}
+                            onPress={quitarFoto}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[s.fotoBtnQuitarText, { color: t.textSec }]}>Quitar</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text style={[s.fotoHint, { color: t.textMuted }]}>
+                        Puedes agregarla ahora o después.
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
                 {/* Comportamiento en POS */}
@@ -413,21 +465,19 @@ export default function ModalPlato({ visible, plato, categorias, t, onGuardar, o
             )}
 
           </ScrollView>
-        </View>
       </View>
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modal:            { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: '92%' },
-  header:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
-  titulo:           { fontSize: 18, fontWeight: '900' },
-  subtitulo:        { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  backBtn:          { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  headerIcono:      { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  closeBtn:         { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  container:        { flex: 1 },
+  header:           { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 20, borderBottomWidth: 1 },
+  headerIcono:      { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headerTitulo:     { fontSize: 17, fontWeight: '900' },
+  headerSub:        { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
+  backBtn:          { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  closeBtn:         { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   body:             { padding: 20, paddingBottom: 40 },
 
   label:            { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 8 },
@@ -436,6 +486,15 @@ const s = StyleSheet.create({
   dropdownItem:     { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1 },
   dropdownText:     { fontSize: 14 },
 
+  fotoCard:         { borderRadius: 16, borderWidth: 1, padding: 14, gap: 12 },
+  fotoTitulo:       { fontSize: 13, fontWeight: '800', paddingBottom: 10, borderBottomWidth: 1 },
+  fotoRow:          { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  fotoPreview:      { width: 64, height: 64, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  fotoBtn:          { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5 },
+  fotoBtnText:      { fontSize: 11, fontWeight: '800' },
+  fotoBtnQuitar:    { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5 },
+  fotoBtnQuitarText:{ fontSize: 11, fontWeight: '800' },
+  fotoHint:         { fontSize: 10 },
   switchCard:       { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   switchCardTitulo: { fontSize: 14, fontWeight: '800', padding: 14, borderBottomWidth: 1 },
   switchRow:        { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },

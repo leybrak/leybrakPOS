@@ -130,7 +130,7 @@ function ModalOpcion({ producto, t, onConfirmar, onCerrar }) {
 }
 
 const mo = StyleSheet.create({
-  overlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 16 },
+  overlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 16 },
   modal:          { borderRadius: 24, borderWidth: 1, maxHeight: '85%' },
   header:         { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, gap: 12 },
   sub:            { fontSize: 9, fontWeight: '800', letterSpacing: 2, marginBottom: 4 },
@@ -531,52 +531,55 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
       <View style={[mc.container, { backgroundColor: t.bg }]}>
         <StatusBar barStyle={t.isDark ? 'light-content' : 'dark-content'} backgroundColor={t.bgCard} />
 
-        {/* Header */}
+        {/* Header — mismo shell grande que Plato/Receta/Variaciones */}
         <View style={[mc.header, { backgroundColor: t.bgCard, borderBottomColor: t.border }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, flexShrink: 1, marginRight: 12 }}>
-            {vista === 'formulario' && (
-              <TouchableOpacity
-                onPress={() => { setVista('lista'); setComboEditando(null); }}
-                style={[mc.backBtn, { backgroundColor: t.bgCard2 }]}
-              >
-                <Icon name="chevron-left" size={16} color={t.textSec} />
-              </TouchableOpacity>
-            )}
-            <View style={[mc.headerIcono, { backgroundColor: `${t.color}15` }]}>
-              <Icon name="th-large" size={16} color={t.color} />
-            </View>
-            <View style={{ flex: 1, flexShrink: 1 }}>
-              <Text style={[mc.headerSub, { color: t.textMuted }]} numberOfLines={1}>MÓDULO DE MENÚ</Text>
-              <Text style={[mc.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
-                {vista === 'lista' ? 'Combos del Menú' : comboEditando ? 'Editar Combo' : 'Nuevo Combo'}
-              </Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', flexShrink: 0 }}>
-            {vista === 'lista' && (
-              <TouchableOpacity
-                style={[mc.btnNuevo, { backgroundColor: t.color }]}
-                onPress={() => { setComboEditando(null); setVista('formulario'); }}
-                activeOpacity={0.8}
-              >
-                <Icon name="plus" size={12} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={mc.btnNuevoText}>NUEVO COMBO</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={onCerrar} style={{ padding: 6 }}>
-              <Icon name="times" size={22} color={t.textSec} />
+          {vista === 'formulario' && (
+            <TouchableOpacity
+              onPress={() => { setVista('lista'); setComboEditando(null); }}
+              style={[mc.backBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}
+            >
+              <Icon name="arrow-left" size={14} color={t.textSec} />
             </TouchableOpacity>
+          )}
+          <View style={[mc.headerIcono, { backgroundColor: `${t.color}15` }]}>
+            <Icon name="th-large" size={18} color={t.color} />
           </View>
+          <View style={{ flex: 1, flexShrink: 1 }}>
+            <Text style={[mc.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
+              {vista === 'lista' ? 'Combos del Menú' : comboEditando ? 'Editar Combo' : 'Nuevo Combo'}
+            </Text>
+            <Text style={[mc.headerSub, { color: t.textMuted }]} numberOfLines={1}>
+              {vista === 'lista' ? 'PRESENTACIONES Y PROMOS' : 'PRODUCTOS Y PRECIO DEL COMBO'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onCerrar}
+            style={[mc.closeBtn, { backgroundColor: t.bgCard2, borderColor: t.border2 }]}
+          >
+            <Icon name="times" size={14} color={t.textSec} />
+          </TouchableOpacity>
         </View>
 
         {/* Contenido */}
         {vista === 'lista' ? (
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={mc.listaContent}
             refreshControl={
               <RefreshControl refreshing={refrescando} onRefresh={() => cargar(true)} colors={[t.color]} />
             }
           >
+            <View style={mc.listaHeader}>
+              <Text style={[mc.contadorTxt, { color: t.textMuted }]}>Existentes ({combos.length})</Text>
+              <TouchableOpacity
+                onPress={() => { setComboEditando(null); setVista('formulario'); }}
+                style={[mc.btnNuevo, { backgroundColor: t.color }]}
+                activeOpacity={0.85}
+              >
+                <Icon name="plus" size={11} color="#fff" style={{ marginRight: 5 }} />
+                <Text style={mc.btnNuevoText}>Nuevo Combo</Text>
+              </TouchableOpacity>
+            </View>
+
             {cargando ? (
               <ActivityIndicator size="large" color={t.color} style={{ marginTop: 60 }} />
             ) : combos.length === 0 ? (
@@ -642,13 +645,16 @@ export default function ModalCombos({ visible, productos, categorias, t, onCerra
 
 const mc = StyleSheet.create({
   container:    { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 16, borderBottomWidth: 1 },
-  headerIcono:  { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 2, marginBottom: 2 },
-  headerTitulo: { fontSize: 20, fontWeight: '900' },
-  backBtn:      { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  btnNuevo:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-  btnNuevoText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 24) + 16, paddingBottom: 20, borderBottomWidth: 1 },
+  headerIcono:  { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  headerTitulo: { fontSize: 17, fontWeight: '900' },
+  headerSub:    { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 2 },
+  backBtn:      { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  closeBtn:     { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  listaHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  contadorTxt:  { fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  btnNuevo:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  btnNuevoText: { color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
   listaContent: { padding: 16, paddingBottom: 40 },
   emptyState:   { padding: 40, borderRadius: 24, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', gap: 10, marginTop: 40 },
   emptyIconBox: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

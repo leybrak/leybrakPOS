@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import usePosStore from '../../store/usePosStore';
-import { getInsumosSede, getCatalogoGlobal, getSedes, registrarIngresoMasivo } from '../../api/api';
+import {
+  getInsumosSede, getCatalogoGlobal, getSedes, registrarIngresoMasivo,
+  getOrdenesCompra, getProveedores,
+} from '../../api/api';
 import ModalIngresoMercaderia from '../../components/modals/ModalIngresoMercaderia';
 import ModalNuevoInsumoBase from '../../components/modals/ModalNuevoInsumoBase';
-import { 
-  Building2, BookOpen, Search, PackageX, Plus, Truck, 
-  Hand, ArrowLeft, ArrowDownToLine, ShoppingCart, 
-  AlertTriangle, Database, CheckCircle2, ChevronRight
+import ModalNuevoPedido from '../../components/modals/ModalNuevoPedido';
+import ModalDetallePedido from '../../components/modals/ModalDetallePedido';
+import PedidoTimeline from '../../components/PedidoTimeline';
+import Erp_Proveedores from './Erp_Proveedores';
+import {
+  Building2, BookOpen, Search, PackageX, Plus, Truck,
+  Hand, ArrowLeft, ArrowDownToLine, ShoppingCart,
+  AlertTriangle, Database, CheckCircle2, ChevronRight, ClipboardList, Users,
 } from 'lucide-react';
 
 export default function InventarioView() {
@@ -34,9 +41,41 @@ export default function InventarioView() {
   const [modalCompraOpen, setModalCompraOpen] = useState(false);
   const [modalBaseOpen, setModalBaseOpen] = useState(false);
 
+  // ── Pedidos / Compras ──────────────────────────────────────
+  const [ordenes, setOrdenes] = useState([]);
+  const [proveedores, setProveedores] = useState([]);
+  const [cargandoPedidos, setCargandoPedidos] = useState(false);
+  const [modalProveedoresOpen, setModalProveedoresOpen] = useState(false);
+  const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
+  const [pedidoNuevoConfig, setPedidoNuevoConfig] = useState(null); // { origen, sedeFija, lineasIniciales }
+
   useEffect(() => {
     fetchBase();
   }, []);
+
+  useEffect(() => {
+    if (tab === 'pedidos' && esDueño) {
+      fetchPedidos();
+    }
+  }, [tab]);
+
+  const fetchPedidos = async () => {
+    setCargandoPedidos(true);
+    try {
+      const [resOrdenes, resProveedores] = await Promise.all([getOrdenesCompra(), getProveedores()]);
+      setOrdenes(resOrdenes.data);
+      setProveedores(resProveedores.data);
+    } catch (err) {
+      console.error('Error cargando pedidos:', err);
+    } finally {
+      setCargandoPedidos(false);
+    }
+  };
+
+  const abrirNuevoPedido = (config) => setPedidoNuevoConfig(config);
+  const abrirSolicitudInterna = (sedeId, lineasIniciales = null) => {
+    abrirNuevoPedido({ origen: 'interno', sedeFija: sedeId, lineasIniciales });
+  };
 
   const fetchBase = async () => {
     try {
@@ -175,10 +214,48 @@ export default function InventarioView() {
               >
                 <BookOpen size={16} /> Catálogo
               </button>
+              <button
+                onClick={() => { setTab('pedidos'); setSedeActiva(null); setBusqueda(''); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
+                  tab === 'pedidos'
+                    ? (isDark ? 'bg-[#222] text-white shadow-md' : 'bg-white text-gray-900 shadow-sm border border-gray-200')
+                    : (isDark ? 'text-neutral-500 hover:text-white' : 'text-gray-500 hover:text-gray-900')
+                }`}
+              >
+                <ClipboardList size={16} /> Pedidos
+              </button>
             </div>
           )}
 
           {/* BOTONES DE ACCIÓN PRINCIPAL */}
+          {tab === 'pedidos' && esDueño && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setModalProveedoresOpen(true)}
+                className={`px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
+                  isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-neutral-300 border-[#333]' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                }`}
+              >
+                <Users size={16} /> Proveedores
+              </button>
+              <button
+                onClick={() => abrirNuevoPedido({ origen: 'interno', sedeFija: null, lineasIniciales: null })}
+                className={`px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
+                  isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-neutral-300 border-[#333]' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                }`}
+              >
+                <Building2 size={16} /> Reabastecer Sede
+              </button>
+              <button
+                onClick={() => abrirNuevoPedido({ origen: 'proveedor', sedeFija: null, lineasIniciales: null })}
+                style={{ backgroundColor: colorPrimario }}
+                className="px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Truck size={16} /> Comprar a Proveedor
+              </button>
+            </div>
+          )}
+
           {tab === 'catalogo' && esDueño && (
             <button 
               onClick={() => setModalBaseOpen(true)}
@@ -201,8 +278,8 @@ export default function InventarioView() {
           )}
 
           {!esDueño && (
-            <button 
-              onClick={() => alert("Módulo de 'Solicitudes a Matriz' en construcción 🚧")}
+            <button
+              onClick={() => abrirSolicitudInterna(sedeActiva?.id)}
               style={{ backgroundColor: colorPrimario }}
               className="px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
             >
@@ -243,7 +320,7 @@ export default function InventarioView() {
       )}
 
       {/* 🚪 VISTA 2: DENTRO DEL EDIFICIO */}
-      {(sedeActiva || tab === 'catalogo') && (
+      {tab !== 'pedidos' && (sedeActiva || tab === 'catalogo') && (
         <div className="animate-fadeIn space-y-6">
           
           {sedeActiva && (
@@ -296,8 +373,57 @@ export default function InventarioView() {
                   isStock={!!sedeActiva} 
                   config={config} 
                   onTransferir={sedeActiva ? handleTransferirDeMatriz : handleIngresarAMatriz}
-                  esDueño={esDueño} 
+                  esDueño={esDueño}
+                  onSolicitar={(insumo) => {
+                    const lineaInicial = [{ insumo_base: insumo.id, cantidad_pedida: insumo.stock_minimo || '' }];
+                    if (esDueño) {
+                      // El destino (qué sede recibe) lo elige el dueño dentro del modal.
+                      abrirNuevoPedido({ origen: 'proveedor', sedeFija: null, lineasIniciales: lineaInicial });
+                    } else {
+                      abrirSolicitudInterna(sedeActiva?.id, lineaInicial);
+                    }
+                  }}
                 />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 📦 VISTA 3: PEDIDOS / COMPRAS (SOLO DUEÑO) */}
+      {tab === 'pedidos' && esDueño && (
+        <div className="animate-fadeIn space-y-4">
+          {cargandoPedidos ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-pulse">
+              {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-[#111] rounded-[2rem] border border-[#222]" />)}
+            </div>
+          ) : ordenes.length === 0 ? (
+            <div className="bg-[#111] border border-[#222] rounded-[2rem] p-16 text-center flex flex-col items-center">
+              <ClipboardList size={64} className="text-neutral-700 mb-6" />
+              <h3 className="text-xl font-black text-white mb-2">Sin pedidos todavía</h3>
+              <p className="text-neutral-500">Crea una compra a un proveedor o un reabastecimiento entre sedes.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {ordenes.map(orden => (
+                <div
+                  key={orden.id}
+                  onClick={() => setOrdenSeleccionada(orden)}
+                  className="cursor-pointer bg-[#161616] border border-[#2a2a2a] hover:border-[#444] rounded-[2rem] p-6 transition-all"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">
+                        {orden.origen === 'proveedor' ? 'Compra a Proveedor' : 'Reabastecimiento Interno'} · #{orden.id}
+                      </p>
+                      <h4 className="text-lg font-black text-white">
+                        {orden.origen === 'proveedor' ? (orden.nombre_proveedor || 'Proveedor') : (orden.nombre_sede_destino || 'Sede')}
+                      </h4>
+                    </div>
+                  </div>
+                  <PedidoTimeline estado={orden.estado} compacto />
+                  <p className="text-xs text-neutral-500 mt-4">{(orden.lineas || []).length} insumo(s)</p>
+                </div>
               ))}
             </div>
           )}
@@ -306,12 +432,40 @@ export default function InventarioView() {
 
       <ModalIngresoMercaderia isOpen={modalCompraOpen} onClose={() => setModalCompraOpen(false)} sedes={sedes} onSuccess={refrescarDatos} config={config}/>
       <ModalNuevoInsumoBase isOpen={modalBaseOpen} onClose={() => setModalBaseOpen(false)} onSuccess={refrescarDatos} config={config}/>
+
+      <ModalNuevoPedido
+        isOpen={!!pedidoNuevoConfig}
+        onClose={() => setPedidoNuevoConfig(null)}
+        onSuccess={fetchPedidos}
+        config={config}
+        origen={pedidoNuevoConfig?.origen}
+        sedeFija={pedidoNuevoConfig?.sedeFija}
+        lineasIniciales={pedidoNuevoConfig?.lineasIniciales}
+        sedes={sedes}
+        catalogo={catalogo}
+        proveedores={proveedores}
+        onProveedorCreado={(p) => setProveedores(prev => [...prev, p])}
+      />
+      <ModalDetallePedido
+        isOpen={!!ordenSeleccionada}
+        onClose={() => setOrdenSeleccionada(null)}
+        onSuccess={fetchPedidos}
+        config={config}
+        orden={ordenSeleccionada}
+      />
+      <Erp_Proveedores
+        isOpen={modalProveedoresOpen}
+        onClose={() => setModalProveedoresOpen(false)}
+        proveedores={proveedores}
+        onCambio={fetchPedidos}
+        config={config}
+      />
     </div>
   );
 }
 
 // 🃏 SUB-COMPONENTE: Tarjeta Inteligente
-function InsumoCard({ item, isStock, config, onTransferir, esDueño }) {
+function InsumoCard({ item, isStock, config, onTransferir, esDueño, onSolicitar }) {
   const [cantidadTransferir, setCantidadTransferir] = useState('');
   
   const nombre = item.nombre || item.nombre_insumo;
@@ -342,13 +496,23 @@ function InsumoCard({ item, isStock, config, onTransferir, esDueño }) {
 
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-4">
-          <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5 ${isStock ? (esCritico ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20') : 'bg-[#ff5a1f]/10 text-[#ff5a1f] border border-[#ff5a1f]/20'}`}>
-            {isStock ? (
-              esCritico ? <><AlertTriangle size={12}/> Alerta Stock</> : <><CheckCircle2 size={12}/> Stock Local</>
-            ) : (
-              <><Database size={12}/> Stock en Matriz</>
-            )}
-          </span>
+          {isStock && esCritico && onSolicitar ? (
+            <button
+              onClick={() => onSolicitar(item)}
+              title="Agregar a un pedido"
+              className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer"
+            >
+              <AlertTriangle size={12}/> Alerta Stock
+            </button>
+          ) : (
+            <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5 ${isStock ? (esCritico ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20') : 'bg-[#ff5a1f]/10 text-[#ff5a1f] border border-[#ff5a1f]/20'}`}>
+              {isStock ? (
+                esCritico ? <><AlertTriangle size={12}/> Alerta Stock</> : <><CheckCircle2 size={12}/> Stock Local</>
+              ) : (
+                <><Database size={12}/> Stock en Matriz</>
+              )}
+            </span>
+          )}
         </div>
         
         <h4 className="text-xl font-black text-white leading-tight line-clamp-2" title={nombre}>{nombre}</h4>
@@ -396,8 +560,8 @@ function InsumoCard({ item, isStock, config, onTransferir, esDueño }) {
             </div>
           ) : (
              <div className="pt-4 border-t border-[#2a2a2a]">
-                <button 
-                  onClick={() => alert("Módulo de 'Solicitudes a Matriz' en construcción 🚧")}
+                <button
+                  onClick={() => onSolicitar?.(item)}
                   className="w-full bg-[#222] hover:bg-white hover:text-black text-neutral-300 font-bold px-4 py-3.5 rounded-xl text-sm transition-colors flex justify-center items-center gap-2"
                 >
                   <Hand size={18} /> Solicitar Abastecimiento

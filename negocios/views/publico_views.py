@@ -110,7 +110,7 @@ def orden_publica(request, sede_id, mesa_id):
 def verificar_sesion(request):
     user = request.user
     ws_token = AccessToken.for_user(user)
-    
+
     # Determinar rol real desde la BD, no desde localStorage
     if user.is_superuser:
         rol = 'SuperAdmin'
@@ -118,15 +118,23 @@ def verificar_sesion(request):
         rol = 'Dueño'
     else:
         rol = 'Admin'  # usuario Django sin negocio
-    
+
+    negocio = getattr(user, 'negocio', None)
+    nombre_perfil = (negocio.nombre_propietario if negocio else '') or user.get_full_name() or user.username
+    avatar_url = None
+    if negocio and negocio.avatar_propietario:
+        avatar_url = request.build_absolute_uri(negocio.avatar_propietario.url)
+
     return Response({
         'autenticado': True,
         'ws_token': str(ws_token),
         'user': {
             'username': user.username,
             'rol': rol,
+            'nombre': nombre_perfil,
+            'avatar': avatar_url,
             # negocio_id para que el frontend sepa a qué negocio pertenece
-            'negocio_id': user.negocio.id if hasattr(user, 'negocio') else None,
+            'negocio_id': negocio.id if negocio else None,
         }
     })
 
@@ -226,6 +234,20 @@ def login_empleado_pin(request):
         empleado_valido.ultimo_ingreso = timezone.now()
         empleado_valido.save(update_fields=['ultimo_ingreso'])
 
+    # 🛠️ El frontend (web y mobile) obligaba a "Marcar Ingreso" en CADA
+    # entrada por PIN, sin importar si el empleado ya había marcado su
+    # ingreso antes y todavía no marcó su salida — si la sesión se perdía
+    # (cookie expirada, error de red pasajero) y volvía a entrar con el
+    # PIN a mitad de turno, le volvía a pedir "registrar asistencia" de
+    # nuevo. Se expone si el turno ya está abierto para que el frontend
+    # se salte ese paso en ese caso.
+    turno_abierto = bool(
+        empleado_valido.ultimo_ingreso and (
+            not empleado_valido.ultima_salida or
+            empleado_valido.ultima_salida < empleado_valido.ultimo_ingreso
+        )
+    )
+
     response = Response({
         'id': empleado_valido.id,                 # ← lo necesita el header X-Empleado-ID
         'nombre': empleado_valido.nombre,
@@ -233,6 +255,7 @@ def login_empleado_pin(request):
         'puede_repartir': puede_repartir,         # ← rutea al repartidor a su app dedicada
         'caja_abierta': caja_abierta,
         'sede_id': sede_id,
+        'turno_abierto': turno_abierto,
     })
     # Cookie HttpOnly igual que los JWT del dueño
     response.set_cookie(

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import usePosStore from '../store/usePosStore';
 import { useToast } from '../context/ToastContext';
+import { useConfirm, usePrompt } from '../context/ConfirmContext';
 import ModalCobro from '../components/modals/ModalCobro';
 import ModalModificadores from '../components/modals/ModalModificadores';
 import { crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden } from '../api/api';
@@ -15,10 +16,12 @@ import { usePosData } from '../features/POS/hooks/usePosData';
 import { usePosSearch } from '../features/POS/hooks/usePosSearch';
 import { calcularLineasHappyHour, calcularLineasReglas, happyHourActivaAhora } from '../features/POS/hooks/usePosData';
 
-export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
+export default function PosView({ mesaId, onVolver, esModoTerminal = false, numeroMesaMostrado }) {
   // Al momento en que el empleado inicia sesión en la terminal de sala:
   localStorage.setItem('modo_dispositivo', 'terminal');
   const toast = useToast();
+  const confirmar = useConfirm();
+  const prompt = usePrompt();
   const { estadoCaja, configuracionGlobal, carrito, agregarProducto, agregarCombo, esDueño, sedes, manejarCambioSede, restarProducto, obtenerTotalItems, restarDesdeGrid, obtenerTotalDinero, vaciarCarrito, actualizarItemCompleto, sumarUnidad } = usePosStore();  const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const [wsListo, setWsListo] = useState(false);
@@ -28,15 +31,34 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   const [telefonoLlevar] = useState('');
 
   // 1. DATA HOOK
-  const { productosBase, combosPromocionalesHoy, happyHours, reglasNegocio, categoriasReales, modificadoresGlobales, ordenActiva, setOrdenActiva, cargando } = usePosData(sedeActualId, mesaId, vaciarCarrito);
+  const { productosBase, combosPromocionalesHoy, happyHours, reglasNegocio, categoriasReales, modificadoresGlobales, ordenActiva, setOrdenActiva, cargando, cargandoOrden } = usePosData(sedeActualId, mesaId, vaciarCarrito);
 
   // 2. SEARCH & FILTER HOOK
-  const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales, modificadoresGlobales);
+  const { busqueda, setBusqueda, inputBusquedaActivo, setInputBusquedaActivo, categoriaActiva, setCategoriaActiva, aprenderSeleccion, productosFiltrados } = usePosSearch(productosBase, categoriasReales);
+
+  // Ctrl/Cmd+K abre el buscador — el header (modo terminal/PC) ya insinuaba
+  // este atajo con el texto "Ctrl + K", pero no hacía nada. El input real
+  // tiene autoFocus, así que con solo activar inputBusquedaActivo ya
+  // aparece enfocado y listo para escribir.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setInputBusquedaActivo(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [setInputBusquedaActivo]);
 
   // ESTADOS LOCALES DE LA VISTA
   const [modalCobroAbierto, setModalCobroAbierto] = useState(false);
   const [modalModsAbierto, setModalModsAbierto] = useState(false);
   const [productoParaModificar, setProductoParaModificar] = useState(null);
+  // Grupo+opción a preseleccionar cuando el modal se abre porque se buscó
+  // el nombre de una variante (ej. "gordita") en vez del producto (ver
+  // usePosSearch.js → _coincidenciaOpcion).
+  const [preseleccionVariante, setPreseleccionVariante] = useState(null);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [mostrarExito, setMostrarExito] = useState(false);
@@ -46,6 +68,14 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   // ====================== WEBSOCKET LOGIC ======================
   const wsRef = useRef(null);
   const estadoMesaRef = useRef('libre'); // Soluciona el error de mutación del Linter
+  const totalMesaRef = useRef(0);
+  // 🛠️ Cobrar/cancelar ya avisan al backend, que transmite el estado correcto
+  // (libre, total 0) a todas las pantallas ANTES de que este componente se
+  // desmonte. Sin esta bandera, el mensaje de "reposo" del desmontaje (más
+  // abajo) pisaba ese aviso correcto con el último estado en memoria acá
+  // ('ocupada' + el monto ya cobrado) — la mesa volvía a verse ocupada en
+  // el salón hasta recargar la página.
+  const mesaLiberadaRef = useRef(false);
 
   useEffect(() => {
     if (esParaLlevar || !mesaId || !sedeActualId) return;
@@ -88,8 +118,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       unmounted = true;
       clearTimeout(reconnectTimeout);
       // Restaurar estado de mesa al salir
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaId, estado: estadoMesaRef.current, total: 0 }));
+      // 🛠️ Antes mandaba total:0 a lo bruto — este mensaje SOBREESCRIBE (no
+      // fusiona) lo que ven las demás pantallas, así que salir de una mesa
+      // ocupada borraba el monto a cobrar en el grid del salón hasta que
+      // alguien recargaba la página. Se manda el total real (totalMesaRef).
+      if (ws && ws.readyState === WebSocket.OPEN && !mesaLiberadaRef.current) {
+        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaId, estado: estadoMesaRef.current, total: totalMesaRef.current }));
       }
       ws?.close();
     };
@@ -105,20 +139,28 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   // Notificar al Salón apenas termine de cargar la data
   // Notificar al Salón basándose en la carga de datos, el carrito y el WebSocket
   useEffect(() => {
-    // 🚨 FRENO DE SEGURIDAD: 
-    // Esperamos a que la base de datos cargue Y que el WebSocket esté conectado
-    if (cargando || !wsListo) return; 
+    // 🚨 FRENO DE SEGURIDAD:
+    // Esperamos a que la orden de ESTA mesa cargue Y que el WebSocket esté
+    // conectado — el catálogo (cargando) puede ya estar listo desde cache
+    // sin que sepamos aún si la mesa tiene una orden activa o no.
+    if (cargandoOrden || !wsListo) return;
     
     if (ordenActiva) {
       // 1. La mesa ya tiene un pedido en la base de datos
       estadoMesaRef.current = 'ocupada';
-      
-      // 2. ¿Hay cosas nuevas en el carrito? 
-      // Si carrito.length es 0, solo estamos viendo la cuenta -> 'cobrando'
-      // Si es > 0, el mesero está marcando algo nuevo -> 'pidiendo'
-      const estadoActual = carrito.length > 0 ? 'pidiendo' : 'cobrando';
-      
-      notificarEstadoMesa(estadoActual, parseFloat(ordenActiva.total || 0));
+
+      // 2. ¿Hay cosas nuevas en el carrito?
+      // 🛠️ Antes: carrito vacío → 'cobrando' a ciegas, aunque nadie hubiera
+      // abierto el modal de cobro (por ejemplo, justo después de enviar un
+      // pedido a cocina). 'cobrando' ya se avisa aparte, atado a
+      // modalCobroAbierto (ver el efecto de más abajo) — acá solo se avisa
+      // si hay cosas nuevas sin enviar ('pidiendo'); si no, se deja el
+      // estado real ('ocupada') salvo que el modal de cobro esté abierto.
+      if (carrito.length > 0) {
+        notificarEstadoMesa('pidiendo', totalMesa);
+      } else if (!modalCobroAbierto) {
+        notificarEstadoMesa('ocupada', totalMesa);
+      }
     } else {
       // 3. Mesa libre -> El mesero entró a tomar el primer pedido
       estadoMesaRef.current = 'libre';
@@ -126,12 +168,16 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargando, ordenActiva, carrito.length, wsListo]); // 👈 Dependencias clave
+  }, [cargandoOrden, ordenActiva, carrito.length, wsListo, modalCobroAbierto]); // 👈 Dependencias clave
 
   // ====================== CÁLCULOS ======================
   const totalOrdenActiva = ordenActiva ? ordenActiva.detalles.reduce((acc, d) => acc + parseFloat(d.precio_unitario || 0) * (d.cantidad || 1), 0) : 0;
   const totalMesa = totalOrdenActiva + obtenerTotalDinero();
-  
+
+  // Mantiene el total real a mano para el mensaje de "reposo" que se manda
+  // al salir de la mesa (ver limpieza del WS más arriba).
+  useEffect(() => { totalMesaRef.current = totalMesa; }, [totalMesa]);
+
   const cantItemsMesa = (ordenActiva ? ordenActiva.detalles.reduce((acc, el) => acc + el.cantidad, 0) : 0) + obtenerTotalItems();
   const hhActivas = happyHours.filter(happyHourActivaAhora);
   const todosLosItemsParaHH = [
@@ -193,23 +239,25 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       return;
     }
 
-    const confirmar = window.confirm(
-      "⚠️ ¿ESTÁS SEGURO DE ANULAR TODO EL PEDIDO?\nEsta acción liberará la mesa y quedará registrada en la auditoría."
+    const confirmado = await confirmar(
+      'Esta acción liberará la mesa y quedará registrada en la auditoría.',
+      { titulo: '¿Anular todo el pedido?', peligroso: true, textoConfirmar: 'Sí, anular' }
     );
 
-    if (confirmar) {
+    if (confirmado) {
       try {
         setProcesando(true);
         // 1. Informamos al backend para que libere la mesa y cancele la orden
-        await actualizarOrden(ordenActiva.id, { 
+        await actualizarOrden(ordenActiva.id, {
           estado: 'cancelado',
-          notas_cocina: 'Anulación total desde el POS' 
+          notas_cocina: 'Anulación total desde el POS'
         });
 
         // 2. Limpieza total del estado local
+        mesaLiberadaRef.current = true;
         vaciarCarrito();
         setCarritoAbierto(false);
-        
+
         // 3. Volvemos al salón
         onVolver();
         
@@ -223,7 +271,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   };
 
   const manejarAnularItem = async (detalleId, nombrePlato) => {
-    const motivo = window.prompt(`¿Motivo de anulación para "${nombrePlato}"?`);
+    const motivo = await prompt(`Se anulará "${nombrePlato}" de la cuenta.`, {
+      titulo: 'Motivo de anulación',
+      peligroso: true,
+      textoConfirmar: 'Anular',
+      pedirTexto: { placeholder: 'Ej: se equivocó el mesero...' },
+    });
     if (!motivo) return;
     setProcesando(true);
     try {
@@ -245,7 +298,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
     if (!ordenActiva) return;
     
     // Pequeña confirmación por seguridad
-    if (!window.confirm('¿Estás seguro de cancelar esta orden vacía y liberar la mesa?')) return;
+    if (!(await confirmar('¿Cancelar esta orden vacía y liberar la mesa?', { titulo: 'Liberar mesa', peligroso: true }))) return;
 
     try {
       // 1. Le decimos a Django que cancele la orden
@@ -263,15 +316,19 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
       toast.error('No se pudo liberar la mesa. Revisa tu conexión.');
     }
   };
-  const abrirModalParaNuevo = (producto) => {
+  const abrirModalParaNuevo = (producto, preseleccion = null) => {
     if (ordenActiva) notificarEstadoMesa('pidiendo', totalMesa); // 👈 Corregido
     setProductoParaModificar(producto);
+    setPreseleccionVariante(preseleccion);
     setModalModsAbierto(true);
   };
-  
+
   const manejarAgregarAlCarritoDesdeModal = (itemCompleto) => {
+      // Se agregó algo al carrito — si venía de una búsqueda, se limpia
+      // para poder escribir la siguiente de una sin tener que borrar.
+      setBusqueda('');
       const existeItem = carrito.find(i => i.cart_id === itemCompleto.cart_id);
-      if (existeItem) { actualizarItemCompleto(itemCompleto); } 
+      if (existeItem) { actualizarItemCompleto(itemCompleto); }
       else { agregarProducto(itemCompleto); }
   };
   
@@ -296,7 +353,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
   return (
     <div className={`relative h-full flex flex-col overflow-hidden font-sans transition-colors duration-500 ${tema === 'dark' ? 'bg-[#0a0a0a] text-neutral-100' : 'bg-[#f4f4f5] text-gray-900'}`}>
       
-      <PosHeader esModoTerminal={esModoTerminal} onVolver={onVolver} tema={tema} colorPrimario={colorPrimario} esParaLlevar={esParaLlevar} nombreLlevar={nombreLlevar} mesaId={mesaId} inputBusquedaActivo={inputBusquedaActivo} setInputBusquedaActivo={setInputBusquedaActivo} busqueda={busqueda} setBusqueda={setBusqueda} categoriaActiva={categoriaActiva} setCategoriaActiva={setCategoriaActiva} categoriasReales={categoriasReales} productosBase={productosBase} />
+      <PosHeader esModoTerminal={esModoTerminal} onVolver={onVolver} tema={tema} colorPrimario={colorPrimario} esParaLlevar={esParaLlevar} nombreLlevar={nombreLlevar} mesaId={mesaId} numeroMesaMostrado={numeroMesaMostrado} inputBusquedaActivo={inputBusquedaActivo} setInputBusquedaActivo={setInputBusquedaActivo} busqueda={busqueda} setBusqueda={setBusqueda} categoriaActiva={categoriaActiva} setCategoriaActiva={setCategoriaActiva} categoriasReales={categoriasReales} productosBase={productosBase} />
 
       {/* Aquí resolvemos el 'cargando' never used: Muestra un loader simple mientras baja data */}
       {cargando ? (
@@ -314,9 +371,10 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
           ordenActiva={ordenActiva} 
           totalMesa={totalMesa} 
           busqueda={busqueda} 
-          abrirModalParaNuevo={abrirModalParaNuevo} 
-          aprenderSeleccion={aprenderSeleccion} 
-          agregarProducto={agregarProducto} 
+          abrirModalParaNuevo={abrirModalParaNuevo}
+          aprenderSeleccion={aprenderSeleccion}
+          agregarProducto={agregarProducto}
+          limpiarBusqueda={() => setBusqueda('')}
           restarDesdeGrid={restarDesdeGrid} 
           notificarEstadoMesa={notificarEstadoMesa} 
           formatearSoles={formatearSoles} 
@@ -351,7 +409,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
         ordenActiva={ordenActiva} 
         manejarAnularItem={manejarAnularItem} 
         procesando={procesando} 
-        abrirModalParaEditar={(item) => { setProductoParaModificar(item); setModalModsAbierto(true); }} 
+        abrirModalParaEditar={(item) => { setProductoParaModificar(item); setPreseleccionVariante(null); setModalModsAbierto(true); }}
         restarProducto={restarProducto} 
         sumarUnidad={sumarUnidad} 
         manejarEnviarCocina={manejarEnviarCocina} 
@@ -385,6 +443,7 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
               setModalCobroAbierto(false);
               if (info?.pagado) {
                 // Cierre tras un cobro exitoso: limpiamos y volvemos a mesas.
+                mesaLiberadaRef.current = true;
                 vaciarCarrito();
                 setCarritoAbierto(false);
                 onVolver();
@@ -427,11 +486,12 @@ export default function PosView({ mesaId, onVolver, esModoTerminal = false }) {
         </div>
       )}
       
-      <ModalModificadores 
-        isOpen={modalModsAbierto} 
-        onClose={() => setModalModsAbierto(false)} 
-        producto={productoParaModificar} 
-        modificadoresGlobales={modificadoresGlobales} 
+      <ModalModificadores
+        isOpen={modalModsAbierto}
+        onClose={() => { setModalModsAbierto(false); setPreseleccionVariante(null); }}
+        producto={productoParaModificar}
+        preseleccion={preseleccionVariante}
+        modificadoresGlobales={modificadoresGlobales}
         onAgregarAlCarrito={manejarAgregarAlCarritoDesdeModal}
         happyHours={happyHours}
       />

@@ -3,14 +3,16 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Modal, ScrollView,
-  Platform, StatusBar, Easing
+  Animated, Dimensions, Modal, ScrollView, TextInput, Alert,
+  Platform, StatusBar, Easing, BackHandler
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import { BlurView } from '@react-native-community/blur';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DashboardScreen     from '../screens/ERP/DashboardScreen';
+import AnaliticasScreen    from '../screens/ERP/AnaliticasScreen';
 import ConfiguracionScreen from '../screens/ERP/ConfiguracionScreen';
 import PersonalScreen      from '../screens/ERP/PersonalScreen';
 import MenuScreen          from '../screens/ERP/Menu/MenuScreen';
@@ -21,14 +23,14 @@ import FacturacionScreen   from '../screens/ERP/FacturacionScreen';
 import SalonScreen         from '../screens/POS/SalonScreen';
 import useAppStore         from '../store/useAppStore';
 import PosScreen           from '../screens/POS/PosScreen';
-import { setLogoutCallback } from '../api/api';
+import KdsScreen           from '../screens/POS/KdsScreen';
+import { setLogoutCallback, crearTicket } from '../api/api';
 const { width } = Dimensions.get('window');
 
 const COLOR_DEFAULT = '#3b82f6';
-const SAFE_BOTTOM   = Platform.OS === 'ios' ? 34 : 24;
 const SAFE_TOP      = Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 24) + 10;
 
-// ─── Placeholder ──────────────────────────────────────────────
+// ─── Placeholder (features que hoy solo viven en la web) ───────
 const PlaceholderScreen = ({ titulo, icono }) => (
   <View style={{ flex: 1, backgroundColor: '#050505', alignItems: 'center', justifyContent: 'center' }}>
     <View style={{ width: 64, height: 64, backgroundColor: '#121212', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#1e1e1e' }}>
@@ -38,56 +40,170 @@ const PlaceholderScreen = ({ titulo, icono }) => (
       {titulo.toUpperCase()}
     </Text>
     <View style={{ marginTop: 12, backgroundColor: 'rgba(59,130,246,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(59,130,246,0.2)' }}>
-      <Text style={{ color: COLOR_DEFAULT, fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>EN CONSTRUCCIÓN</Text>
+      <Text style={{ color: COLOR_DEFAULT, fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>SOLO DISPONIBLE EN LA WEB</Text>
     </View>
   </View>
 );
 
+// ─── Metadata de cada pantalla (id -> ícono FontAwesome + título de arriba) ───
 const SCREENS_META = {
-  dashboard:    { icono: 'bar-chart',  nombre: 'Inicio'     },
-  menu:         { icono: 'cutlery',    nombre: 'Menú'       },
-  personal:     { icono: 'users',      nombre: 'Personal'   },
-  inventario:   { icono: 'cube',       nombre: 'Inventario' },
-  sedes:        { icono: 'map-marker', nombre: 'Sedes'      },
-  configuracion:{ icono: 'cog',        nombre: 'Ajustes'    },
-  crm:          { icono: 'heart',      nombre: 'Clientes'   },
-  facturacion:  { icono: 'file-text',  nombre: 'Facturación'},
+  dashboard:     { icono: 'th-large',    nombre: 'Panel de Control' },
+  analiticas:    { icono: 'line-chart',  nombre: 'Analíticas' },
+  menu:          { icono: 'cutlery',     nombre: 'Carta y Precios' },
+  inventario:    { icono: 'cube',        nombre: 'Inventario y Recetas' },
+  sedes:         { icono: 'map-marker',  nombre: 'Sedes y Mapa' },
+  personal:      { icono: 'users',       nombre: 'Personal y Accesos' },
+  configuracion: { icono: 'cog',         nombre: 'Mi Negocio y Plan' },
+  crm:           { icono: 'heart',       nombre: 'Fidelización (CRM)' },
+  bot_wsp:       { icono: 'whatsapp',    nombre: 'Bot WhatsApp' },
+  carta_qr:      { icono: 'qrcode',      nombre: 'Carta QR Virtual' },
+  facturacion:   { icono: 'file-text',   nombre: 'Facturación SUNAT' },
 };
 
-const TAB_ITEMS = ['dashboard', 'menu', 'personal'];
+// ─── Mismos 5 grupos, mismos ítems y mismas reglas de "quién ve qué"
+// que el sidebar de la web (pos-frontend/src/features/ERP/Erp_Sidebar.jsx).
+// Cambiá esto ahí primero si el sidebar de la web cambia.
+function construirGruposMenu(modulos, esDueño) {
+  return [
+    {
+      titulo: 'MONITOREO',
+      items: [
+        { id: 'dashboard', show: true },
+        { id: 'analiticas', show: true },
+      ],
+    },
+    {
+      titulo: 'CATÁLOGO Y LOGÍSTICA',
+      items: [
+        { id: 'menu', show: true },
+        { id: 'inventario', show: modulos.inventario },
+      ],
+    },
+    {
+      titulo: 'ADMINISTRACIÓN',
+      items: [
+        { id: 'sedes', show: esDueño },
+        { id: 'personal', show: esDueño },
+        { id: 'configuracion', show: esDueño },
+      ],
+    },
+    {
+      titulo: 'ECOSISTEMA DIGITAL',
+      items: [
+        { id: 'crm', show: modulos.clientes },
+        { id: 'bot_wsp', show: modulos.botWsp },
+        { id: 'carta_qr', show: modulos.cartaQr },
+      ],
+    },
+    {
+      titulo: 'CONTABILIDAD',
+      items: [
+        { id: 'facturacion', show: modulos.facturacion },
+      ],
+    },
+  ];
+}
 
-const ALL_DRAWER_ITEMS = [
-  { id: 'inventario',    grupo: 'CATÁLOGO', moduloKey: 'inventario' },
-  { id: 'sedes',         grupo: 'ADMIN',     moduloKey: null         },
-  { id: 'configuracion', grupo: 'ADMIN',     moduloKey: null         },
-  { id: 'crm',           grupo: 'DIGITAL',   moduloKey: 'clientes'   },
-  { id: 'facturacion',   grupo: 'DIGITAL',   moduloKey: 'facturacion'},
-];
+// ─── Modal "Reportar un problema" (igual a Erp_Sidebar.jsx en la web) ───
+function ModalReportarProblema({ visible, onClose }) {
+  const [asunto, setAsunto]   = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
 
-// ─── Drawer ───────────────────────────────────────────────────
-function Drawer({ visible, vistaActiva, color, drawerItems, onNavegar, onIrAlPos, onLogout, onClose }) {
+  const cerrar = () => { onClose(); setTimeout(() => { setAsunto(''); setMensaje(''); setEnviado(false); }, 200); };
+
+  const enviar = async () => {
+    if (!asunto.trim() || !mensaje.trim()) return;
+    setEnviando(true);
+    try {
+      await crearTicket({ asunto, mensaje });
+      setEnviado(true);
+    } catch {
+      Alert.alert('Error', 'No se pudo enviar el reporte. Intenta de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={cerrar}>
+      <View style={rp.overlay}>
+        <View style={rp.card}>
+          {enviado ? (
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Icon name="check-circle" size={40} color="#10b981" />
+              <Text style={rp.tituloExito}>¡Reporte enviado!</Text>
+              <Text style={rp.subExito}>Lo vamos a revisar pronto.</Text>
+              <TouchableOpacity style={rp.btnCerrar} onPress={cerrar}>
+                <Text style={rp.btnCerrarText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={rp.titulo}>Reportar un problema</Text>
+              <TextInput
+                style={rp.input}
+                placeholder="¿Qué problema tuviste?"
+                placeholderTextColor="#525252"
+                value={asunto}
+                onChangeText={setAsunto}
+              />
+              <TextInput
+                style={[rp.input, rp.textarea]}
+                placeholder="Cuéntanos con detalle qué pasó…"
+                placeholderTextColor="#525252"
+                value={mensaje}
+                onChangeText={setMensaje}
+                multiline
+                numberOfLines={4}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={rp.btnCancelar} onPress={cerrar}>
+                  <Text style={rp.btnCancelarText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[rp.btnEnviar, (!asunto.trim() || !mensaje.trim() || enviando) && { opacity: 0.4 }]}
+                  onPress={enviar}
+                  disabled={enviando || !asunto.trim() || !mensaje.trim()}
+                >
+                  <Text style={rp.btnEnviarText}>{enviando ? 'Enviando…' : 'Enviar'}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Drawer (sidebar completo, igual a la web) ─────────────────
+function Drawer({ visible, vistaActiva, color, gruposMenu, onNavegar, onReportar, onLogout, onClose }) {
+  const insets = useSafeAreaInsets();
   const [render, setRender] = useState(false);
-  const slideAnim = useRef(new Animated.Value(width)).current;
+  const slideAnim = useRef(new Animated.Value(-width)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const [gruposExpandidos, setGruposExpandidos] = useState({});
 
   useEffect(() => {
     if (visible) {
       setRender(true);
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: 0,     duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(fadeAnim,  { toValue: 1,     duration: 300, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0,      duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1,      duration: 300, useNativeDriver: true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: width, duration: 250, easing: Easing.in(Easing.cubic),  useNativeDriver: true }),
-        Animated.timing(fadeAnim,  { toValue: 0,     duration: 250, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: -width, duration: 250, easing: Easing.in(Easing.cubic),  useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 0,      duration: 250, useNativeDriver: true }),
       ]).start(() => setRender(false));
     }
   }, [visible]);
 
   if (!render && !visible) return null;
 
-  const grupos = [...new Set(drawerItems.map(i => i.grupo))];
+  const toggleGrupo = (titulo) => setGruposExpandidos(prev => ({ ...prev, [titulo]: prev[titulo] === false ? true : false }));
 
   return (
     <Modal transparent visible onRequestClose={onClose} animationType="none">
@@ -106,7 +222,7 @@ function Drawer({ visible, vistaActiva, color, drawerItems, onNavegar, onIrAlPos
           <View style={d.drawerHeader}>
             <View>
               <Text style={d.drawerBrand}>LEYBRAK<Text style={{ color }}>POS</Text></Text>
-              <Text style={d.drawerSub}>SISTEMA DE GESTIÓN</Text>
+              <Text style={d.drawerSub}>SAAS PLATFORM</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={d.closeBtn} activeOpacity={0.7}>
               <Icon name="times" size={16} color="#6b7280" />
@@ -114,41 +230,51 @@ function Drawer({ visible, vistaActiva, color, drawerItems, onNavegar, onIrAlPos
           </View>
 
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-            {grupos.map(grupo => (
-              <View key={grupo} style={d.grupo}>
-                <Text style={d.grupoTitulo}>{grupo}</Text>
-                {drawerItems.filter(i => i.grupo === grupo).map(item => {
-                  const sc     = SCREENS_META[item.id];
-                  const activo = vistaActiva === item.id;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[d.drawerItem, activo && d.drawerItemActivo]}
-                      onPress={() => { onNavegar(item.id); onClose(); }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[d.drawerItemIcono, activo && { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
-                        <Icon name={sc.icono} size={14} color={activo ? color : '#6b7280'} />
-                      </View>
-                      <Text style={[d.drawerItemNombre, activo && { color: '#fff', fontWeight: '700' }]}>
-                        {sc.nombre}
-                      </Text>
-                      <Icon name="chevron-right" size={10} color={activo ? color : '#333'} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
+            {gruposMenu.map(grupo => {
+              const itemsVisibles = grupo.items.filter(i => i.show);
+              if (itemsVisibles.length === 0) return null;
+              const expandido = gruposExpandidos[grupo.titulo] !== false;
+
+              return (
+                <View key={grupo.titulo} style={d.grupo}>
+                  <TouchableOpacity style={d.grupoHeader} onPress={() => toggleGrupo(grupo.titulo)} activeOpacity={0.7}>
+                    <Text style={d.grupoTitulo}>{grupo.titulo}</Text>
+                    <Icon name={expandido ? 'chevron-up' : 'chevron-down'} size={9} color="#4b5563" />
+                  </TouchableOpacity>
+
+                  {expandido && itemsVisibles.map(item => {
+                    const sc     = SCREENS_META[item.id];
+                    const activo = vistaActiva === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[d.drawerItem, activo && d.drawerItemActivo]}
+                        onPress={() => { onNavegar(item.id); onClose(); }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[d.drawerItemIcono, activo && { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
+                          <Icon name={sc.icono} size={14} color={activo ? color : '#6b7280'} />
+                        </View>
+                        <Text style={[d.drawerItemNombre, activo && { color: '#fff', fontWeight: '700' }]}>
+                          {sc.nombre}
+                        </Text>
+                        {activo && <View style={[d.drawerItemBarra, { backgroundColor: color }]} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
           </ScrollView>
 
-          <View style={d.drawerFooter}>
-            <TouchableOpacity
-              style={[d.posBtn, { backgroundColor: color }]}
-              onPress={() => { onIrAlPos(); onClose(); }}
-              activeOpacity={0.8}
-            >
-              <Icon name="desktop" size={16} color="#fff" style={{ marginRight: 10 }} />
-              <Text style={d.posBtnText}>Terminal POS</Text>
+          {/* 🛠️ Antes había acá un botón "Terminal POS" duplicado — el
+              header del ERP ya tiene su propio botón exclusivo para volver
+              al POS (th.posBtn, ícono de escritorio), así que este era
+              redundante. */}
+          <View style={[d.drawerFooter, { paddingBottom: 20 + insets.bottom }]}>
+            <TouchableOpacity style={d.reportarBtn} onPress={() => { onClose(); setTimeout(onReportar, 300); }} activeOpacity={0.8}>
+              <Icon name="life-ring" size={15} color="#6b7280" style={{ marginRight: 10 }} />
+              <Text style={d.reportarBtnText}>Reportar un problema</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -168,8 +294,10 @@ function Drawer({ visible, vistaActiva, color, drawerItems, onNavegar, onIrAlPos
 
 // ─── Layout ERP ───────────────────────────────────────────────
 function ERPLayout({ onIrAlPos, onLogout }) {
-  const [vistaActiva, setVistaActiva] = useState('dashboard');
+  const [vistaActiva, setVistaActiva]   = useState('dashboard');
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [reportarVisible, setReportarVisible] = useState(false);
+  const [esDueño, setEsDueño] = useState(false);
 
   const { configuracionGlobal } = useAppStore();
   const color   = configuracionGlobal.colorPrimario || COLOR_DEFAULT;
@@ -177,26 +305,59 @@ function ERPLayout({ onIrAlPos, onLogout }) {
   const modulos = configuracionGlobal.modulos || {};
   const bgColor = isDark ? '#050505' : '#f0f0f0';
 
-  const drawerItemsFiltrados = ALL_DRAWER_ITEMS.filter(item => {
-    if (item.moduloKey === null) return true;
-    return modulos[item.moduloKey] === true;
-  });
-
   useEffect(() => {
-    const itemActivo = ALL_DRAWER_ITEMS.find(i => i.id === vistaActiva);
-    if (itemActivo && itemActivo.moduloKey && !modulos[itemActivo.moduloKey]) {
-      setVistaActiva('dashboard');
-    }
-  }, [modulos]);
+    (async () => {
+      const rol = (await EncryptedStorage.getItem('usuario_rol')) || 'Empleado';
+      setEsDueño(['dueño', 'admin', 'administrador'].includes(rol.trim().toLowerCase()));
+    })();
+  }, []);
 
-  const estaEnDrawer = !TAB_ITEMS.includes(vistaActiva);
+  const gruposMenu = construirGruposMenu(modulos, esDueño);
+  const idsVisibles = gruposMenu.flatMap(g => g.items.filter(i => i.show).map(i => i.id));
+
+  // Si el módulo/rol que habilitaba la pantalla activa se apaga, volvemos al inicio.
+  useEffect(() => {
+    if (!idsVisibles.includes(vistaActiva)) setVistaActiva('dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modulos, esDueño]);
+
+  // 🛠️ Antes nada escuchaba el botón/gesto de retroceder de Android acá
+  // dentro, así que Android caía a su comportamiento default (cerrar la
+  // app) sin importar en qué pestaña del ERP estuviera el dueño. Ahora:
+  // modal "Reportar" abierto → cerrarlo; drawer abierto → cerrarlo;
+  // parado en una pestaña que no es el Dashboard → volver al Dashboard
+  // (la "home" del ERP). Solo en el Dashboard con todo cerrado se deja
+  // el comportamiento default (salir de la app), como en cualquier pantalla raíz.
+  useEffect(() => {
+    const onBack = () => {
+      if (reportarVisible) { setReportarVisible(false); return true; }
+      if (drawerVisible) { setDrawerVisible(false); return true; }
+      if (vistaActiva !== 'dashboard') { setVistaActiva('dashboard'); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [reportarVisible, drawerVisible, vistaActiva]);
 
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={bgColor} />
 
+      {/* Barra superior — reemplaza a la tab bar: acá vive el único acceso
+          de navegación, igual que el sidebar persistente de la web. */}
+      <View style={[th.header, { backgroundColor: isDark ? '#0a0a0a' : '#fff', borderBottomColor: isDark ? '#1a1a1a' : '#e5e7eb' }]}>
+        <TouchableOpacity style={th.menuBtn} onPress={() => setDrawerVisible(true)} activeOpacity={0.7}>
+          <Icon name="bars" size={18} color={isDark ? '#fff' : '#111'} />
+        </TouchableOpacity>
+        <Text style={[th.titulo, { color: isDark ? '#fff' : '#111' }]}>{SCREENS_META[vistaActiva]?.nombre}</Text>
+        <TouchableOpacity style={th.posBtn} onPress={onIrAlPos} activeOpacity={0.8}>
+          <Icon name="desktop" size={16} color={color} />
+        </TouchableOpacity>
+      </View>
+
       <View style={{ flex: 1 }}>
         {vistaActiva === 'dashboard'     && <DashboardScreen />}
+        {vistaActiva === 'analiticas'    && <AnaliticasScreen />}
         {vistaActiva === 'configuracion' && <ConfiguracionScreen />}
         {vistaActiva === 'menu'          && <MenuScreen />}
         {vistaActiva === 'personal'      && <PersonalScreen />}
@@ -204,99 +365,91 @@ function ERPLayout({ onIrAlPos, onLogout }) {
         {vistaActiva === 'sedes'         && <SedesScreen />}
         {vistaActiva === 'crm'           && <ClientesScreen />}
         {vistaActiva === 'facturacion'   && <FacturacionScreen />}
-      </View>
-
-      {/* Tab Bar */}
-      <View style={tb.tabBarWrapper}>
-        <View style={tb.tabBar}>
-
-          {TAB_ITEMS.slice(0, 2).map(id => {
-            const sc     = SCREENS_META[id];
-            const activo = vistaActiva === id;
-            return (
-              <TouchableOpacity key={id} style={tb.tabItem} onPress={() => setVistaActiva(id)} activeOpacity={0.7}>
-                <Icon name={sc.icono} size={20} color={activo ? color : '#4b5563'} />
-                <Text style={[tb.tabLabel, activo && { color }]}>{sc.nombre}</Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* FAB POS */}
-          <View style={tb.fabContainer}>
-            <TouchableOpacity
-              style={[tb.fabButton, { backgroundColor: color, shadowColor: color }]}
-              onPress={onIrAlPos}
-              activeOpacity={0.8}
-            >
-              <Icon name="desktop" size={22} color="#fff" />
-            </TouchableOpacity>
-            <Text style={[tb.tabLabel, { color, marginTop: 6 }]}>POS</Text>
-          </View>
-
-          {/* Personal */}
-          <TouchableOpacity style={tb.tabItem} onPress={() => setVistaActiva(TAB_ITEMS[2])} activeOpacity={0.7}>
-            <Icon name={SCREENS_META[TAB_ITEMS[2]].icono} size={20} color={vistaActiva === TAB_ITEMS[2] ? color : '#4b5563'} />
-            <Text style={[tb.tabLabel, vistaActiva === TAB_ITEMS[2] && { color }]}>{SCREENS_META[TAB_ITEMS[2]].nombre}</Text>
-          </TouchableOpacity>
-
-          {/* Más */}
-          <TouchableOpacity style={tb.tabItem} onPress={() => setDrawerVisible(true)} activeOpacity={0.7}>
-            <Icon name="bars" size={20} color={estaEnDrawer ? color : '#4b5563'} />
-            <Text style={[tb.tabLabel, estaEnDrawer && { color }]}>Más</Text>
-          </TouchableOpacity>
-
-        </View>
+        {vistaActiva === 'bot_wsp'       && <PlaceholderScreen titulo="Bot WhatsApp" icono="whatsapp" />}
+        {vistaActiva === 'carta_qr'      && <PlaceholderScreen titulo="Carta QR Virtual" icono="qrcode" />}
       </View>
 
       <Drawer
         visible={drawerVisible}
         vistaActiva={vistaActiva}
         color={color}
-        drawerItems={drawerItemsFiltrados}
+        gruposMenu={gruposMenu}
         onNavegar={setVistaActiva}
-        onIrAlPos={onIrAlPos}
+        onReportar={() => setReportarVisible(true)}
         onLogout={onLogout}
         onClose={() => setDrawerVisible(false)}
       />
+      <ModalReportarProblema visible={reportarVisible} onClose={() => setReportarVisible(false)} />
     </View>
   );
 }
 
 // ─── POS Layout ───────────────────────────────────────────────
-function POSLayout({ onVolver }) {
+function POSLayout({ onVolver, onCerrarTurno }) {
   const [mesaActiva, setMesaActiva] = useState(null);
 
-  const { configuracionGlobal } = useAppStore();
-  const color = configuracionGlobal.colorPrimario || COLOR_DEFAULT;
+  // 🛠️ Mismo problema que en ERPLayout: sin esto, el botón/gesto de
+  // retroceder de Android salía de la app en vez de volver al Salón desde
+  // una mesa abierta. Con mesa abierta → cerrarla (vuelve al Salón); en el
+  // Salón, si el dueño llegó acá desde el ERP (onVolver existe) → volver
+  // al ERP; si no hay onVolver (mesero/cajero, el Salón es su pantalla
+  // raíz) se deja el comportamiento default (salir de la app).
+  useEffect(() => {
+    const onBack = () => {
+      if (mesaActiva) { setMesaActiva(null); return true; }
+      if (onVolver) { onVolver(); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [mesaActiva, onVolver]);
 
-  // Sin mesa seleccionada → mapa de mesas
-  if (!mesaActiva) {
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Botón volver al ERP */}
-        <SalonScreen
-          onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
-          onVolver={onVolver}
-        />
-      </View>
-    );
-  }
-
-  // Mesa seleccionada → PosScreen real
+  // 🛠️ Antes esto era un if/else: entrar a una mesa DESMONTABA SalonScreen
+  // por completo, y volver la volvía a MONTAR desde cero — recargando las 5
+  // llamadas de cargar() (mesas, sedes, órdenes para llevar, órdenes activas,
+  // negocio) cada vez, con su pantalla de "CONECTANDO SISTEMA..." de por
+  // medio. De ahí la demora al salir del POS, y el flash de "sin mesas" en
+  // el remontaje. El Salón ya se mantiene al día EN VIVO por WebSocket
+  // mientras se está dentro de una mesa (mesa_actualizada en cada acción:
+  // enviar a cocina, anular, cancelar, trasladar, cobrar — ver
+  // orden_views.py), así que no hace falta recargar nada al volver: basta
+  // con no desmontarlo y dejar que el WS lo mantenga correcto. PosScreen se
+  // dibuja encima como overlay de pantalla completa cuando hay mesa activa.
   return (
-    <PosScreen
-      key={typeof mesaActiva === 'object' ? mesaActiva.id : mesaActiva}
-      mesaId={mesaActiva}
-      onVolver={() => setMesaActiva(null)}
-    />
+    <View style={{ flex: 1 }}>
+      <SalonScreen
+        onSeleccionarMesa={(mesa) => setMesaActiva(mesa)}
+        onVolver={onVolver}
+        onCerrarTurno={onCerrarTurno}
+        mesaIdActiva={typeof mesaActiva === 'object' ? mesaActiva?.id : mesaActiva}
+      />
+      {mesaActiva && (
+        <View style={StyleSheet.absoluteFill}>
+          <PosScreen
+            key={typeof mesaActiva === 'object' ? mesaActiva.id : mesaActiva}
+            mesaId={mesaActiva}
+            onVolver={() => setMesaActiva(null)}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
 // ─── Stack ────────────────────────────────────────────────────
 const Stack = createNativeStackNavigator();
 
-export default function AppNavigator({ sesion, onLogout }) {
-  const [enPos, setEnPos] = useState(false);
+export default function AppNavigator({ sesion, onLogout, onCerrarTurno }) {
+  const rolSesion = (sesion?.rol || '').toString().trim().toLowerCase();
+  // 🛠️ Antes SIEMPRE arrancaba en ERPLayout sin importar el rol — un
+  // mesero/cajero/cocinero que entraba por PIN terminaba viendo el dashboard
+  // de admin. Solo dueño/admin/administrador (login directo por "Panel de
+  // Control") deben ver el ERP; el resto entra directo a su pantalla
+  // operativa y no tiene forma de volver al ERP. Cocinero va al KDS (ya no
+  // al Salón/POS como stopgap — ahora tiene su propia pantalla).
+  const esDueñoRol = ['dueño', 'dueno', 'admin', 'administrador'].includes(rolSesion);
+  const esCocineroRol = ['cocinero', 'cocina'].includes(rolSesion);
+  const [vista, setVista] = useState(esDueñoRol ? 'erp' : esCocineroRol ? 'kds' : 'pos');
 
   useEffect(() => {
     setLogoutCallback(onLogout);
@@ -304,77 +457,57 @@ export default function AppNavigator({ sesion, onLogout }) {
   }, [onLogout]);
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main">
-          {() => enPos
-            ? <POSLayout onVolver={() => setEnPos(false)} />
-            : <ERPLayout onIrAlPos={() => setEnPos(true)} onLogout={onLogout} />
-          }
-        </Stack.Screen>
-      </Stack.Navigator>
-    </NavigationContainer>
+    // 🛠️ Nada en este árbol tenía un <SafeAreaProvider> — cada pantalla que
+    // necesitaba el inset real de abajo (gesto de Android) terminaba
+    // adivinándolo con una constante fija (SAFE_BOTTOM = 24), que no
+    // coincide con el inset real en muchos equipos. Uno solo acá arriba
+    // alcanza para todo el árbol (ERP, POS, Drawer, KDS).
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Main">
+            {() => {
+              if (vista === 'erp') {
+                return <ERPLayout onIrAlPos={() => setVista('pos')} onLogout={onLogout} />;
+              }
+              if (vista === 'kds') {
+                return <KdsScreen onCerrarTurno={onCerrarTurno} />;
+              }
+              return (
+                <POSLayout
+                  onVolver={esDueñoRol ? () => setVista('erp') : undefined}
+                  onCerrarTurno={!esDueñoRol ? onCerrarTurno : undefined}
+                />
+              );
+            }}
+          </Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
-// ─── Estilos Tab Bar ──────────────────────────────────────────
-const tb = StyleSheet.create({
-  tabBarWrapper: {
-    backgroundColor: '#0a0a0a',
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
-    paddingBottom: SAFE_BOTTOM,
+// ─── Estilos de la barra superior ───────────────────────────────
+const th = StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 24) + 10,
+    paddingBottom: 14, paddingHorizontal: 16, borderBottomWidth: 1,
   },
-  tabBar: {
-    flexDirection: 'row',
-    height: 72,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#4b5563',
-    marginTop: 6,
-    letterSpacing: 0.5,
-  },
-  fabContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginTop: -32,
-  },
-  fabButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 4,
-    borderColor: '#0a0a0a',
-  },
+  menuBtn:  { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  titulo:   { fontSize: 15, fontWeight: '800', letterSpacing: -0.3, flex: 1, textAlign: 'center' },
+  posBtn:   { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 });
 
 // ─── Estilos Drawer ───────────────────────────────────────────
 const d = StyleSheet.create({
   overlay:   { flex: 1, flexDirection: 'row' },
   drawer: {
-    position: 'absolute', right: 0, top: 0, bottom: 0,
-    width: width * 0.75, maxWidth: 320,
+    position: 'absolute', left: 0, top: 0, bottom: 0,
+    width: width * 0.8, maxWidth: 320,
     backgroundColor: '#0a0a0a',
-    borderLeftWidth: 1, borderLeftColor: '#1a1a1a',
-    shadowColor: '#000', shadowOffset: { width: -5, height: 0 },
+    borderRightWidth: 1, borderRightColor: '#1a1a1a',
+    shadowColor: '#000', shadowOffset: { width: 5, height: 0 },
     shadowOpacity: 0.5, shadowRadius: 15, elevation: 20,
   },
   drawerHeader: {
@@ -389,9 +522,10 @@ const d = StyleSheet.create({
     borderRadius: 10, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#222',
   },
-  grupo:            { paddingHorizontal: 16, paddingTop: 24 },
-  grupoTitulo:      { fontSize: 10, fontWeight: '800', color: '#4b5563', letterSpacing: 2, marginBottom: 12, paddingLeft: 4 },
-  drawerItem:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, marginBottom: 4 },
+  grupo:            { paddingHorizontal: 12, paddingTop: 12 },
+  grupoHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 10 },
+  grupoTitulo:      { fontSize: 10, fontWeight: '800', color: '#4b5563', letterSpacing: 1.5 },
+  drawerItem:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, marginBottom: 4, position: 'relative', overflow: 'hidden' },
   drawerItemActivo: { backgroundColor: '#121212', borderWidth: 1, borderColor: '#1e1e1e' },
   drawerItemIcono: {
     width: 32, height: 32, backgroundColor: '#161616',
@@ -399,17 +533,41 @@ const d = StyleSheet.create({
     marginRight: 14, borderWidth: 1, borderColor: '#222',
   },
   drawerItemNombre: { flex: 1, fontSize: 14, fontWeight: '600', color: '#9ca3af' },
+  drawerItemBarra:  { position: 'absolute', right: 0, top: 8, bottom: 8, width: 3, borderRadius: 4 },
   drawerFooter: {
-    padding: 20, paddingBottom: SAFE_BOTTOM + 20,
+    padding: 20,
     borderTopWidth: 1, borderTopColor: '#1a1a1a',
-    backgroundColor: '#0a0a0a', gap: 12,
+    backgroundColor: '#0a0a0a', gap: 10,
   },
-  posBtn:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16 },
-  posBtnText:       { color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  reportarBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 14, paddingVertical: 13, borderWidth: 1, borderColor: 'transparent',
+  },
+  reportarBtnText:  { color: '#6b7280', fontSize: 13, fontWeight: '600' },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(239,68,68,0.05)', borderRadius: 14, paddingVertical: 16,
     borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)',
   },
   logoutBtnText:    { color: '#ef4444', fontSize: 14, fontWeight: '700' },
+});
+
+// ─── Estilos "Reportar un problema" ─────────────────────────────
+const rp = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  card:    { width: '100%', maxWidth: 400, backgroundColor: '#111', borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 20, padding: 24 },
+  titulo:  { color: '#fff', fontWeight: '900', fontSize: 15, marginBottom: 16 },
+  input: {
+    backgroundColor: '#0a0a0a', borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 12, color: '#fff', fontSize: 13, marginBottom: 12,
+  },
+  textarea: { height: 90, textAlignVertical: 'top' },
+  btnCancelar:     { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center' },
+  btnCancelarText: { color: '#9ca3af', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  btnEnviar:       { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#ff5a1f', alignItems: 'center' },
+  btnEnviarText:   { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  tituloExito: { color: '#fff', fontWeight: '900', fontSize: 15, marginTop: 12 },
+  subExito:    { color: '#737373', fontSize: 12, marginTop: 4 },
+  btnCerrar:   { marginTop: 20, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, backgroundColor: '#ff5a1f' },
+  btnCerrarText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
 });

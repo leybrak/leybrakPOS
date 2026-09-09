@@ -3,10 +3,12 @@ from urllib import response
 import requests
 import logging
 import os                    # ✨ NUEVO
+from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
 from django.core.files.storage import default_storage   # ✨ NUEVO
 from django.core.files.base import ContentFile          # ✨ NUEVO
+from django.db.models import F
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,8 +16,9 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser  # ✨ NUEVO
 
-from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede
+from ..models import Negocio, PagoSuscripcion, PlanSaaS, Sede, Orden, InsumoSede, Comprobante
 from ..serializers import NegocioSerializer, PagoSuscripcionSerializer, PlanSaaSSerializer, SedeSerializer
+from .historia_views import _token_bot_valido
 from ..services import precargar_modulos_por_plan
 from ..permissions import EsSuperUsuario
 
@@ -176,6 +179,115 @@ class NegocioViewSet(viewsets.ModelViewSet):
 
         return Response({'ok': True, 'url': url})
 
+    # ==========================================
+    # 🔐 CAMBIO DE CONTRASEÑA (autoservicio, dueño/admin)
+    # ==========================================
+    # Ruta: POST /api/negocios/cambiar_password/
+    @action(detail=False, methods=['post'], url_path='cambiar_password', permission_classes=[IsAuthenticated])
+    def cambiar_password(self, request):
+        user = request.user
+        password_actual = request.data.get('password_actual', '')
+        password_nueva = request.data.get('password_nueva', '')
+
+        if not password_actual or not password_nueva:
+            return Response({'error': 'Debes ingresar la contraseña actual y la nueva.'}, status=400)
+        if not user.check_password(password_actual):
+            return Response({'error': 'La contraseña actual es incorrecta.'}, status=400)
+        if len(password_nueva) < 8:
+            return Response({'error': 'La nueva contraseña debe tener al menos 8 caracteres.'}, status=400)
+
+        user.set_password(password_nueva)
+        user.save()
+        return Response({'detail': 'Contraseña actualizada correctamente.'})
+
+    # ==========================================
+    # 🔔 ALERTAS — para la campana de notificaciones del topbar (ERP)
+    # ==========================================
+    # Ruta: GET /api/negocios/alertas/
+    # Calculadas al vuelo (sin tabla propia): suscripción, stock bajo,
+    # delivery sin repartidor y comprobantes SUNAT rechazados.
+    @action(detail=False, methods=['get'], url_path='alertas', permission_classes=[IsAuthenticated])
+    def alertas(self, request):
+        try:
+            negocio = request.user.negocio
+        except Negocio.DoesNotExist:
+            return Response([])
+
+        alertas = []
+
+        # 1. Suscripción por vencer / vencida / bloqueada
+        info = negocio.estado_suscripcion_info()
+        estado_sus = info['estado']
+        dias = info['dias_restantes']
+        if estado_sus == 'bloqueado':
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'danger',
+                'titulo': 'Cuenta bloqueada',
+                'mensaje': 'Tu negocio está bloqueado por falta de pago. Regulariza tu suscripción para seguir operando.',
+                'vista': 'negocio',
+            })
+        elif estado_sus == 'vencido':
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'danger',
+                'titulo': 'Suscripción vencida',
+                'mensaje': 'Tu suscripción venció. Realiza el pago para evitar el bloqueo de tu cuenta.',
+                'vista': 'negocio',
+            })
+        elif estado_sus in ('prueba', 'activo') and dias <= 3:
+            etiqueta = 'de prueba' if estado_sus == 'prueba' else 'de tu plan actual'
+            alertas.append({
+                'tipo': 'suscripcion', 'nivel': 'warning',
+                'titulo': f'Quedan {dias} día{"s" if dias != 1 else ""} {etiqueta}',
+                'mensaje': 'Renueva pronto para no perder acceso al sistema.',
+                'vista': 'negocio',
+            })
+
+        # 2. Stock bajo (si el módulo inventario está activo)
+        if negocio.mod_inventario_activo:
+            insumos_bajos = InsumoSede.objects.filter(
+                sede__negocio=negocio, stock_actual__lte=F('stock_minimo')
+            ).select_related('insumo_base')
+            n = insumos_bajos.count()
+            if n > 0:
+                nombres = ', '.join(i.insumo_base.nombre for i in insumos_bajos[:3])
+                extra = f' y {n - 3} más' if n > 3 else ''
+                alertas.append({
+                    'tipo': 'stock_bajo', 'nivel': 'warning',
+                    'titulo': f'{n} insumo{"s" if n != 1 else ""} con stock bajo',
+                    'mensaje': f'{nombres}{extra}.',
+                    'vista': 'inventario',
+                })
+
+        # 3. Pedidos de delivery sin repartidor asignado
+        if negocio.mod_delivery_activo:
+            n = (Orden.objects
+                 .filter(sede__negocio=negocio, tipo='delivery', estado_delivery='pendiente')
+                 .exclude(estado='cancelado')
+                 .count())
+            if n > 0:
+                alertas.append({
+                    'tipo': 'delivery_pendiente', 'nivel': 'warning',
+                    'titulo': f'{n} pedido{"s" if n != 1 else ""} de delivery sin repartidor',
+                    'mensaje': 'Hay pedidos de delivery esperando que un repartidor los tome.',
+                    'vista': None,
+                })
+
+        # 4. Comprobantes SUNAT rechazados (últimos 7 días)
+        if negocio.mod_facturacion_activo and negocio.facturacion_emision != 'desactivado':
+            desde = timezone.now() - timedelta(days=7)
+            n = Comprobante.objects.filter(
+                negocio=negocio, estado_sunat='rechazado', creado_en__gte=desde
+            ).count()
+            if n > 0:
+                alertas.append({
+                    'tipo': 'comprobante_error', 'nivel': 'danger',
+                    'titulo': f'{n} comprobante{"s" if n != 1 else ""} con error SUNAT',
+                    'mensaje': 'Revisa los comprobantes rechazados en Facturación SUNAT.',
+                    'vista': 'facturacion',
+                })
+
+        return Response(alertas)
+
     # ============================================================
     # El resto de los métodos no cambia
     # ============================================================
@@ -272,6 +384,13 @@ class SedeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='info_bot', permission_classes=[AllowAny])
     def info_bot(self, request):
+        # 🛡️ Antes era AllowAny sin ningún token: cualquiera podía iterar
+        # nombres de instancia (formato predecible) y leer personalidad,
+        # instrucciones internas y config de puntos de CUALQUIER negocio.
+        # Misma convención de X-Bot-Token que historia_views.py.
+        if not _token_bot_valido(request):
+            return Response({'error': 'No autorizado'}, status=403)
+
         instancia = request.query_params.get('instancia')
         if not instancia:
             return Response({'error': 'Falta el parámetro instancia'}, status=400)
@@ -279,6 +398,10 @@ class SedeViewSet(viewsets.ModelViewSet):
         sede = Sede.objects.filter(whatsapp_instancia=instancia).first()
         if not sede:
             return Response({'error': 'Instancia no registrada en ninguna Sede'}, status=404)
+
+        if not sede.bot_token:
+            # Por si la sede se creó antes de este campo y aún no pasó por save().
+            sede.save()
 
         # ✨ 1. OBTENEMOS LA HORA Y DÍA ACTUAL
         ahora = timezone.localtime() # Obtiene la hora en la zona de Perú (America/Lima)
@@ -328,6 +451,10 @@ class SedeViewSet(viewsets.ModelViewSet):
             'negocio_id':    negocio.id,
             'nombre_sede':   sede.nombre,
             'nombre_negocio': negocio.nombre,
+            # 🔑 Secreto propio de ESTA sede para las llamadas siguientes del bot
+            # (header X-Bot-Token, ver BotTokenAuthentication). No es el token
+            # global de arranque que protege este mismo endpoint.
+            'bot_token':     sede.bot_token,
             # 👇 EL CEREBRO DEL BOT 👇
             'esta_abierto':  esta_abierto,
             'hora_apertura': str_apertura,

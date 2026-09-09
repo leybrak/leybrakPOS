@@ -53,3 +53,52 @@ class LoginCajaGateTest(APITestCase):
         r = self._login('2222')
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.data['caja_abierta'])
+
+
+class LoginTurnoAbiertoTest(APITestCase):
+    """
+    turno_abierto le dice al frontend si este empleado ya marcó su ingreso y
+    todavía no marcó su salida — para no volver a pedirle "Marcar Ingreso" si
+    tuvo que reingresar el PIN a mitad de turno (sesión perdida, error de red).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='dueno2', password='x')
+        self.negocio = Negocio.objects.create(
+            propietario=self.user, nombre='N2', fin_prueba=timezone.now() + timedelta(days=30))
+        self.sede = Sede.objects.create(negocio=self.negocio, nombre='S2')
+        self.rol_mesero = Rol.objects.create(nombre='Mesero')
+        self.mesero = Empleado.objects.create(
+            negocio=self.negocio, sede=self.sede, nombre='Mesa', pin='3333', rol=self.rol_mesero)
+        SesionCaja.objects.create(sede=self.sede, estado='abierta', fondo_inicial=Decimal('100'))
+
+    def _login(self):
+        return self.client.post(_URL, {'pin': '3333', 'sede_id': self.sede.id}, format='json')
+
+    def test_sin_ingreso_previo_turno_no_esta_abierto(self):
+        r = self._login()
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.data['turno_abierto'])
+
+    def test_con_ingreso_y_sin_salida_turno_esta_abierto(self):
+        self.mesero.ultimo_ingreso = timezone.now()
+        self.mesero.save(update_fields=['ultimo_ingreso'])
+        r = self._login()
+        self.assertTrue(r.data['turno_abierto'])
+
+    def test_con_salida_posterior_al_ingreso_turno_no_esta_abierto(self):
+        self.mesero.ultimo_ingreso = timezone.now() - timedelta(hours=8)
+        self.mesero.ultima_salida = timezone.now() - timedelta(hours=1)
+        self.mesero.save(update_fields=['ultimo_ingreso', 'ultima_salida'])
+        r = self._login()
+        self.assertFalse(r.data['turno_abierto'])
+
+    def test_con_ingreso_nuevo_tras_una_salida_vieja_turno_esta_abierto(self):
+        # Cerró turno ayer, hoy volvió a marcar ingreso (por el flujo normal
+        # o por accion='asistencia') — el turno de HOY está abierto de nuevo.
+        self.mesero.ultima_salida = timezone.now() - timedelta(hours=20)
+        self.mesero.ultimo_ingreso = timezone.now() - timedelta(minutes=5)
+        self.mesero.save(update_fields=['ultimo_ingreso', 'ultima_salida'])
+        r = self._login()
+        self.assertTrue(r.data['turno_abierto'])

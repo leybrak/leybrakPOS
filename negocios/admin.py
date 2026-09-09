@@ -15,7 +15,7 @@ from .models import (
     Cliente, ZonaDelivery, ReglaNegocio, CuponPromocional,
     HorarioVisibilidad, ComponenteCombo, VersionApp, Comprobante, SerieComprobante,
     HistoriaProgramada, FeedbackCliente, CanjePuntos, BotSticker, ModuloGlobal,
-    TicketSoporte, DatosPagoPlataforma
+    TicketSoporte, DatosPagoPlataforma, Proveedor, OrdenCompra, OrdenCompraDetalle
 )
 from .services import precargar_modulos_por_plan
 from django.contrib import admin
@@ -397,3 +397,26 @@ class BotStickerAdmin(ModelAdmin):  # ✨ UNFOLD
     list_display = ('contexto', 'negocio', 'activo', 'creado_en')
     list_filter = ('contexto', 'activo', 'negocio')
     list_editable = ('activo',)
+
+
+# ==========================================
+# 📦 12. PEDIDOS / COMPRAS (Proveedores + Órdenes de Compra)
+# ==========================================
+@admin.register(Proveedor)
+class ProveedorAdmin(ModelAdmin):  # ✨ UNFOLD
+    list_display = ('nombre', 'negocio', 'telefono', 'ruc', 'activo')
+    list_filter = ('negocio', 'activo')
+    search_fields = ('nombre', 'telefono', 'ruc')
+
+
+class OrdenCompraDetalleInline(TabularInline):  # ✨ UNFOLD
+    model = OrdenCompraDetalle
+    extra = 0
+
+
+@admin.register(OrdenCompra)
+class OrdenCompraAdmin(ModelAdmin):  # ✨ UNFOLD
+    list_display = ('id', 'negocio', 'origen', 'proveedor', 'sede_destino', 'estado', 'creado_en')
+    list_filter = ('negocio', 'origen', 'estado')
+    search_fields = ('proveedor__nombre',)
+    inlines = [OrdenCompraDetalleInline]

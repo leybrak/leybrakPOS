@@ -9,6 +9,8 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import api, { emitirComprobante, enviarTicketWhatsapp } from '../../api/api';
 import { useYapePlinListener } from '../../hooks/useYapePlinListener';
+import { usePagosWS } from '../../hooks/usePagosWS';
+import { useConfirm } from '../../context/ConfirmContext';
 import ModalEmitirComprobante from './ModalEmitirComprobante';
 
 export default function ModalCobro({
@@ -21,6 +23,7 @@ export default function ModalCobro({
   onCobroExitoso,
 }) {
   const { configuracionGlobal } = useAppStore();
+  const confirmar = useConfirm();
   const isDark = configuracionGlobal?.temaFondo !== 'light';
   const color  = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const yapeNumero = configuracionGlobal?.yape_numero || '';
@@ -70,6 +73,12 @@ export default function ModalCobro({
   useEffect(() => { pasoRef.current   = paso;   }, [paso]);
   useEffect(() => { metodoRef.current = metodo; }, [metodo]);
 
+  // ─── Negocio (para el WS de pagos) ─────────────────────────
+  const [negocioId, setNegocioId] = useState(null);
+  useEffect(() => {
+    EncryptedStorage.getItem('negocio_id').then(id => { if (id) setNegocioId(id); });
+  }, []);
+
   // ─── Reset al abrir ───────────────────────────────────────
   useEffect(() => {
     if (visible) {
@@ -113,7 +122,8 @@ export default function ModalCobro({
   useEffect(() => {
     if (visible && ordenId) fetchPreview(metodo);
   }, [metodo, visible, ordenId, fetchPreview]);
-  // Escuchar pagos Yape/Plin desde notificaciones del celular
+  // Escuchar pagos Yape/Plin desde notificaciones del celular (mismo
+  // dispositivo que recibe la notificación de Yape/Plin).
   useYapePlinListener(
     visible && paso === 'qr' && (metodo === 'yape' || metodo === 'plin') && confirmacionAutomatica,
     (data) => {
@@ -126,6 +136,36 @@ export default function ModalCobro({
         });
       }
     }
+  );
+
+  // Escuchar el mismo canal por WebSocket — respaldo para cuando el celular
+  // que cobra NO es el que tiene Yape/Plin instalado (o Android mató el
+  // listener nativo en segundo plano). El backend ya transmite cada
+  // notificación por este canal (lo usa la web); antes el mobile no lo
+  // escuchaba y la pantalla de "esperando Yape" se quedaba esperando para
+  // siempre aunque el pago sí hubiera llegado al servidor.
+  const manejarMensajePagos = useCallback((data) => {
+    if (data.type === 'notificacion_confirmada') {
+      setNotificaciones(prev => prev.filter(n => n.notificacion_id !== data.notificacion_id));
+      return;
+    }
+    if (data.type !== 'pago_recibido') return;
+    if (pasoRef.current   !== 'qr') return;
+    if (metodoRef.current !== 'yape' && metodoRef.current !== 'plin') return;
+
+    const montoNotif = parseFloat(data.monto);
+    const montoEsp   = parseFloat(montoCobroRef.current.toFixed(2));
+    if (Math.abs(montoNotif - montoEsp) >= 0.01) return;
+
+    setNotificaciones(prev => {
+      if (prev.some(n => n.notificacion_id === data.notificacion_id)) return prev;
+      return [...prev, data];
+    });
+  }, []);
+
+  usePagosWS(
+    visible && confirmacionAutomatica ? negocioId : null,
+    manejarMensajePagos
   );
   // ─── Cálculos ─────────────────────────────────────────────
   const totalEfectivo = preview ? preview.total : total;
@@ -178,7 +218,28 @@ export default function ModalCobro({
     }
   };
 
+  // 🛡️ Si hay 2+ pagos del mismo monto a la vez (dos clientes pagando lo
+  // mismo casi juntos), nada impide tocar el que no corresponde — el
+  // sistema no sabe cuál mesa mandó cuál Yape, solo el cajero puede
+  // verificarlo leyendo el nombre/código. Con un solo pago en pantalla no
+  // hay ambigüedad posible, así que no se agrega este paso de más.
+  const confirmarConAmbiguedad = (notificacion) => {
+    const esYape = notificacion.tipo === 'YAPE';
+    const detalle = esYape && notificacion.codigo_seguridad
+      ? `el código de seguridad es ${notificacion.codigo_seguridad}`
+      : `el nombre es "${notificacion.nombre_cliente}"`;
+    return confirmar(
+      `Verifica con el cliente que ${detalle} antes de confirmar — hay otro pago de S/ ${parseFloat(notificacion.monto).toFixed(2)} esperando al mismo tiempo.`,
+      { titulo: 'Hay más de un pago con este monto', peligroso: false, icono: 'exclamation-triangle', textoConfirmar: 'Sí, coincide' },
+    );
+  };
+
   const confirmarNotificacion = async (notificacion) => {
+    if (notificaciones.length >= 2) {
+      const ok = await confirmarConAmbiguedad(notificacion);
+      if (!ok) return;
+    }
+
     setNotificacionElegida(notificacion);
     try {
       await api.post('/yape/confirmar/', {
@@ -287,8 +348,11 @@ export default function ModalCobro({
 
   const metodosDisponibles = [
     { id: 'efectivo', nombre: 'Efectivo', icono: 'money',       color: '#10b981' },
-    yapeNumero && { id: 'yape',    nombre: 'Yape',     icono: 'mobile',      color: '#6d28d9' },
-    plinNumero && { id: 'plin',    nombre: 'Plin',     icono: 'mobile',      color: '#14b8a6' },
+    // 🛠️ Antes exigía yapeNumero/plinNumero — si el negocio solo cargó el QR
+    // (sin número), el botón desaparecía aunque la web sí lo mostraba (ver
+    // metodosDisponibles en ModalCobro.jsx web: !!(numero || qr)).
+    (yapeNumero || yapeQr) && { id: 'yape', nombre: 'Yape', icono: 'mobile', color: '#6d28d9' },
+    (plinNumero || plinQr) && { id: 'plin', nombre: 'Plin', icono: 'mobile', color: '#14b8a6' },
     { id: 'tarjeta',  nombre: 'Tarjeta',  icono: 'credit-card', color: '#3b82f6' },
   ].filter(Boolean);
 

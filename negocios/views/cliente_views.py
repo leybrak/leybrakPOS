@@ -58,6 +58,14 @@ class ClienteViewSet(viewsets.ModelViewSet):
         if not negocio:
             return Response({'error': 'Negocio no encontrado'}, status=404)
 
+        # 🛡️ Fix de fuga entre negocios: negocio_id venía del query param sin
+        # cruzarlo contra el negocio del token — el bot de un negocio podía
+        # leer/crear clientes de OTRO negocio cambiando el parámetro.
+        if not request.user.is_superuser and (
+            not hasattr(request.user, 'negocio') or request.user.negocio.id != negocio.id
+        ):
+            return Response({'error': 'No autorizado'}, status=403)
+
         cliente, creado = _buscar_o_crear_cliente(negocio, telefono)
         if cliente is None:
             return Response({'error': 'Teléfono inválido.'}, status=400)

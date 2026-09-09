@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getProductos, getCategorias, getModificadores, getOrdenes } from '../../../api/api';
+import { getOrdenes } from '../../../api/api';
 import api from '../../../api/api';
+import { leerMenuCache, esCacheReciente, refrescarMenuCache } from '../../../services/menuCache';
+
+// Aplica el mismo formateo que usaba usePosData al bajar productos frescos
+// (agrega `precio` como número, que es lo que consume el carrito/ProductGrid).
+const formatearProductos = (productos) => productos.map(p => ({
+  ...p, id: p.id, nombre: p.nombre, precio: parseFloat(p.precio_base), categoria: p.categoria,
+}));
 
 // ── Helper: evalúa si un combo promocional está activo hoy ──
 function comboActivoHoy(combo) {
@@ -173,52 +180,69 @@ export const usePosData = (sedeActualId, mesaId, vaciarStore) => {
   const [combosPromocionalesHoy, setCombosPromocionalesHoy] = useState([]);
   const [happyHours, setHappyHours] = useState([]);
   const [reglasNegocio, setReglasNegocio] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [cargandoOrden, setCargandoOrden] = useState(true);
 
+  // ─── Catálogo (carta + combos/HH/reglas) — depende solo de la SEDE ───
+  // 🛠️ Antes este fetch (productos/categorias/modificadores/combos/happy
+  // hours/reglas) dependía de `mesaId` — cada mesa que el mozo abría volvía
+  // a pedir la carta entera por red, con un loader completo de por medio.
+  // La carta casi no cambia entre mesas de la misma sede: se separa de la
+  // orden (que sí es por-mesa) y se muestra desde cache al instante
+  // (optimistic UI), igual que ya hace mobile (ver menuCache.js).
   useEffect(() => {
     let isMounted = true;
+    if (!sedeActualId) { setCargandoCatalogo(false); return; }
 
-    const fetchData = async () => {
-      if (!sedeActualId) {
-        if (isMounted) setCargando(false);
-        return;
-      }
-      if (isMounted) setCargando(true);
+    const cache = leerMenuCache(sedeActualId);
+    if (cache) {
+      setProductosBase(formatearProductos(cache.productos));
+      setCategoriasReales(cache.categorias);
+      setModificadoresGlobales(cache.modificadores);
+      setCargandoCatalogo(false);
+    } else {
+      setCargandoCatalogo(true);
+    }
 
+    (async () => {
       try {
-        const [
-          responseProductos,
-          responseCategorias,
-          responseMods,
-          responseOrdenes,
-          responseCombos,
-          responseHH,
-          responseReglas,
-        ] = await Promise.all([
-          getProductos({ sede_id: sedeActualId }),
-          getCategorias(),
-          getModificadores(),
-          getOrdenes({ sede_id: sedeActualId }),
+        const [responseCombos, responseHH, responseReglas] = await Promise.all([
           api.get('/combos-promocionales/'),
           api.get('/happy-hours/'),
           api.get('/reglas-negocio-v2/'),
         ]);
-
         if (!isMounted) return;
+        setCombosPromocionalesHoy((responseCombos.data || []).filter(comboActivoHoy));
+        setHappyHours((responseHH.data || []).filter(hh => hh.activa));
+        setReglasNegocio((responseReglas.data || []).filter(r => r.activa));
 
-        // Productos
-        const dataFormateada = responseProductos.data.map(p => ({
-          ...p,
-          id: p.id,
-          nombre: p.nombre,
-          precio: parseFloat(p.precio_base),
-          categoria: p.categoria,
-        }));
-        setProductosBase(dataFormateada);
-        setCategoriasReales(responseCategorias.data);
-        setModificadoresGlobales(responseMods.data);
+        if (!cache || !esCacheReciente(cache.timestamp)) {
+          const fresco = await refrescarMenuCache(sedeActualId);
+          if (!isMounted) return;
+          setProductosBase(formatearProductos(fresco.productos));
+          setCategoriasReales(fresco.categorias);
+          setModificadoresGlobales(fresco.modificadores);
+        }
+      } catch (error) {
+        console.error("Error al cargar el catálogo del POS:", error);
+      } finally {
+        if (isMounted) setCargandoCatalogo(false);
+      }
+    })();
 
-        // Orden activa
+    return () => { isMounted = false; };
+  }, [sedeActualId]);
+
+  // ─── Orden activa de ESTA mesa — siempre fresca ───
+  useEffect(() => {
+    let isMounted = true;
+    if (!sedeActualId) { setCargandoOrden(false); return; }
+    setCargandoOrden(true);
+
+    (async () => {
+      try {
+        const responseOrdenes = await getOrdenes({ sede_id: sedeActualId });
+        if (!isMounted) return;
         const ordenViva = responseOrdenes.data.find(o =>
           String(o.mesa) === String(mesaId) &&
           o.estado !== 'completado' &&
@@ -227,27 +251,12 @@ export const usePosData = (sedeActualId, mesaId, vaciarStore) => {
         );
         setOrdenActiva(ordenViva || null);
         vaciarStore();
-
-        // Combos promocionales activos hoy
-        const combosHoy = (responseCombos.data || []).filter(comboActivoHoy);
-        setCombosPromocionalesHoy(combosHoy);
-
-        // Happy Hours activas ahora
-        const hhActivas = (responseHH.data || []).filter(hh => hh.activa);
-        setHappyHours(hhActivas);
-
-        // Reglas de negocio activas
-        const reglas = (responseReglas.data || []).filter(r => r.activa);
-        setReglasNegocio(reglas);
-
       } catch (error) {
-        console.error("Error al cargar datos del POS:", error);
+        console.error("Error al cargar la orden de la mesa:", error);
       } finally {
-        if (isMounted) setCargando(false);
+        if (isMounted) setCargandoOrden(false);
       }
-    };
-
-    fetchData();
+    })();
 
     return () => { isMounted = false; };
   }, [sedeActualId, mesaId, vaciarStore]);
@@ -261,6 +270,10 @@ export const usePosData = (sedeActualId, mesaId, vaciarStore) => {
     combosPromocionalesHoy,
     happyHours,
     reglasNegocio,
-    cargando,
+    // El grid de productos solo espera el catálogo (instantáneo con cache);
+    // cargandoOrden se expone aparte para lo que sí necesita esperar la
+    // orden real (el aviso de estado de mesa por WS).
+    cargando: cargandoCatalogo,
+    cargandoOrden,
   };
 };

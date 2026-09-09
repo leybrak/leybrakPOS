@@ -126,6 +126,10 @@ export const loginPinEmpleado = (payload) =>
 export const verificarSesionEmpleado = () =>
   api.get('/empleados/verificar-sesion/');
 
+// Marca de asistencia (obligatoria antes de entrar al POS) y fin de turno.
+export const marcarIngresoEmpleado = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_ingreso/`);
+export const marcarSalidaEmpleado  = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_salida/`);
+
 // ─── Negocio ──────────────────────────────────────────────────
 export const getNegocio        = (id)       => api.get(`/negocios/${id}/`);
 export const actualizarNegocio = (id, data) => api.patch(`/negocios/${id}/`, data, {
@@ -140,6 +144,12 @@ export const actualizarProducto = (id, data) => api.put(`/productos/${id}/`, dat
 export const parchearProducto   = (id, data) => api.patch(`/productos/${id}/`, data);
 export const crearCategoria     = (data)     => api.post('/categorias/', data);
 export const parchearCategoria  = (id, data) => api.patch(`/categorias/${id}/`, data);
+// Sube la foto de un plato ya creado. `asset` = { uri, type, name } de react-native-image-picker.
+export const subirImagenProducto = (id, asset) => {
+  const form = new FormData();
+  form.append('imagen', { uri: asset.uri, type: asset.type || 'image/jpeg', name: asset.fileName || 'plato.jpg' });
+  return api.post(`/productos/${id}/subir_imagen/`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 
 // ─── Mesas y órdenes ─────────────────────────────────────────
 export const getMesas              = (params)        => api.get('/mesas/', { params });
@@ -148,6 +158,7 @@ export const crearOrden            = (data)          => api.post('/ordenes/', da
 export const actualizarOrden       = (id, data)      => api.patch(`/ordenes/${id}/`, data);
 export const agregarProductosAOrden = (id, payload)  => api.post(`/ordenes/${id}/agregar_productos/`, payload);
 export const anularItemDeOrden     = (id, payload)   => api.post(`/ordenes/${id}/anular_item/`, payload);
+export const trasladarMesaOrden    = (id, mesaDestinoId) => api.post(`/ordenes/${id}/trasladar_mesa/`, { mesa_destino_id: mesaDestinoId });
 
 // ─── Caja ─────────────────────────────────────────────────────
 export const getEstadoCaja = (params)  => api.get('/sesiones_caja/estado_actual/', { params });
@@ -186,6 +197,8 @@ export const actualizarSede = (id, data) => api.patch(`/sedes/${id}/`, data);
 // ─── Dashboard ────────────────────────────────────────────────
 export const obtenerMetricasDashboard = (params) =>
   api.get('/dashboard/metricas/', { params });
+export const obtenerAnaliticas = (params) =>
+  api.get('/analiticas/', { params });
 
 // ─── Yape / Plin ─────────────────────────────────────────────
 export const confirmarPagoYape = (data) => api.post('/yape/confirmar/', data);
@@ -195,7 +208,14 @@ export const getModificadores      = (params)   => api.get('/modificadores-rapid
 export const crearModificador      = (data)     => api.post('/modificadores-rapidos/', data);
 export const actualizarModificador = (id, data) => api.put(`/modificadores-rapidos/${id}/`, data);
 export const eliminarModificador   = (id)       => api.delete(`/modificadores-rapidos/${id}/`);
-export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params: { ...params, tipo: 'llevar', estado: 'preparando' } });
+// 🛠️ Antes forzaba tipo:'llevar' + estado:'preparando' — las órdenes
+// 'delivery' del bot quedaban afuera y las 'pendiente'/'listo' también.
+// El backend solo filtra por un valor exacto, así que acá no filtramos
+// nada: SalonScreen se queda con lo que corresponda a "para llevar".
+export const getOrdenesLlevar = (params) => api.get('/ordenes/', { params });
+
+// ─── Soporte ────────────────────────────────────────────────────
+export const crearTicket = (data) => api.post('/tickets-soporte/', data);
 
 // ─── Inventario ───────────────────────────────────────────────
 export const getCatalogoGlobal      = (params) => api.get('/insumo-base/', { params });

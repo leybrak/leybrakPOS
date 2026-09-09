@@ -12,6 +12,7 @@ import {
   getRendimientoEmpleados // Asegúrate de exportar esto en tu api.js
 } from '../../api/api';
 import useAppStore from '../../store/useAppStore';
+import { useConfirm } from '../../context/ConfirmContext';
 
 // ─── Hook de tema ─────────────────────────────────────────────
 const useTema = () => {
@@ -325,6 +326,7 @@ function ModalEmpleado({ visible, empleado, roles, sedes, t, onGuardar, onCerrar
 // ─── Pantalla principal ───────────────────────────────────────
 export default function PersonalScreen() {
   const t = useTema();
+  const confirmar = useConfirm();
 
   const [empleados, setEmpleados]   = useState([]);
   const [roles, setRoles]           = useState([]);
@@ -357,7 +359,9 @@ export default function PersonalScreen() {
         getSedes(params),
       ]);
       setEmpleados(resEmp.data);
-      setRoles(resRoles.data);
+      // El rol "Dueño" es un único registro global (ver login_movil) — no se
+      // puede asignar a un segundo empleado, así que ni aparece como opción.
+      setRoles(resRoles.data.filter(r => r.nombre.trim().toLowerCase() !== 'dueño'));
       setSedes(resSedes.data);
     } catch (e) {
       console.error('Error cargando personal:', e);
@@ -389,25 +393,17 @@ export default function PersonalScreen() {
   };
 
   const handleToggleActivo = async (emp) => {
-    Alert.alert(
-      emp.activo ? 'Desactivar empleado' : 'Reactivar empleado',
-      `¿Deseas ${emp.activo ? 'desactivar' : 'reactivar'} a ${emp.nombre}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          style: emp.activo ? 'destructive' : 'default',
-          onPress: async () => {
-            try {
-              await actualizarEmpleado(emp.id, { activo: !emp.activo });
-              await cargar();
-            } catch (e) {
-              Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar el estado.');
-            }
-          },
-        },
-      ]
-    );
+    const ok = await confirmar(`¿Deseas ${emp.activo ? 'desactivar' : 'reactivar'} a ${emp.nombre}?`, {
+      titulo: emp.activo ? 'Desactivar empleado' : 'Reactivar empleado',
+      peligroso: emp.activo,
+    });
+    if (!ok) return;
+    try {
+      await actualizarEmpleado(emp.id, { activo: !emp.activo });
+      await cargar();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo actualizar el estado.');
+    }
   };
 
   if (cargando) {
@@ -525,7 +521,10 @@ export default function PersonalScreen() {
                   </View>
                 </View>
 
-                {esDueno && (
+                {/* El registro del propio Dueño (auto-creado al loguearse) no se
+                    puede editar/desactivar desde acá — su rol ni aparece como
+                    opción en el modal, y el backend igual lo rechazaría. */}
+                {esDueno && emp.rol_nombre?.trim().toLowerCase() !== 'dueño' && (
                   <View style={[s.cardSaaSActions, { borderTopColor: t.border }]}>
                     <TouchableOpacity style={[s.actionBtnSaaS, { backgroundColor: t.bgCard2, borderColor: t.border }]} onPress={() => { setEmpleadoEditar(emp); setModalVisible(true); }}>
                       <Icon name="pencil" size={14} color={t.color} />

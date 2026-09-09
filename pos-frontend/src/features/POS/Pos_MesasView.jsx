@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja, validarPinEmpleado } from '../../api/api';
+import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
+import { useConfirm, usePrompt } from '../../context/ConfirmContext';
 
 // Modales
 import ModalCobro from '../../components/modals/ModalCobro';
@@ -18,7 +19,9 @@ import { useMesasData } from './hooks/useMesasData';
 import { useMesasWS } from './hooks/useMesasWS';
 
 export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId }) {
-  const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const { estadoCaja, configuracionGlobal, setConfiguracionGlobal, setEstadoCaja } = usePosStore();
+  const confirmar = useConfirm();
+  const prompt = usePrompt();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const isDark = tema === 'dark'; // ✨ Helper para el nuevo diseño
@@ -70,7 +73,12 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
   };
 
   const manejarCancelacion = async (id) => {
-    const motivo = window.prompt("¿Por qué se cancela el pedido?");
+    const motivo = await prompt('Esta acción libera la mesa y queda registrada en la auditoría.', {
+      titulo: '¿Por qué se cancela el pedido?',
+      peligroso: true,
+      textoConfirmar: 'Cancelar pedido',
+      pedirTexto: { placeholder: 'Motivo...' },
+    });
     if (motivo) {
       try {
         await actualizarOrden(id, { estado: 'cancelado', cancelado: true, motivo_cancelacion: motivo });
@@ -110,16 +118,15 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
 
   const manejarCierreCajaSeguro = async () => {
     const hayOcupadas = mesas.some(mesa => mesa.estado === 'ocupada' || mesa.orden_activa);
-    const hayLlevarPendientes = ordenesLlevar.some(orden => orden.estado_pago !== 'pagado'); 
+    const hayLlevarPendientes = ordenesLlevar.some(orden => orden.estado_pago !== 'pagado');
     if (hayOcupadas || hayLlevarPendientes) { alert("⚠️ Aún hay mesas ocupadas o pedidos pendientes."); return; }
 
-    const pin = window.prompt("Ingrese PIN autorizado para cerrar caja:");
-    if (!pin) return;
-    try {
-      const res = await validarPinEmpleado({ pin, accion: 'entrar' });
-      if (['Cajero', 'Administrador', 'Admin'].includes(res.data.rol_nombre)) setModalCierreAbierto(true);
-      else alert("🚫 Sin permisos para cerrar caja.");
-    } catch { alert("❌ PIN incorrecto o empleado inactivo."); }
+    // 🛠️ Antes pedía un PIN de empleado (window.prompt + validarPinEmpleado) — el
+    // dueño no tiene PIN configurado (entra con usuario/contraseña), así que nunca
+    // podía cerrar caja. El botón ya está gateado por rol para quien lo ve, así que
+    // alcanza con una confirmación simple.
+    const ok = await confirmar('¿Estás seguro de cerrar la caja? Se registrará el cierre de turno.');
+    if (ok) setModalCierreAbierto(true);
   };
 
   // ── RENDER DE ESTADOS ESPECIALES (Diseño ERP) ──────────────────────────────
@@ -287,8 +294,12 @@ export default function MesasView({ onSeleccionarMesa, onIrAErp, mesaActivaId })
           setModalCierreAbierto(false);
           const dif = resumen?.diferencia || 0;
           const msg = dif === 0 ? "✅ ¡Cuadre perfecto!" : dif > 0 ? `⚠️ Sobrante de S/ ${dif.toFixed(2)}` : `🚨 Faltante de S/ ${Math.abs(dif).toFixed(2)}`;
-          alert(`${msg}\n\nCerrando sesión...`);
-          window.location.reload(); 
+          alert(msg);
+          // 🛠️ Antes hacía window.location.reload() — un reload completo de la SPA
+          // solo para reflejar "caja cerrada". Igual que en mobile, alcanza con
+          // actualizar el store: la pantalla de apertura aparece al instante.
+          setEstadoCaja(null);
+          localStorage.removeItem('sesion_caja_id');
         }}
       />
 

@@ -42,10 +42,19 @@ from .caja_views import (
     configuracion_negocio,
 )
 
+from .analitica_views import (
+    analiticas_resumen,
+)
+
 from .inventario_views import (
     InsumoBaseViewSet,
     InsumoSedeViewSet,
     registrar_ingreso_maestro,
+)
+
+from .compras_views import (
+    ProveedorViewSet,
+    OrdenCompraViewSet,
 )
 
 from .cliente_views import (

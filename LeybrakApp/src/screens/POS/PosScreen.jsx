@@ -1,20 +1,53 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Alert, Modal, FlatList,
   StatusBar, Platform, Image, NativeModules, NativeEventEmitter // ← AGREGADOS AQUÍ
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import useAppStore from '../../store/useAppStore';
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalModificadores from '../../components/modals/ModalModificadores';
 import api, {
-  getProductos, getCategorias, getOrdenes, getModificadores,
-  crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden,
+  getOrdenes, getMesas,
+  crearOrden, actualizarOrden, agregarProductosAOrden, anularItemDeOrden, trasladarMesaOrden,
 } from '../../api/api';
+import { leerMenuCache, refrescarMenuCache, esCacheReciente } from '../../services/menuCache';
+import { useConfirm } from '../../context/ConfirmContext';
 const { NotificationModule } = NativeModules;
 const eventEmitter = new NativeEventEmitter(NotificationModule);
+
+// ─── Buscador rápido (espejo de usePosSearch.js en la web) ────────────
+// Rango Unicode "Combining Diacritical Marks" (U+0300–U+036F), armado con
+// String.fromCharCode para no depender de que el archivo conserve bien
+// esos bytes no-ASCII.
+const DIACRITICOS = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g');
+// Quita tildes y pasa a minúsculas — sin esto, buscar "limon" (sin tilde,
+// lo normal escribiendo rápido durante el servicio) no encontraba "Limón".
+const normalizarBusqueda = (texto) => (texto || '')
+  .normalize('NFD')
+  .replace(DIACRITICOS, '')
+  .toLowerCase()
+  .trim();
+
+// Puntaje de relevancia: null si no coincide con TODAS las palabras
+// buscadas (así "pollo chaufa" encuentra "Chaufa de Pollo" sin importar
+// el orden), y más alto cuanto más al principio calza cada palabra.
+const puntuarCoincidencia = (textoNormalizado, palabras) => {
+  if (!palabras.length) return 0;
+  if (!palabras.every(p => textoNormalizado.includes(p))) return null;
+
+  const palabrasTexto = textoNormalizado.split(/\s+/);
+  let puntaje = 0;
+  for (const p of palabras) {
+    if (textoNormalizado.startsWith(p)) puntaje += 30;
+    else if (palabrasTexto.some(w => w.startsWith(p))) puntaje += 15;
+    else puntaje += 5;
+  }
+  return puntaje;
+};
 // ─── Hook de tema ─────────────────────────────────────────────
 const useTema = () => {
   const { configuracionGlobal } = useAppStore();
@@ -35,12 +68,37 @@ const useTema = () => {
 };
 
 // ─── PosScreen principal ──────────────────────────────────────
-export default function PosScreen({ mesaId, onVolver }) {
+// 🛠️ El footer (VER CUENTA / total / ENVIAR) flotaba con un `bottom: 25`
+// fijo en vez de respetar el inset real del gesto de Android — quedaba
+// suspendido a 25px del borde, y como la lista de productos de atrás sí
+// llega hasta el borde real, se veía una tira de productos asomando por
+// debajo del footer ("sandwich": productos, footer, más productos). Se
+// necesita useSafeAreaInsets() para el valor real del inset, y ese hook
+// exige un <SafeAreaProvider> por encima — como PosScreen no tenía
+// ninguno (ni lo hereda de App.tsx/AppNavigator), se envuelve acá mismo,
+// igual que ya hacen ModalCobro.jsx y los demás modales de este proyecto.
+export default function PosScreen(props) {
+  return (
+    <SafeAreaProvider>
+      <PosScreenInner {...props} />
+    </SafeAreaProvider>
+  );
+}
+
+function PosScreenInner({ mesaId, onVolver }) {
   const t = useTema();
+  const confirmar = useConfirm();
+  const insets = useSafeAreaInsets();
   const [modalCobroVisible, setModalCobroVisible] = useState(false);
   const esParaLlevar = typeof mesaId === 'object' && mesaId?.id === 'llevar';
   const nombreLlevar = typeof mesaId === 'object' ? mesaId.cliente : '';
   const mesaIdReal   = esParaLlevar ? null : (typeof mesaId === 'object' ? mesaId.id : mesaId);
+  // 🛠️ El id de mesa es el de la fila en la BD (autoincremental global de
+  // todo el sistema, no del negocio) — antes se mostraba tal cual como
+  // "MESA {id}". SalonScreen ahora manda también el número/nombre real de
+  // la mesa (numero_o_nombre); si no viene (llamador viejo), como último
+  // recurso cae al id para no dejar el título vacío.
+  const numeroMesaMostrado = (typeof mesaId === 'object' && mesaId?.numero != null) ? mesaId.numero : mesaIdReal;
 
   const [productos, setProductos]       = useState([]);
   const [categorias, setCategorias]     = useState([]);
@@ -58,6 +116,82 @@ export default function PosScreen({ mesaId, onVolver }) {
   const [empleadoNombre, setEmpleadoNombre] = useState('');
   const [productoParaVariar, setProductoParaVariar] = useState(null);
   const [modalVariacionesVisible, setModalVariacionesVisible] = useState(false);
+  // Grupo+opción a preseleccionar cuando el modal se abre porque se buscó
+  // el nombre de una variante (ej. "gordita") en vez del producto (ver
+  // productosFiltrados → _coincidenciaOpcion).
+  const [preseleccionVariante, setPreseleccionVariante] = useState(null);
+
+  // ─── Cancelar pedido / trasladar mesa ───────────────────────
+  // 🛠️ Antes, si el cliente se arrepentía, el único camino era anular los
+  // platos uno por uno (anular_item) — la orden quedaba vacía pero seguía
+  // 'pendiente'/'preparando', así que la mesa se quedaba "ocupada" para
+  // siempre por un pedido fantasma. Cancelar la orden ENTERA (que ya
+  // libera la mesa vía el mismo mecanismo que usa cobrar_orden) es un
+  // solo paso, en vez de anular ítem por ítem.
+  const [modalTrasladoVisible, setModalTrasladoVisible] = useState(false);
+  const [mesasParaTraslado, setMesasParaTraslado]       = useState([]);
+  const [cargandoMesas, setCargandoMesas]               = useState(false);
+  const [trasladando, setTrasladando]                   = useState(false);
+
+  const handleCancelarPedido = async () => {
+    if (!ordenActiva) return;
+    const ok = await confirmar('Esto cancela TODO el pedido y libera la mesa. No se puede deshacer.', {
+      titulo: 'Cancelar pedido', peligroso: true, textoConfirmar: 'Sí, cancelar',
+    });
+    if (!ok) return;
+    try {
+      await actualizarOrden(ordenActiva.id, {
+        estado: 'cancelado',
+        notas_cocina: 'Anulación total desde el POS (mobile)',
+      });
+      mesaLiberadaRef.current = true;
+      setCarritoAbierto(false);
+      onVolver();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo cancelar el pedido.');
+    }
+  };
+
+  // Trae las mesas de la sede sin un pedido activo, para elegir el destino.
+  const abrirModalTraslado = async () => {
+    if (!ordenActiva) return;
+    setCargandoMesas(true);
+    setModalTrasladoVisible(true);
+    try {
+      const [resMesas, resOrdenes] = await Promise.all([
+        getMesas({ sede_id: sedeId }),
+        getOrdenes({ sede_id: sedeId }),
+      ]);
+      const mesasOcupadasIds = new Set(
+        (resOrdenes.data || [])
+          .filter(o => o.mesa && o.id !== ordenActiva.id && o.estado !== 'completado' && o.estado !== 'cancelado')
+          .map(o => o.mesa)
+      );
+      setMesasParaTraslado(
+        (resMesas.data || []).filter(m => m.id !== mesaIdReal && !mesasOcupadasIds.has(m.id))
+      );
+    } catch (e) {
+      Alert.alert('Error', 'No se pudieron cargar las mesas.');
+      setModalTrasladoVisible(false);
+    } finally {
+      setCargandoMesas(false);
+    }
+  };
+
+  const confirmarTraslado = async (mesaDestino) => {
+    setTrasladando(true);
+    try {
+      await trasladarMesaOrden(ordenActiva.id, mesaDestino.id);
+      mesaLiberadaRef.current = true;
+      setModalTrasladoVisible(false);
+      setCarritoAbierto(false);
+      onVolver();
+    } catch (e) {
+      Alert.alert('Error', e?.response?.data?.error || 'No se pudo trasladar la mesa.');
+    } finally {
+      setTrasladando(false);
+    }
+  };
 
   // ─── Sesión ───────────────────────────────────────────────
   useEffect(() => {
@@ -77,24 +211,52 @@ export default function PosScreen({ mesaId, onVolver }) {
 
   const cargarDatos = useCallback(async () => {
     if (!sedeId || !negocioId) return;
-    setCargando(true);
+
+    // 🛠️ Antes se pedía la carta completa (productos/categorías/modificadores)
+    // por red cada vez que se abría CUALQUIER mesa — con el local lleno eso
+    // es una descarga de red por cada toque, sin necesidad (la carta casi
+    // no cambia). Ahora, si hay una carta guardada localmente, se muestra
+    // al instante (optimistic UI) y solo se refresca por red si no es
+    // reciente; el WS del salón fuerza el refresco apenas cambia un
+    // producto (ver ManejoWSMenu en SalonScreen y negocios/signals.py).
+    const cache = await leerMenuCache(sedeId);
+    if (cache) {
+      setProductos(cache.productos);
+      setCategorias(cache.categorias);
+      setModificadores(cache.modificadores);
+      setCargando(false);
+    } else {
+      setCargando(true);
+    }
+
     try {
-      const [resProd, resCat, resOrdenes, resMods] = await Promise.all([
-        getProductos({ negocio_id: negocioId, sede_id: sedeId, disponible: true }),
-        getCategorias({ negocio_id: negocioId }),
+      const [resOrdenes] = await Promise.all([
+        // Las órdenes de la mesa SIEMPRE se piden frescas — eso sí puede
+        // cambiar en cualquier momento y no se cachea.
+        // 🛠️ Antes se filtraba por estado:'preparando' — si cocina ya había
+        // marcado la orden como 'listo' (o seguía 'pendiente'), esta consulta
+        // no la encontraba, ordenActiva quedaba null, y al enviar más platos
+        // se creaba una orden NUEVA para la misma mesa en vez de agregarle a
+        // la existente. Resultado: dos órdenes activas en la misma mesa — la
+        // vieja quedaba "invisible" (parecía que se "sobreescribía" la cuenta)
+        // y, aunque se cobrara la nueva, la vieja seguía sin pagar y la mesa
+        // nunca se liberaba. La web nunca filtró por estado (usePosData.js);
+        // se iguala ese criterio acá.
         !esParaLlevar && mesaIdReal
-          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal, estado: 'preparando' })
+          ? getOrdenes({ negocio_id: negocioId, sede_id: sedeId, mesa: mesaIdReal })
           : Promise.resolve({ data: [] }),
-        getModificadores({ negocio_id: negocioId }),
+        esCacheReciente(cache?.timestamp) ? null : refrescarMenuCache(negocioId, sedeId).then((fresco) => {
+          setProductos(fresco.productos);
+          setCategorias(fresco.categorias);
+          setModificadores(fresco.modificadores);
+        }),
       ]);
 
-      setProductos(resProd.data || []);
-      setCategorias(resCat.data || []);
-      setModificadores(resMods.data || []);
-
       const ordenes = resOrdenes.data || [];
-      console.warn('MESA:', mesaIdReal, '| ÓRDENES:', JSON.stringify(ordenes.map(o => ({ id: o.id, mesa: o.mesa }))))
-      if (ordenes.length > 0) setOrdenActiva(ordenes[0]);
+      const ordenViva = ordenes.find(o =>
+        o.estado !== 'completado' && o.estado !== 'cancelado' && o.estado_pago !== 'pagado'
+      );
+      if (ordenViva) setOrdenActiva(ordenViva);
 
     } catch (e) {
       console.error('Error cargando POS:', e);
@@ -104,6 +266,105 @@ export default function PosScreen({ mesaId, onVolver }) {
   }, [sedeId, negocioId, mesaIdReal, esParaLlevar]);
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
+
+  // ─── WebSocket del salón: avisa a la web (y a otras tablets) que esta
+  // mesa está "pidiendo"/"cobrando" mientras el mesero trabaja acá, igual
+  // que hace View_Pos.jsx en la web. ──────────────────────────────────
+  const wsRef = useRef(null);
+  const estadoMesaRef = useRef('libre');
+  const totalMesaRef = useRef(0);
+  // 🛠️ Cobrar/cancelar/trasladar ya avisan por su cuenta al backend, que
+  // transmite el estado correcto (libre, total 0) a todas las pantallas
+  // ANTES de que esta pantalla se desmonte. Sin esta bandera, el mensaje de
+  // "reposo" del desmontaje (más abajo) pisaba ese aviso correcto con el
+  // último estado que tenía esta pantalla en memoria ('ocupada' + el monto
+  // ya cobrado) — la mesa volvía a verse ocupada en el salón hasta recargar.
+  const mesaLiberadaRef = useRef(false);
+  const [wsListo, setWsListo] = useState(false);
+
+  useEffect(() => {
+    if (esParaLlevar || !mesaIdReal || !sedeId) return;
+
+    let ws = null;
+    let unmounted = false;
+    let reconnectTimeout = null;
+
+    const conectar = async () => {
+      if (unmounted) return;
+      try {
+        const res = await api.get('/verificar-sesion/');
+        const token = res.data.ws_token;
+        ws = new WebSocket(`wss://pos.leybrak.com/ws/salon/${sedeId}/?token=${token}`);
+        wsRef.current = ws;
+
+        ws.onopen = () => setWsListo(true);
+        ws.onclose = () => {
+          setWsListo(false);
+          if (!unmounted) reconnectTimeout = setTimeout(conectar, 3000);
+        };
+        ws.onerror = () => ws.close();
+      } catch {
+        if (!unmounted) reconnectTimeout = setTimeout(conectar, 3000);
+      }
+    };
+
+    conectar();
+
+    return () => {
+      unmounted = true;
+      clearTimeout(reconnectTimeout);
+      // Al salir, restauramos el estado "de reposo" de la mesa (libre u ocupada)
+      // para que no se quede mostrando "pidiendo"/"cobrando" en las demás pantallas.
+      // 🛠️ Antes mandaba total:0 a lo bruto — como este mensaje SOBREESCRIBE
+      // (no fusiona) lo que ven las demás pantallas, salir de una mesa ocupada
+      // borraba el monto a cobrar hasta que alguien recargaba la app. Se manda
+      // el total real (totalMesaRef, actualizado en cada render).
+      if (ws && ws.readyState === WebSocket.OPEN && !mesaLiberadaRef.current) {
+        ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado: estadoMesaRef.current, total: totalMesaRef.current }));
+      }
+      ws?.close();
+    };
+  }, [mesaIdReal, sedeId, esParaLlevar]);
+
+  const notificarEstadoMesa = (estado, total = 0) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN && !esParaLlevar) {
+      ws.send(JSON.stringify({ type: 'mesa_estado', mesa_id: mesaIdReal, estado, total }));
+    }
+  };
+
+  useEffect(() => {
+    if (cargando || !wsListo) return;
+
+    if (ordenActiva) {
+      estadoMesaRef.current = 'ocupada';
+      // 🛠️ Antes: carrito vacío → 'cobrando' a ciegas, aunque nadie hubiera
+      // abierto el modal de cobro todavía (por ejemplo, justo después de
+      // enviar un pedido a cocina). Eso pintaba la mesa como "cobrando" en
+      // el salón sin que fuera cierto. 'cobrando' ahora se avisa aparte,
+      // solo cuando el modal de cobro está realmente abierto (ver abajo);
+      // acá solo se avisa 'pidiendo' mientras hay cosas nuevas sin enviar.
+      if (carrito.length > 0) {
+        notificarEstadoMesa('pidiendo', totalMesa);
+      } else if (!modalCobroVisible) {
+        notificarEstadoMesa('ocupada', totalMesa);
+      }
+    } else {
+      estadoMesaRef.current = 'libre';
+      notificarEstadoMesa('pidiendo', 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando, ordenActiva, carrito.length, wsListo, modalCobroVisible]);
+
+  // Avisa 'cobrando' apenas se abre el modal de cobro — igual que
+  // View_Pos.jsx en la web (notificarEstadoMesa('cobrando', ...) atado a
+  // modalCobroAbierto), en vez de adivinarlo por si el carrito está vacío.
+  useEffect(() => {
+    if (modalCobroVisible && !esParaLlevar) {
+      notificarEstadoMesa('cobrando', totalMesa);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalCobroVisible]);
 
   useEffect(() => {
     const subscripcion = eventEmitter.addListener('PagoYapeRecibido', (mensaje) => {
@@ -140,10 +401,19 @@ export default function PosScreen({ mesaId, onVolver }) {
   const cantItems  = carrito.reduce((s, i) => s + i.cantidad, 0)
     + (ordenActiva?.detalles.reduce((s, d) => s + d.cantidad, 0) || 0);
 
+  // Mantiene el total real a mano para el mensaje de "reposo" que se manda
+  // al salir de la mesa (ver limpieza del WS más arriba) — sin esto habría
+  // que declarar ese efecto después de totalMesa, con más riesgo de tocar
+  // el orden de los hooks sin querer.
+  useEffect(() => { totalMesaRef.current = totalMesa; }, [totalMesa]);
+
   const agregarAlCarrito = (producto) => {
-    // Solo forzar modal si la selección es OBLIGATORIA
-    if (producto.requiere_seleccion) {
+    // Se busca el nombre de una variante (ej. "gordita" para Inka Cola) en
+    // vez del producto — el modal se abre con esa opción ya seleccionada,
+    // igual que si la selección fuera obligatoria.
+    if (producto.requiere_seleccion || producto._coincidenciaOpcion) {
       setProductoParaVariar(producto);
+      setPreseleccionVariante(producto._coincidenciaOpcion || null);
       setModalVariacionesVisible(true);
       return;
     }
@@ -164,6 +434,9 @@ export default function PosScreen({ mesaId, onVolver }) {
         notas_cocina: '',
       }];
     });
+    // Se agregó algo al carrito — si venía de una búsqueda, se limpia para
+    // poder escribir la siguiente de una, sin tener que borrar a mano.
+    setBusqueda('');
   };
 
   const agregarConVariaciones = (productoConOpciones) => {
@@ -198,11 +471,49 @@ export default function PosScreen({ mesaId, onVolver }) {
   };
 
   // ─── Filtros ──────────────────────────────────────────────
-  const productosFiltrados = productos.filter(p => {
-    const matchBusqueda  = !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase());
-    const matchCategoria = categoriaActiva === 'todas' || String(p.categoria) === String(categoriaActiva);
-    return matchBusqueda && matchCategoria && p.disponible;
-  });
+  // 🛠️ Antes: substring exacto sobre el string completo — "limon" no
+  // encontraba "Limón", y "pollo chaufa" no encontraba "Chaufa de Pollo"
+  // (el orden de las palabras no calzaba). Ahora normaliza tildes y exige
+  // que TODAS las palabras buscadas aparezcan (en cualquier orden),
+  // ordenando primero los que calzan más al principio del nombre — mismo
+  // criterio que usePosSearch.js en la web.
+  const productosFiltrados = useMemo(() => {
+    const palabras = normalizarBusqueda(busqueda).split(/\s+/).filter(Boolean);
+
+    return productos
+      .filter(p => p.disponible && (categoriaActiva === 'todas' || String(p.categoria) === String(categoriaActiva)))
+      .map(p => {
+        const puntajeNombre = puntuarCoincidencia(normalizarBusqueda(p.nombre), palabras);
+
+        // Un plato con variantes (ej. "Inka Cola" → Personal/Gordita/Litro)
+        // se busca instintivamente por el nombre de la variante, no del
+        // plato — "gordita" antes no encontraba nada. grupos_variacion ya
+        // viene embebido en cada producto (ver ModalModificadores), no hace
+        // falta pedir nada nuevo.
+        const opciones = (p.grupos_variacion || []).flatMap(g => (g.opciones || []).map(o => ({ ...o, _grupoId: g.id })));
+        const variacionCoincidente = opciones
+          .map(o => ({ o, puntaje: puntuarCoincidencia(normalizarBusqueda(o.nombre), palabras) }))
+          .filter(({ puntaje }) => puntaje !== null)
+          .sort((a, b) => b.puntaje - a.puntaje)[0];
+
+        if (puntajeNombre === null && !variacionCoincidente) return null;
+
+        // Un match por el nombre del plato siempre pesa más que uno por
+        // una de sus variantes.
+        const matchoSoloPorVariacion = puntajeNombre === null && variacionCoincidente;
+        p._coincidenciaVariacion = matchoSoloPorVariacion ? variacionCoincidente.o.nombre : null;
+        // Grupo+opción exactos que calzaron — para preseleccionarlos al
+        // abrir el modal de variantes (ver agregarAlCarrito).
+        p._coincidenciaOpcion = matchoSoloPorVariacion
+          ? { grupoId: variacionCoincidente.o._grupoId, opcionId: variacionCoincidente.o.id }
+          : null;
+        const puntaje = puntajeNombre !== null ? puntajeNombre + 1000 : (variacionCoincidente?.puntaje || 0);
+        return { p, puntaje };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.puntaje - a.puntaje)
+      .map(({ p }) => p);
+  }, [productos, categoriaActiva, busqueda]);
 
   // ─── Enviar a cocina ──────────────────────────────────────
   const enviarACocina = async () => {
@@ -252,27 +563,17 @@ export default function PosScreen({ mesaId, onVolver }) {
   };
 
   // ─── Anular item ──────────────────────────────────────────
-  const anularItem = (detalle) => {
-    Alert.alert(
-      'Anular plato',
-      `¿Anular "${detalle.producto_nombre}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Anular', style: 'destructive',
-          onPress: async () => {
-            try {
-              const res = await anularItemDeOrden(ordenActiva.id, {
-                detalle_id:      detalle.id,
-                motivo:          'Anulado desde app',
-                empleado_nombre: empleadoNombre || 'Staff',
-              });
-              setOrdenActiva(res.data.orden || res.data);
-            } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo anular.'); }
-          },
-        },
-      ]
-    );
+  const anularItem = async (detalle) => {
+    const ok = await confirmar(`¿Anular "${detalle.producto_nombre}"?`, { titulo: 'Anular plato', peligroso: true, textoConfirmar: 'Anular' });
+    if (!ok) return;
+    try {
+      const res = await anularItemDeOrden(ordenActiva.id, {
+        detalle_id:      detalle.id,
+        motivo:          'Anulado desde app',
+        empleado_nombre: empleadoNombre || 'Staff',
+      });
+      setOrdenActiva(res.data.orden || res.data);
+    } catch (e) { Alert.alert('Error', e?.response?.data?.error || 'No se pudo anular.'); }
   };
 
   // ─── Cobrar ───────────────────────────────────────────────
@@ -322,6 +623,14 @@ export default function PosScreen({ mesaId, onVolver }) {
         <View style={s.prodBody}>
           {catNombre ? <Text style={[s.prodCateg, { color: t.textMuted }]}>{catNombre.toUpperCase()}</Text> : null}
           <Text style={[s.prodNombre, { color: t.textPrim }]} numberOfLines={2}>{item.nombre}</Text>
+          {/* Se busca "gordita" (nombre de una variante) en vez de "Inka Cola" (el
+              plato) — mostrar cuál variante calzó para que quede claro por qué
+              apareció este resultado. */}
+          {item._coincidenciaVariacion && (
+            <Text style={{ fontSize: 10, fontWeight: '900', color: t.color, textTransform: 'uppercase' }} numberOfLines={1}>
+              ↳ {item._coincidenciaVariacion}
+            </Text>
+          )}
           {item.es_combo && (
             <View style={[s.comboBadge, { backgroundColor: `${t.color}20`, borderColor: `${t.color}30` }]}>
               <Text style={[s.comboBadgeText, { color: t.color }]}>COMBO</Text>
@@ -353,11 +662,14 @@ export default function PosScreen({ mesaId, onVolver }) {
             >
               <Icon name="plus" size={12} color="#fff" />
             </TouchableOpacity>
+            {/* 🛠️ Antes: mismo tamaño que -/+ (36px) y un ícono de globo de
+                chat ("comment") que no representaba bien "agregar una nota".
+                Un poco más grande y con un ícono de nota real. */}
             <TouchableOpacity
-              style={[s.prodCantBtn, { backgroundColor: t.bgCard2, borderColor: t.border, marginLeft: 2 }]}
+              style={[s.prodNotaBtn, { backgroundColor: t.bgCard2, borderColor: t.border, marginLeft: 2 }]}
               onPress={() => { setProductoParaVariar(item); setModalVariacionesVisible(true); }}
             >
-              <Icon name="comment" size={12} color={t.textSec} />
+              <Icon name="sticky-note-o" size={15} color={t.textSec} />
             </TouchableOpacity>
           </View>
         ) : item.tiene_variaciones && !item.requiere_seleccion ? (
@@ -381,10 +693,10 @@ export default function PosScreen({ mesaId, onVolver }) {
         ) : (
           <View style={[s.prodCantRow, { justifyContent: 'flex-end' }]}>
             <TouchableOpacity
-              style={[s.prodCantBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+              style={[s.prodNotaBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
               onPress={() => { setProductoParaVariar(item); setModalVariacionesVisible(true); }}
             >
-              <Icon name="comment" size={12} color={t.textSec} />
+              <Icon name="sticky-note-o" size={15} color={t.textSec} />
             </TouchableOpacity>
           </View>
         )}
@@ -428,7 +740,16 @@ export default function PosScreen({ mesaId, onVolver }) {
                 placeholderTextColor={t.textMuted}
                 autoFocus
               />
-              <TouchableOpacity onPress={() => { setBusquedaActiva(false); setBusqueda(''); }}>
+              {/* 🛠️ Antes el ícono solo (18px) era el área de toque completa —
+                  muy chico para tocarlo con confianza. Mismo tamaño que los
+                  demás botones del header (44x44, ver s.backBtn) + hitSlop
+                  de respaldo. */}
+              <TouchableOpacity
+                onPress={() => { setBusquedaActiva(false); setBusqueda(''); }}
+                style={[s.backBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
                 <Icon name="times" size={18} color={t.textSec} />
               </TouchableOpacity>
             </View>
@@ -439,7 +760,7 @@ export default function PosScreen({ mesaId, onVolver }) {
                   {esParaLlevar ? '🛵 DELIVERY' : '🍽 SALÓN'}
                 </Text>
                 <Text style={[s.headerTitulo, { color: t.textPrim }]} numberOfLines={1}>
-                  {esParaLlevar ? nombreLlevar.toUpperCase() : `MESA ${mesaIdReal}`}
+                  {esParaLlevar ? nombreLlevar.toUpperCase() : `MESA ${numeroMesaMostrado}`}
                 </Text>
               </View>
               <TouchableOpacity
@@ -487,7 +808,7 @@ export default function PosScreen({ mesaId, onVolver }) {
         renderItem={renderProducto}
         keyExtractor={item => String(item.id)}
         numColumns={2}
-        contentContainerStyle={[s.prodGrid, { paddingBottom: (carrito.length > 0 || ordenActiva) ? 100 : 40 }]}
+        contentContainerStyle={[s.prodGrid, { paddingBottom: (carrito.length > 0 || ordenActiva) ? 110 + insets.bottom : 40 }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={[s.emptyState, { borderColor: t.border }]}>
@@ -499,7 +820,7 @@ export default function PosScreen({ mesaId, onVolver }) {
 
       {/* ─── FOOTER ──────────────────────────────────────── */}
       {(carrito.length > 0 || ordenActiva) && (
-        <View style={[s.footer, { backgroundColor: t.bgCard, borderTopColor: t.border }]}>
+        <View style={[s.footer, { backgroundColor: t.bgCard, borderTopColor: t.border, paddingBottom: 10 + insets.bottom }]}>
           
           {/* Botón Ver Cuenta */}
           <TouchableOpacity
@@ -591,6 +912,31 @@ export default function PosScreen({ mesaId, onVolver }) {
               </View>
             </View>
 
+            {/* Acciones sobre el pedido ya hecho — cancelar todo de una,
+                o mover el pedido si el cliente se cambió de mesa. */}
+            {ordenActiva && (
+              <View style={s.accionesOrdenRow}>
+                <TouchableOpacity
+                  style={[s.accionOrdenBtn, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }]}
+                  onPress={handleCancelarPedido}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="ban" size={11} color="#ef4444" style={{ marginRight: 6 }} />
+                  <Text style={[s.accionOrdenBtnText, { color: '#ef4444' }]}>CANCELAR PEDIDO</Text>
+                </TouchableOpacity>
+                {!esParaLlevar && (
+                  <TouchableOpacity
+                    style={[s.accionOrdenBtn, { backgroundColor: t.bgCard2, borderColor: t.border }]}
+                    onPress={abrirModalTraslado}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="exchange" size={11} color={t.textSec} style={{ marginRight: 6 }} />
+                    <Text style={[s.accionOrdenBtnText, { color: t.textSec }]}>TRASLADAR MESA</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
 
               {/* Items en cocina */}
@@ -679,7 +1025,7 @@ export default function PosScreen({ mesaId, onVolver }) {
             </ScrollView>
 
             {/* Footer carrito */}
-            <View style={[s.carritoFooter, { borderTopColor: t.border }]}>
+            <View style={[s.carritoFooter, { borderTopColor: t.border, paddingBottom: 16 + insets.bottom }]}>
               {carrito.length > 0 && (
                 <TouchableOpacity
                   style={[s.btnEnviarCocina, { backgroundColor: t.color }, procesando && { opacity: 0.6 }]}
@@ -710,11 +1056,51 @@ export default function PosScreen({ mesaId, onVolver }) {
           </View>
         </View>
       </Modal>
+
+      {/* ─── MODAL TRASLADAR MESA ──────────────────────────── */}
+      <Modal visible={modalTrasladoVisible} transparent animationType="fade" onRequestClose={() => setModalTrasladoVisible(false)}>
+        <View style={s.trasladoOverlay}>
+          <View style={[s.trasladoModal, { backgroundColor: t.bgCard, borderColor: t.border }]}>
+            <View style={[s.trasladoHeader, { borderBottomColor: t.border }]}>
+              <Text style={[s.trasladoTitulo, { color: t.textPrim }]}>Trasladar a...</Text>
+              <TouchableOpacity onPress={() => setModalTrasladoVisible(false)} style={[s.carritoCloseBtn, { backgroundColor: t.bgCard2 }]}>
+                <Icon name="times" size={14} color={t.textSec} />
+              </TouchableOpacity>
+            </View>
+            {cargandoMesas ? (
+              <ActivityIndicator color={t.color} style={{ paddingVertical: 40 }} />
+            ) : mesasParaTraslado.length === 0 ? (
+              <Text style={[s.trasladoVacio, { color: t.textMuted }]}>No hay mesas libres para trasladar.</Text>
+            ) : (
+              <FlatList
+                data={mesasParaTraslado}
+                keyExtractor={(m) => String(m.id)}
+                numColumns={3}
+                contentContainerStyle={{ padding: 16 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[s.mesaTrasladoBtn, { backgroundColor: t.bgCard2, borderColor: t.border }, trasladando && { opacity: 0.5 }]}
+                    onPress={() => confirmarTraslado(item)}
+                    disabled={trasladando}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.mesaTrasladoText, { color: t.textPrim }]}>{item.numero_o_nombre}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <ModalCobro
         visible={modalCobroVisible}
         onClose={(info) => {
           setModalCobroVisible(false);
-          if (info?.pagado) onVolver();
+          if (info?.pagado) {
+            mesaLiberadaRef.current = true;
+            onVolver();
+          }
         }}
         total={totalMesa}
         ordenId={ordenActiva?.id}
@@ -747,21 +1133,22 @@ export default function PosScreen({ mesaId, onVolver }) {
       <ModalModificadores
         visible={modalVariacionesVisible}
         producto={productoParaVariar}
+        preseleccion={preseleccionVariante}
         modificadoresGlobales={modificadores}
         onAgregarAlCarrito={(item, esEdicion) => {
           const cartId = esEdicion ? item.cart_id : `var_${item.id}_${Date.now()}`;
           const precioFinal = parseFloat(
-            item.precio_unitario_calculado || 
-            item.precio || 
-            item.precio_base || 
+            item.precio_unitario_calculado ||
+            item.precio ||
+            item.precio_base ||
             0
           );
           if (esEdicion) {
-            setCarrito(prev => prev.map(i => 
+            setCarrito(prev => prev.map(i =>
               i.cart_id === cartId ? { ...item, cart_id: cartId, precio: precioFinal } : i
             ));
           } else {
-            
+
             setCarrito(prev => [...prev, {
               cart_id:               cartId,
               id:                    item.id,
@@ -773,8 +1160,11 @@ export default function PosScreen({ mesaId, onVolver }) {
               notas_cocina:          item.notas_cocina || '',
             }]);
           }
+          // Se agregó/editó algo desde el buscador — se limpia para poder
+          // escribir la siguiente búsqueda sin tener que borrar a mano.
+          setBusqueda('');
         }}
-        onClose={() => setModalVariacionesVisible(false)}
+        onClose={() => { setModalVariacionesVisible(false); setPreseleccionVariante(null); }}
       />
 
       {/* ─── MODAL ÉXITO ─────────────────────────────────── */}
@@ -839,6 +1229,9 @@ const s = StyleSheet.create({
   
   prodCantBtn:   { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   prodCantBadge: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  // Un poco más grande que prodCantBtn — el botón de nota se toca más
+  // seguido que -/+ y necesita algo más de presencia.
+  prodNotaBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   prodCantNum:   { color: '#fff', fontSize: 14, fontWeight: '900' },
   
   prodAddBtn:    { marginHorizontal: 10, marginBottom: 10, borderRadius: 10, borderWidth: 1, paddingVertical: 7, alignItems: 'center' },
@@ -847,7 +1240,7 @@ const s = StyleSheet.create({
   emptyState:    { padding: 40, alignItems: 'center', borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', margin: 20, gap: 8 },
   emptyTitulo:   { fontSize: 15, fontWeight: '900' },
 
-  footer:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, gap: 10, position: 'absolute', bottom: 25, left: 0, right: 0 },
+  footer:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, gap: 10, position: 'absolute', bottom: 0, left: 0, right: 0 },
   footerVerCuenta: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
   footerBadge:     { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   footerBadgeText: { color: '#fff', fontSize: 16, fontWeight: '900' },
@@ -902,4 +1295,16 @@ const s = StyleSheet.create({
   exitoCheck:    { width: 80, height: 80, borderRadius: 40, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', marginBottom: 16, elevation: 10 },
   exitoTitulo:   { fontSize: 24, fontWeight: '900', marginBottom: 4 },
   exitoSub:      { fontSize: 13, textAlign: 'center' },
+
+  accionesOrdenRow:   { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  accionOrdenBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, paddingVertical: 10 },
+  accionOrdenBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+
+  trasladoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  trasladoModal:   { width: '100%', maxWidth: 420, maxHeight: '70%', borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
+  trasladoHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1 },
+  trasladoTitulo:  { fontSize: 16, fontWeight: '900' },
+  trasladoVacio:   { textAlign: 'center', padding: 40, fontSize: 13, fontWeight: '600' },
+  mesaTrasladoBtn: { flex: 1, margin: 6, aspectRatio: 1, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  mesaTrasladoText:{ fontSize: 16, fontWeight: '900' },
 });

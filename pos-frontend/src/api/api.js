@@ -226,6 +226,9 @@ export const refrescarSesion = () =>
 // CAJA Y LOGIN DE EMPLEADOS
 // ============================================================
 export const validarPinEmpleado      = (payload)  => api.post(`/empleados/validar_pin/`, { ...payload, sede_id: getSedeId() });
+// Marca de asistencia (obligatoria antes de entrar al POS/KDS) y fin de turno.
+export const marcarIngresoEmpleado   = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_ingreso/`);
+export const marcarSalidaEmpleado    = (empleadoId) => api.post(`/empleados/${empleadoId}/marcar_salida/`);
 export const getEstadoCaja           = (params)   => api.get(`/sesiones_caja/estado_actual/`, { params });
 export const abrirCajaBD             = (payload)  => api.post(`/sesiones_caja/abrir_caja/`, { ...payload, sede_id: getSedeId() });
 export const cerrarCaja              = (data)     => api.post('/sesiones_caja/cerrar_caja/', { ...data, sede_id: getSedeId() });
@@ -251,6 +254,7 @@ export const anularItemDeOrden       = (idOrden, payload) => api.post(`/ordenes/
 // DASHBOARD Y CONFIGURACIÓN
 // ============================================================
 export const obtenerMetricasDashboard = (params) => api.get(`/dashboard/metricas/`, { params });
+export const obtenerAnaliticas        = (params) => api.get(`/analiticas/`, { params });
 export const getNegocioConfig         = (params) => api.get(`/negocio/configuracion/`, { params });
 export const updateNegocioConfig      = (data)   => api.put(`/negocio/configuracion/?negocio_id=${getNegocioId()}`, data);
 
@@ -284,6 +288,7 @@ export const actualizarVariacionesProducto = (productoId, gruposData) =>
 // ============================================================
 export const getNegocio        = (id)       => api.get(`/negocios/${id}/`);
 export const actualizarNegocio = (id, data) => api.patch(`/negocios/${id}/`, data);
+export const getAlertasNegocio = ()         => api.get('/negocios/alertas/');
 
 // ============================================================
 // MESAS
@@ -318,6 +323,25 @@ export const registrarIngresoMasivo  = (data)   => api.post('/insumo-sede/ingres
 // ============================================================
 export const getInsumosSede      = (params) => api.get('/insumo-sede/', { params });
 export const vincularInsumoASede = (data)   => api.post('/insumo-sede/', data);
+export const getAlertasBajoStock = (params) => api.get('/insumo-sede/alertas_bajo_stock/', { params });
+
+// ============================================================
+// PEDIDOS / COMPRAS (Proveedores + reabastecimiento interno)
+// ============================================================
+export const getProveedores        = (params)   => api.get('/proveedores/', { params });
+export const crearProveedor        = (data)     => api.post('/proveedores/', data);
+export const actualizarProveedor   = (id, data) => api.patch(`/proveedores/${id}/`, data);
+
+export const getOrdenesCompra      = (params)   => api.get('/ordenes-compra/', { params });
+export const getOrdenCompra        = (id)       => api.get(`/ordenes-compra/${id}/`);
+export const crearOrdenCompra      = (data)     => api.post('/ordenes-compra/', data);
+export const actualizarOrdenCompra = (id, data) => api.patch(`/ordenes-compra/${id}/`, data);
+export const solicitarOrdenCompra  = (id)       => api.post(`/ordenes-compra/${id}/solicitar/`);
+export const confirmarOrdenCompra  = (id, data) => api.post(`/ordenes-compra/${id}/confirmar/`, data);
+export const enCaminoOrdenCompra   = (id)       => api.post(`/ordenes-compra/${id}/marcar_en_camino/`);
+export const recibirOrdenCompra    = (id, data) => api.post(`/ordenes-compra/${id}/recibir/`, data);
+export const cancelarOrdenCompra   = (id, data) => api.post(`/ordenes-compra/${id}/cancelar/`, data);
+export const avisarProveedorWsp    = (id, data) => api.post(`/ordenes-compra/${id}/avisar_proveedor/`, data);
 
 // ============================================================
 // ENDPOINTS PÚBLICOS — Carta QR (sin token)

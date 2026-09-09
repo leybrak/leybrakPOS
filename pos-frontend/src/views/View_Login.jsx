@@ -99,6 +99,8 @@ export default function LoginView({ onAccesoConcedido }) {
       if (destino === 'erp') {
         const rolSeguro = res.data.rol || 'Dueño';
         localStorage.setItem('usuario_rol', rolSeguro);
+        if (res.data.nombre) localStorage.setItem('usuario_nombre', res.data.nombre);
+        if (res.data.avatar) localStorage.setItem('usuario_avatar', res.data.avatar);
         onAccesoConcedido(rolSeguro);
       } else {
         localStorage.removeItem('empleado_id');
@@ -121,6 +123,15 @@ export default function LoginView({ onAccesoConcedido }) {
       localStorage.setItem('sede_id', sedeObj.id);
       localStorage.setItem('sede_nombre', sedeObj.nombre);
       localStorage.removeItem('modo_dispositivo');
+      // 🛠️ Antes esto cerraba la sesión del dueño (POST /token/logout/) para que
+      // App.jsx no la priorizara al reabrir la app. Pero el JWT del dueño sigue
+      // siendo necesario para TODAS las llamadas que hace un empleado ya logueado
+      // por PIN (mesas, órdenes, cobrar...) — la sesión de empleado es solo un
+      // contexto liviano encima de ese JWT, no un token propio. Matarlo dejaba a
+      // cualquier empleado sin poder hacer nada (401 en cascada) apenas entraba.
+      // En cambio marcamos este dispositivo como terminal-PIN con una bandera
+      // aparte; App.jsx la usa para forzar el PIN sin tocar la sesión del dueño.
+      localStorage.setItem('dispositivo_terminal_pin', 'true');
       setModo('empleado');
     }
   };
@@ -140,6 +151,10 @@ export default function LoginView({ onAccesoConcedido }) {
 
       // Éxito — limpiar bloqueo local
       setBloqueadoSegundos(0);
+      // 🛠️ Antes no se guardaba acá — un login por PIN "fresco" (no restaurado
+      // desde la cookie de sesión) se quedaba sin empleado_id en localStorage,
+      // rompiendo silenciosamente todo lo que lo usa (abrir/cerrar caja, etc.).
+      localStorage.setItem('empleado_id', empleado.id);
       localStorage.setItem('empleado_nombre', empleado.nombre);
       localStorage.setItem('usuario_rol', empleado.rol);
 

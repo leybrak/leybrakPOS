@@ -240,6 +240,19 @@ def metricas_dashboard(request):
     negocio_id_raw = request.query_params.get('negocio_id')
     sede_id = None if es_valor_nulo(sede_id_raw) else sede_id_raw
 
+    # 🛡️ Fix de fuga entre negocios: sede_id/negocio_id venían del query
+    # param sin cruzarlos contra el negocio del JWT — cualquier dueño podía
+    # ver ventas, tickets y actividad reciente de OTRO negocio con solo
+    # cambiar el parámetro.
+    if not request.user.is_superuser:
+        negocio_propio = getattr(request.user, 'negocio', None)
+        if sede_id and not Sede.objects.filter(id=sede_id, negocio=negocio_propio).exists():
+            return Response({'error': 'No autorizado'}, status=403)
+        if not es_valor_nulo(negocio_id_raw) and (
+            negocio_propio is None or str(negocio_propio.id) != str(negocio_id_raw)
+        ):
+            return Response({'error': 'No autorizado'}, status=403)
+
     hoy = timezone.localtime().date()
     ordenes_base = Orden.objects.filter(
         creado_en__date=hoy,

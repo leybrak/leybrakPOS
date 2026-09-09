@@ -5,6 +5,7 @@ import {
   AlertCircle, ChevronDown
 } from 'lucide-react';
 import api from '../../../api/api';
+import { useConfirm } from '../../../context/ConfirmContext';
 
 // ============================================================
 // HELPERS
@@ -712,6 +713,7 @@ function ModalCombo({ combo, isDark, colorPrimario, productosReales, sedesReales
 // COMPONENTE PRINCIPAL
 // ============================================================
 export default function Crm_TabCombos({ isDark, colorPrimario, productosReales = [],sedesReales = [] ,categoriasReales = [] }) {
+  const confirmar = useConfirm();
   const [combos, setCombos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -772,7 +774,7 @@ export default function Crm_TabCombos({ isDark, colorPrimario, productosReales =
 
   // ── Eliminar ──
   const handleEliminar = async (id) => {
-    if (!window.confirm('¿Eliminar esta campaña? Esta acción no se puede deshacer.')) return;
+    if (!(await confirmar('Esta acción no se puede deshacer.', { titulo: '¿Eliminar esta campaña?', peligroso: true }))) return;
     try {
       await api.delete(`/combos-promocionales/${id}/`);
       await cargarCombos();

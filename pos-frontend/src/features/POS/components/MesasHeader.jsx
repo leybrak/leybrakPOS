@@ -29,8 +29,8 @@ export default function MesasHeader({
         </div>
 
         <div className="flex flex-col items-end gap-2 sm:gap-3">
-          {/* Selector de sede — visible para el dueño cuando hay sedes disponibles */}
-          {esDueño && sedes?.length >= 1 && (
+          {/* Selector de sede — solo tiene sentido si hay más de una para elegir */}
+          {esDueño && sedes?.length > 1 && (
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-neutral-500">Sede:</span>
               <select

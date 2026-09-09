@@ -1,8 +1,9 @@
 import React, { useState,useEffect } from 'react';
-import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja, validarPinEmpleado } from '../../api/api';
+import { crearOrden, actualizarMesa, actualizarOrden, crearPago, registrarMovimientoCaja } from '../../api/api';
 import { abrirCajaBD } from '../../api/api';
 import usePosStore from '../../store/usePosStore';
 import api from '../../api/api';
+import { useConfirm, usePrompt } from '../../context/ConfirmContext';
 // Modales y Drawers
 import ModalCobro from '../../components/modals/ModalCobro';
 import ModalCierreCaja from '../../components/modals/ModalCierreCaja';
@@ -20,12 +21,14 @@ import TerminalSidebar from './components/TerminalSidebar';
 import { useTerminalData } from './hooks/useTerminalData';
 import { useTerminalWS } from './hooks/useTerminalWS';
 
-export default function PosTerminal({ onIrAErp }) {
+export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   // =========================================================
   // ✨ HELPER DE SEGURIDAD (Desencripta el JWT)
   // =========================================================
   
   const { estadoCaja, configuracionGlobal, setConfiguracionGlobal } = usePosStore();
+  const confirmar = useConfirm();
+  const prompt = usePrompt();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
 
@@ -128,8 +131,8 @@ export default function PosTerminal({ onIrAErp }) {
 
   // ✨ NUEVO: Lógica para desarmar un grupo de mesas
   const manejarSepararMesa = async (mesaPadre) => {
-    const confirmar = window.confirm(`¿Estás seguro de que quieres desarmar el grupo de la Mesa ${mesaPadre.numero}?`);
-    if (!confirmar) return;
+    const confirmado = await confirmar(`¿Desarmar el grupo de la Mesa ${mesaPadre.numero}?`, { titulo: 'Separar mesas', peligroso: false });
+    if (!confirmado) return;
 
     try {
       // 1. Buscamos todas las mesas que están unidas a este padre usando el estado local
@@ -164,7 +167,12 @@ export default function PosTerminal({ onIrAErp }) {
   };
 
   const manejarCancelacion = async (id) => {
-    const motivo = window.prompt('¿Por qué se cancela el pedido?');
+    const motivo = await prompt('Esta acción libera la mesa y queda registrada en la auditoría.', {
+      titulo: '¿Por qué se cancela el pedido?',
+      peligroso: true,
+      textoConfirmar: 'Cancelar pedido',
+      pedirTexto: { placeholder: 'Motivo...' },
+    });
     if (motivo) {
       try { await actualizarOrden(id, { estado: 'cancelado', cancelado: true, motivo_cancelacion: motivo }); setTriggerRecarga((p) => !p); }
       catch { console.error('Error al cancelar'); }
@@ -175,13 +183,12 @@ export default function PosTerminal({ onIrAErp }) {
     const hayOcupadas = mesas.some((m) => m.estado === 'ocupada' || m.orden_activa);
     const hayLlevar = ordenesLlevar.some((o) => o.estado_pago !== 'pagado');
     if (hayOcupadas || hayLlevar) { alert('⚠️ No puedes cerrar el turno. Hay mesas ocupadas o pedidos pendientes.'); return; }
-    const pin = window.prompt('Ingrese PIN autorizado para cerrar caja:');
-    if (!pin) return;
-    try {
-      const { data } = await validarPinEmpleado({ pin, accion: 'entrar' });
-      if (['Cajero', 'Administrador', 'Admin'].includes(data.rol_nombre)) setModalCierreAbierto(true);
-      else alert('🚫 Tu rol no tiene permisos para cerrar la caja.');
-    } catch { alert('❌ PIN incorrecto o empleado inactivo.'); }
+    // 🛠️ Antes pedía un PIN de empleado (window.prompt + validarPinEmpleado) — el
+    // dueño no tiene PIN configurado (entra con usuario/contraseña), así que nunca
+    // podía cerrar caja. El botón ya está gateado por rol para quien lo ve, así que
+    // alcanza con una confirmación simple.
+    const ok = await confirmar('¿Estás seguro de cerrar la caja? Se registrará el cierre de turno.');
+    if (ok) setModalCierreAbierto(true);
   };
 
   // ✨ NUEVO: Función que llama a Django y dispara el WhatsApp
@@ -283,7 +290,7 @@ export default function PosTerminal({ onIrAErp }) {
         <p className="text-neutral-500 mb-8 max-w-md">El salón y delivery están desactivados. Usa la Venta Rápida.</p>
         <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">⚡ INICIAR VENTA RÁPIDA</button>
         <DrawerVentaRapida isOpen={drawerVentaRapidaAbierto} onClose={() => setDrawerVentaRapidaAbierto(false)} onProcederPago={(carrito, total) => { setOrdenACobrar({ id: 'venta_rapida', es_venta_rapida: true, total, detalles: carrito.map((c) => ({ producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad })) }); setDrawerVentaRapidaAbierto(false); }} />
-        <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
+        <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
       </div>
     );
   }
@@ -300,8 +307,9 @@ export default function PosTerminal({ onIrAErp }) {
         modSalonActivo={modulos.salon} modLlevarActivo={modulos.delivery} 
         setVistaLocal={setVistaLocal} ordenesLlevar={ordenesLlevar} 
         setDrawerVentaRapidaAbierto={setDrawerVentaRapidaAbierto} rolUsuario={rolUsuario} 
-        onIrAErp={onIrAErp} setModalMovimientosAbierto={setModalMovimientosAbierto} 
-        manejarCierreCajaSeguro={manejarCierreCajaSeguro} 
+        onIrAErp={onIrAErp} setModalMovimientosAbierto={setModalMovimientosAbierto}
+        manejarCierreCajaSeguro={manejarCierreCajaSeguro}
+        onCerrarTurno={onCerrarTurno}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -334,10 +342,11 @@ export default function PosTerminal({ onIrAErp }) {
           )}
         </div>
 
-        <TerminalSidebar 
-          mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada} 
-          setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas} 
-          setVistaLocal={setVistaLocal} mesas={mesas} tema={tema} colorPrimario={colorPrimario} 
+        <TerminalSidebar
+          mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada}
+          setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas}
+          mesas={mesas} tema={tema} colorPrimario={colorPrimario}
+          setOrdenACobrar={setOrdenACobrar}
         />
       </div>
 
@@ -372,7 +381,7 @@ export default function PosTerminal({ onIrAErp }) {
         isOpen={!!ordenACobrar} 
         onClose={() => setOrdenACobrar(null)}
         total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0}
-        carrito={ordenACobrar ? ordenACobrar.detalles.map((d) => ({ id: d.producto, nombre: d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) : []}
+        carrito={ordenACobrar ? ordenACobrar.detalles.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) : []}
         esVentaRapida={ordenACobrar?.es_venta_rapida || false}
         onCobroExitoso={async (datosCobro) => {
           try {
@@ -433,8 +442,12 @@ export default function PosTerminal({ onIrAErp }) {
           setModalCierreAbierto(false);
           const dif = resumen?.diferencia || 0;
           const msg = dif === 0 ? '✅ ¡Cuadre perfecto!' : dif > 0 ? `⚠️ Sobrante de S/ ${dif.toFixed(2)}` : `🚨 Faltante de S/ ${Math.abs(dif).toFixed(2)}`;
-          alert(`${msg}\n\nCerrando sesión...`);
-          window.location.reload();
+          alert(msg);
+          // 🛠️ Antes hacía window.location.reload() — un reload completo de la SPA
+          // solo para reflejar "caja cerrada". Igual que en mobile, alcanza con
+          // actualizar el store: la pantalla de apertura aparece al instante.
+          setEstadoCaja(null);
+          localStorage.removeItem('sesion_caja_id');
         }}
       />
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api/api';
 import usePosStore from '../../store/usePosStore';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
 import { 
   Bot, Plug, MessageSquare, CheckCircle, Power, 
   Smartphone, Loader2, QrCode, Check, Timer,
@@ -13,6 +14,7 @@ import Bot_Delivery from './BotComponents/Bot_Delivery';
 import Bot_QrModal from './BotComponents/Bot_QrModal';
 export default function Erp_BotWsp({ sedesReales = [], onRefrescar , productosReales = []}) {
   const toast = useToast();
+  const confirmar = useConfirm();
   const { configuracionGlobal } = usePosStore();
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
   const temaFondo = configuracionGlobal?.temaFondo || 'dark';
@@ -175,7 +177,7 @@ export default function Erp_BotWsp({ sedesReales = [], onRefrescar , productosRe
   };
 
   const manejarDesvincularWsp = async (sedeId) => {
-    if (!window.confirm('¿Estás seguro de desconectar el Bot?')) return;
+    if (!(await confirmar('¿Estás seguro de desconectar el Bot?', { titulo: 'Desconectar bot', peligroso: true }))) return;
     setLoadingAction(`desvincular_${sedeId}`);
     try {
       await api.delete(`/sedes/${sedeId}/eliminar_instancia/`);

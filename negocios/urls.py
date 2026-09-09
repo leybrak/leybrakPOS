@@ -44,6 +44,8 @@ router.register(r'ordenes',               views.OrdenViewSet,            basenam
 router.register(r'empleados',             views.EmpleadoViewSet,         basename='empleado')
 router.register(r'insumo-base',           views.InsumoBaseViewSet,       basename='insumobase')
 router.register(r'insumo-sede',           views.InsumoSedeViewSet,       basename='insumosede')
+router.register(r'proveedores',           views.ProveedorViewSet,        basename='proveedor')
+router.register(r'ordenes-compra',        views.OrdenCompraViewSet,      basename='ordencompra')
 router.register(r'modificadores-rapidos', views.ModificadorRapidoViewSet, basename='modificadorrapido')
 router.register(r'grupos-variacion',      views.GrupoVariacionViewSet,   basename='grupovariacion')
 router.register(r'opciones-variacion',    views.OpcionVariacionViewSet,  basename='opcionvariacion')
@@ -73,6 +75,7 @@ urlpatterns = [
     # ==========================================
     path('negocio/configuracion/',    views.configuracion_negocio,    name='configuracion_negocio'),
     path('dashboard/metricas/',       views.metricas_dashboard,       name='metricas_dashboard'),
+    path('analiticas/',               views.analiticas_resumen,       name='analiticas_resumen'),
     path('movimientos-caja/',         views.registrar_movimiento_caja, name='registrar_movimiento_caja'),
     path('verificar-sesion/',         views.verificar_sesion,         name='verificar_sesion'),
     path('marketing/guardar-global/', MarketingGlobalView.as_view(),  name='guardar_marketing_global'),

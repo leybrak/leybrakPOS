@@ -115,8 +115,11 @@ export const useErpDashboard = () => {
 
   const moduloKdsActivo = configuracionGlobal?.modulos?.cocina;
   const rolesFiltrados = rolesReales.filter(rol => {
+    // El rol "Dueño" es un único registro global (ver login_movil) — no se puede
+    // asignar a un segundo empleado, así que ni aparece como opción.
+    if (rol.nombre.trim().toLowerCase() === 'dueño') return false;
     if (!moduloKdsActivo && (rol.nombre.toLowerCase().includes('cocin') || rol.nombre.toLowerCase().includes('chef'))) return false;
-    return true; 
+    return true;
   });
   
   const recargarSedes = async () => {
@@ -510,7 +513,8 @@ export const useErpDashboard = () => {
   };
 
   const toggleActivo = async (emp) => {
-    if (!window.confirm(`¿Seguro?`)) return;
+    const accion = emp.activo ? 'desactivar' : 'reactivar';
+    if (!(await confirmar(`¿Deseas ${accion} a ${emp.nombre}?`, { titulo: emp.activo ? 'Desactivar empleado' : 'Reactivar empleado', peligroso: emp.activo }))) return;
     try {
       await actualizarEmpleado(emp.id, { activo: !emp.activo });
       setEmpleadosReales(prev => prev.map(e => e.id === emp.id ? { ...e, activo: !emp.activo } : e));

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getPlanesDisponibles, crearPlanStaff, actualizarPlanStaff, eliminarPlanStaff } from '../../api/api';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const MODULOS_META = [
   { key: 'modulo_kds',        label: 'Pantalla KDS' },
@@ -87,6 +88,7 @@ function ModalPlan({ plan, onClose, onGuardado }) {
 }
 
 export default function Staff_Planes() {
+  const confirmar = useConfirm();
   const [planes, setPlanes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState(null); // null | 'nuevo' | plan-object
@@ -101,7 +103,7 @@ export default function Staff_Planes() {
   useAutoRefresh(() => cargar(true));
 
   const eliminar = async (plan) => {
-    if (!window.confirm(`¿Borrar el plan "${plan.nombre}"?`)) return;
+    if (!(await confirmar(`¿Borrar el plan "${plan.nombre}"?`, { titulo: 'Borrar plan', peligroso: true }))) return;
     setError(null);
     try {
       await eliminarPlanStaff(plan.id);

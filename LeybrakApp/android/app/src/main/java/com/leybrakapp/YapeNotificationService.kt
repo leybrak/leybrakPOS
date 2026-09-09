@@ -1,6 +1,7 @@
 package com.leybrakapp
 
 import android.app.Notification
+import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -103,4 +104,18 @@ class YapeNotificationService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {}
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.d(TAG, "🔌 Listener conectado")
+    }
+
+    // Si el sistema (Doze, ahorro de batería agresivo del fabricante) nos
+    // desconecta mientras la app sigue viva, pedimos que nos reconecte en
+    // vez de quedarnos sordos hasta que alguien reabra la app a mano.
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.w(TAG, "🔌 Listener desconectado — pidiendo rebind")
+        requestRebind(ComponentName(applicationContext, YapeNotificationService::class.java))
+    }
 }

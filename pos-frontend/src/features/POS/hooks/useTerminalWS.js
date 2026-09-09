@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import api from '../../../api/api';
+import { refrescarMenuCache } from '../../../services/menuCache';
 
 export const useTerminalWS = (sedeActualId, setMesas, setOrdenesLlevar, setSolicitudesBot, sedeActualIdRef) => {
   const wsRef = useRef(null);
@@ -82,6 +83,15 @@ export const useTerminalWS = (sedeActualId, setMesas, setOrdenesLlevar, setSolic
 
             if (data.type === 'error') {
               console.error('🛑 Django rechazó la conexión:', data.mensaje);
+            }
+
+            // La carta cambió (alguien activó/desactivó o editó un producto
+            // desde el ERP) — refrescamos la cache local en segundo plano
+            // para que la próxima mesa que se abra ya la tenga al día
+            // (ver negocios/signals.py: avisar_menu_actualizado_*, y el
+            // mismo manejo en SalonScreen.jsx de mobile).
+            if (data.type === 'menu_actualizado') {
+              refrescarMenuCache(sedeActualId).catch(() => {});
             }
 
           } catch (err) {

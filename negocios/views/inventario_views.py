@@ -6,7 +6,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..models import InsumoBase, InsumoSede
+from ..models import InsumoBase, InsumoSede, Sede
 from ..serializers import InsumoBaseSerializer, InsumoSedeSerializer
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,14 @@ class InsumoSedeViewSet(viewsets.ModelViewSet):
             distribucion     = request.data.get('distribucion', {})
             total_a_repartir = sum(float(v) for v in distribucion.values() if v and float(v) > 0)
 
+            # 🛡️ Sin esto, se podía repartir stock a una sede de OTRO negocio
+            # (id de sede adivinado), ensuciando su inventario con datos ajenos.
+            sede_ids = [int(sid) for sid in distribucion.keys()]
+            if sede_ids and Sede.objects.filter(
+                id__in=sede_ids, negocio=insumo_base.negocio
+            ).count() != len(set(sede_ids)):
+                return Response({'error': 'Una de las sedes indicadas no pertenece a tu negocio.'}, status=403)
+
             if total_a_repartir > stock_proyectado_matriz:
                 raise ValueError(
                     f"No hay suficiente stock. Quieres repartir {total_a_repartir}, "
@@ -91,6 +99,20 @@ class InsumoSedeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error("Error en ingreso_masivo para insumo %s", insumo_base_id, exc_info=True)
             return Response({"error": "Ocurrió un error interno en el servidor."}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def alertas_bajo_stock(self, request):
+        """Insumos con stock_actual <= stock_minimo, para armar un pedido sugerido."""
+        if not hasattr(request.user, 'negocio'):
+            return Response([])
+        qs = InsumoSede.objects.filter(
+            sede__negocio=request.user.negocio,
+            stock_actual__lte=F('stock_minimo'),
+        ).select_related('insumo_base', 'sede')
+        sede_id = request.query_params.get('sede_id')
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return Response(InsumoSedeSerializer(qs, many=True).data)
 
 
 # ============================================================

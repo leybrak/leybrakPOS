@@ -20,7 +20,7 @@ from ..services import aplicar_reglas_negocio, calcular_preview_happy_hours
 from ..models import (
     Orden, DetalleOrden, DetalleOrdenOpcion, Pago,
     Producto, OpcionVariacion, Cliente, SolicitudCambio, SesionCaja, RegistroAuditoria, Sede,
-    CanjePuntos
+    CanjePuntos, Mesa
 )
 from ..serializers import OrdenSerializer, DetalleOrdenSerializer, PagoSerializer
 from django.db.models import Sum, Count
@@ -111,7 +111,12 @@ def _calcular_descuento_puntos(negocio, cliente, puntos_solicitados):
     return p, descuento, None
 
 
-def _procesar_opciones(opciones_ids_raw, variaciones_dict):
+def _procesar_opciones(opciones_ids_raw, variaciones_dict, negocio):
+    """
+    `negocio` es obligatorio: sin filtrar por él, un ID de opción de OTRO
+    negocio (con precio_adicional negativo, por ejemplo) permitía rebajar
+    el total de un pedido ajeno usando descuentos que no le pertenecen.
+    """
     opciones_ids = list(opciones_ids_raw)
     for grupo_id, ids in variaciones_dict.items():
         if isinstance(ids, list):
@@ -124,7 +129,7 @@ def _procesar_opciones(opciones_ids_raw, variaciones_dict):
         opc_id = opc_raw.get('id') if isinstance(opc_raw, dict) else opc_raw
         if opc_id is not None:
             try:
-                opcion = OpcionVariacion.objects.get(id=opc_id)
+                opcion = OpcionVariacion.objects.get(id=opc_id, grupo__producto__negocio=negocio)
                 subtotal += opcion.precio_adicional
                 opciones_a_guardar.append(opcion)
             except OpcionVariacion.DoesNotExist:
@@ -199,7 +204,11 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
 
     def perform_create(self, serializer):
-        empleado = get_empleado_desde_header(self.request)
+        # 🛡️ IDOR fix: get_empleado_desde_header() NO valida el negocio del
+        # empleado contra el del JWT — un X-Empleado-Id de OTRO negocio dejaba
+        # crear órdenes directo en su cocina/salón. get_empleado_verificado()
+        # sí cruza empleado.negocio == request.user.negocio (ver helpers.py).
+        empleado = get_empleado_verificado(self.request)
         sede_id_solicitada = self.request.data.get('sede')
 
         if empleado:
@@ -225,7 +234,9 @@ class OrdenViewSet(viewsets.ModelViewSet):
             nuevo_total = Decimal('0.00')
 
             for d in detalles_data:
-                producto = Producto.objects.get(id=d['producto'])
+                # 🛡️ Sin negocio=... acá, un producto_id de OTRO negocio traía
+                # su propio precio/nombre a esta orden.
+                producto = Producto.objects.get(id=d['producto'], negocio=self.request.user.negocio)
                 if not producto.disponible:
                     # 🛡️ FIX: perform_create() no puede "return Response(...)" acá —
                     # CreateModelMixin.create() ignora ese valor de retorno y de
@@ -248,7 +259,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 variaciones_dict = notas.get('variaciones', {})
                 # Compat: web manda 'opciones', la app móvil 'opciones_seleccionadas'.
                 opciones_ids_raw = d.get('opciones', []) or d.get('opciones_seleccionadas', [])
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_ids_raw, variaciones_dict)
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(
+                    opciones_ids_raw, variaciones_dict, self.request.user.negocio)
                 precio_final_unitario = precio_seguro + subtotal_opciones
 
                 detalle = DetalleOrden.objects.create(
@@ -391,12 +403,15 @@ class OrdenViewSet(viewsets.ModelViewSet):
             lineas = []
             for d in detalles_data:
                 try:
-                    producto = Producto.objects.get(id=d.get('producto'))
+                    # 🛡️ Filtrado por sede.negocio (ya validada arriba), no por
+                    # el `negocio` crudo del request — así funciona igual de
+                    # bien si algún día se permite cotizar sin token con negocio.
+                    producto = Producto.objects.get(id=d.get('producto'), negocio=sede.negocio)
                 except Producto.DoesNotExist:
                     continue
                 cantidad = int(d.get('cantidad') or 1)
                 opciones_raw = d.get('opciones') or d.get('opciones_seleccionadas') or []
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_raw, {})
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_raw, {}, sede.negocio)
                 precio_unit = producto.precio_base + subtotal_opciones
                 det = DetalleOrden.objects.create(
                     orden=orden, producto=producto, cantidad=cantidad, precio_unitario=precio_unit,
@@ -497,7 +512,9 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             for detalle_data in detalles_data:
-                producto = Producto.objects.get(id=detalle_data['producto'])
+                # 🛡️ orden ya está scopeada a request.user.negocio por get_object()
+                # (ver get_queryset), así que orden.sede.negocio es de fiar acá.
+                producto = Producto.objects.get(id=detalle_data['producto'], negocio=orden.sede.negocio)
                 precio_seguro = producto.precio_base
 
                 notas = detalle_data.get('notas_y_modificadores', {})
@@ -509,7 +526,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
                 variaciones_dict = notas.get('variaciones', {})
                 opciones_ids_raw = detalle_data.get('opciones_seleccionadas', [])
-                opciones_a_guardar, subtotal_opciones = _procesar_opciones(opciones_ids_raw, variaciones_dict)
+                opciones_a_guardar, subtotal_opciones = _procesar_opciones(
+                    opciones_ids_raw, variaciones_dict, orden.sede.negocio)
                 precio_final_unitario = precio_seguro + subtotal_opciones
 
                 nuevo_detalle = DetalleOrden.objects.create(
@@ -628,13 +646,38 @@ class OrdenViewSet(viewsets.ModelViewSet):
         telefono_crm    = request.data.get('telefono', '').strip()
         sesion_caja_id  = request.data.get('sesion_caja_id')
 
-        # ✅ Si la orden ya fue pagada por WebSocket, solo procesamos
-        # CRM y WebSockets sin intentar crear pagos duplicados.
-        ya_pagada = orden.estado_pago == 'pagado'
-
         try:
             with transaction.atomic():
+                # 🛡️ select_for_update: self.get_object() (arriba) no bloquea
+                # la fila. Dos terminales cobrando la MISMA orden casi al
+                # mismo tiempo (ej. dos cajeros, o el mismo cajero con dos
+                # pestañas/una doble carga de red) podían pasar ambos el
+                # chequeo `ya_pagada == False` antes de que cualquiera
+                # guardara, y cada uno creaba su propio Pago manual — a
+                # diferencia de Yape (donde notificacion_origen es único),
+                # un Pago en efectivo/tarjeta no tiene ningún constraint que
+                # evite duplicarse, así que la orden terminaba con el doble
+                # de pagos registrados (la caja cuadra mal al cierre, aunque
+                # no se "pierde" plata real). El guard cobroComprometidoRef
+                # del frontend evita el doble-tap en la MISMA pestaña, pero
+                # no cubre dos terminales distintos.
+                orden = Orden.objects.select_for_update().get(pk=orden.pk)
+
                 sesion_caja = SesionCaja.objects.get(id=sesion_caja_id) if sesion_caja_id else None
+                # 🛡️ IDOR fix: sesion_caja_id venía del body sin validar que
+                # perteneciera a la sede de la orden — un cliente con un bug
+                # (o un request armado a mano) podía atribuir el pago a la
+                # caja de OTRA sede/negocio, descuadrando su cierre de caja.
+                if sesion_caja and sesion_caja.sede_id != orden.sede_id:
+                    return Response(
+                        {'error': 'La sesión de caja no pertenece a la sede de esta orden.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                # ✅ Si la orden ya fue pagada (por WebSocket o por el request
+                # que ganó la carrera de arriba), solo procesamos CRM y
+                # WebSockets sin intentar crear pagos duplicados.
+                ya_pagada = orden.estado_pago == 'pagado'
 
                 if not ya_pagada:
                     # ── Flujo normal: registrar pagos ──────────────────
@@ -733,6 +776,59 @@ class OrdenViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=['post'])
+    def trasladar_mesa(self, request, pk=None):
+        """
+        Mueve una orden activa de una mesa a otra de la misma sede — el
+        cliente empezó en una mesa y se cambió a otra ya con el pedido
+        hecho. Solo se puede trasladar a una mesa que no tenga ya otro
+        pedido activo, para no pisarle la cuenta a otra mesa.
+        """
+        orden = self.get_object()
+        mesa_destino_id = request.data.get('mesa_destino_id')
+
+        if not mesa_destino_id:
+            return Response({'error': 'mesa_destino_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if orden.estado in ('completado', 'cancelado') or orden.estado_pago == 'pagado':
+            return Response({'error': 'No se puede trasladar una orden cerrada.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        mesa_destino = Mesa.objects.filter(id=mesa_destino_id, sede_id=orden.sede_id).first()
+        if not mesa_destino:
+            return Response({'error': 'La mesa destino no existe en esta sede.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if mesa_destino.id == orden.mesa_id:
+            return Response({'error': 'La orden ya está en esa mesa.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # No permitir trasladar a una mesa que ya tiene otro pedido activo.
+        ocupada = Orden.objects.filter(mesa=mesa_destino).exclude(id=orden.id).exclude(
+            estado__in=['completado', 'cancelado']
+        ).exists()
+        if ocupada:
+            return Response({'error': 'La mesa destino ya tiene un pedido activo.'}, status=status.HTTP_409_CONFLICT)
+
+        with transaction.atomic():
+            orden = Orden.objects.select_for_update().get(pk=orden.pk)
+            mesa_origen_id = orden.mesa_id
+            orden.mesa = mesa_destino
+            orden.save(update_fields=['mesa'])
+
+        channel_layer = get_channel_layer()
+        if mesa_origen_id:
+            async_to_sync(channel_layer.group_send)(
+                f"salon_sede_{orden.sede_id}",
+                {"type": "mesa_actualizada", "mesa_id": mesa_origen_id, "estado": "libre", "total": 0}
+            )
+        async_to_sync(channel_layer.group_send)(
+            f"salon_sede_{orden.sede_id}",
+            {"type": "mesa_actualizada", "mesa_id": mesa_destino.id, "estado": "ocupada", "total": float(orden.total)}
+        )
+
+        return Response({
+            'status': 'Mesa trasladada',
+            'orden': self.get_serializer(orden).data,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
     def preview_cobro(self, request, pk=None):
         orden = self.get_object()
         metodo_pago = request.data.get('metodo', '')
@@ -754,6 +850,14 @@ class OrdenViewSet(viewsets.ModelViewSet):
 
         if not sede_id or not telefono:
             return Response({"error": "Se requiere sede_id y telefono."}, status=400)
+
+        # 🛡️ IDOR fix: sin esto, el token de bot de CUALQUIER negocio podía
+        # consultar pedidos de OTRO negocio con solo cambiar el sede_id.
+        if not request.user.is_superuser:
+            if not hasattr(request.user, 'negocio') or not Sede.objects.filter(
+                id=sede_id, negocio=request.user.negocio
+            ).exists():
+                return Response({"error": "La sede indicada no pertenece a tu negocio."}, status=403)
 
         try:
             orden = Orden.objects.prefetch_related(
@@ -777,8 +881,15 @@ class OrdenViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def modificar_desde_bot(self, request, pk=None):
         try:
-            orden = Orden.objects.get(id=pk)
+            orden = Orden.objects.select_related('sede__negocio').get(id=pk)
         except Orden.DoesNotExist:
+            return Response({"error": f"La orden {pk} no existe."}, status=404)
+
+        # 🛡️ IDOR fix: sin esto, el token de bot de CUALQUIER negocio podía
+        # modificar o cancelar el pedido de OTRO negocio con solo saber el ID.
+        if not request.user.is_superuser and (
+            not hasattr(request.user, 'negocio') or orden.sede.negocio_id != request.user.negocio.id
+        ):
             return Response({"error": f"La orden {pk} no existe."}, status=404)
 
         accion = request.data.get('accion')
@@ -833,11 +944,19 @@ class OrdenViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def resolver_solicitud_bot(self, request, pk=None):
         try:
-            orden         = Orden.objects.get(id=pk)
+            orden         = Orden.objects.select_related('sede__negocio').get(id=pk)
             solicitud_id  = request.data.get('solicitud_id')
             decision      = request.data.get('decision')
             solicitud     = SolicitudCambio.objects.get(id=solicitud_id, orden=orden, estado='pendiente')
         except (Orden.DoesNotExist, SolicitudCambio.DoesNotExist):
+            return Response({"error": "La orden o solicitud no existe."}, status=404)
+
+        # 🛡️ IDOR fix: mismo patrón que estado_orden_bot/modificar_desde_bot —
+        # sin esto, el token de bot de CUALQUIER negocio podía aprobar/rechazar
+        # solicitudes de cambio de pedidos de OTRO negocio.
+        if not request.user.is_superuser and (
+            not hasattr(request.user, 'negocio') or orden.sede.negocio_id != request.user.negocio.id
+        ):
             return Response({"error": "La orden o solicitud no existe."}, status=404)
 
         mensaje_whatsapp = ""

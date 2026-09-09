@@ -1,7 +1,7 @@
 import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { cerrarSesionGlobal } from '../src/api/api';
-import { verificarSesionEmpleado, generarPagoSuscripcion, refrescarSesion } from '../src/api/api';
+import { verificarSesionEmpleado, generarPagoSuscripcion, refrescarSesion, marcarIngresoEmpleado, marcarSalidaEmpleado } from '../src/api/api';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import LoginView from './views/View_Login';
@@ -12,6 +12,7 @@ import StaffDashboard from './views/View_Staff';
 import PublicMenu from './features/public/PublicMenu';
 import api from '../src/api/api';
 import usePosStore from './store/usePosStore';
+import ActualizacionDisponible from './components/ActualizacionDisponible';
 
 if (typeof window !== 'undefined') {
   window.__getStoreConfig = () => usePosStore.getState().configuracionGlobal;
@@ -38,6 +39,10 @@ const VistaInternaPOS = () => {
   const [suscripcion, setSuscripcion] = useState(null);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [errorPago, setErrorPago] = useState(null);
+  // Empleado que ya pasó el PIN pero todavía no confirmó su ingreso —
+  // mesero/cajero/cocinero no pueden pasar al POS/KDS sin este paso.
+  const [pendienteIngreso, setPendienteIngreso] = useState(null);
+  const [marcandoIngreso, setMarcandoIngreso] = useState(false);
 
   // Inicia el pago de la suscripción y redirige a MercadoPago.
   const handlePagarSuscripcion = async () => {
@@ -68,32 +73,53 @@ const VistaInternaPOS = () => {
     }
   };
 
+  // Intenta restaurar la sesión de empleado desde la cookie empleado_session.
+  // Devuelve true si encontró/manejó una sesión (autenticada o no) y ya no
+  // hace falta seguir revisando las otras opciones; false si no hay cookie.
+  const intentarRestaurarEmpleado = async () => {
+    const res = await verificarSesionEmpleado();
+    if (!res.data.autenticado) return false;
+
+    const { rol, sede_id, nombre, empleado_id, negocio_id } = res.data.empleado;
+    const vistaDestino = getRolVista(rol);
+    if (!vistaDestino) { setVista('sin_permiso'); return true; }
+
+    localStorage.setItem('sede_id',         sede_id);
+    localStorage.setItem('empleado_id',     empleado_id);
+    localStorage.setItem('empleado_nombre', nombre);
+    localStorage.setItem('negocio_id',      negocio_id);
+    localStorage.setItem('usuario_rol',     rol);
+
+    const sus = await verificarSuscripcion();
+    if (sus && !sus.puede_operar) { setVista('bloqueado'); return true; }
+
+    setSesion({ rol, nombre, sede_id });
+    setVista(vistaDestino);
+    return true;
+  };
+
   useEffect(() => {
   const verificar = async () => {
     try {
       // 1. ¿Hay sesión de empleado activa? (cookie empleado_session)
       try {
-        const res = await verificarSesionEmpleado();
-        if (res.data.autenticado) {
-          const { rol, sede_id, nombre, empleado_id, negocio_id } = res.data.empleado;
-          const vistaDestino = getRolVista(rol);
-          if (!vistaDestino) { setVista('sin_permiso'); return; }
-
-          localStorage.setItem('sede_id',         sede_id);
-          localStorage.setItem('empleado_id',     empleado_id);
-          localStorage.setItem('empleado_nombre', nombre);
-          localStorage.setItem('negocio_id',      negocio_id);
-          localStorage.setItem('usuario_rol',     rol);
-
-          const sus = await verificarSuscripcion();
-          if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
-
-          setSesion({ rol, nombre, sede_id });
-          setVista(vistaDestino);
-          return;
+        if (await intentarRestaurarEmpleado()) return;
+      } catch (err) {
+        // 🛠️ Antes CUALQUIER error acá (incluyendo un timeout de red, o el
+        // backend reiniciando a mitad de un deploy) se trataba igual que "no
+        // hay sesión" y mandaba de vuelta al PIN — aunque la sesión siguiera
+        // viva en el servidor. Eso es justo lo que reportó el mozo: "a veces
+        // recargo y me manda al PIN, a veces no". Un 401 sí significa que la
+        // sesión ya no es válida; cualquier otra falla puede ser pasajera —
+        // se reintenta una vez antes de rendirse.
+        if (err?.response?.status !== 401) {
+          try {
+            await new Promise(r => setTimeout(r, 800));
+            if (await intentarRestaurarEmpleado()) return;
+          } catch (_) {
+            // Sigue fallando — recién ahora se sigue con las demás opciones.
+          }
         }
-      } catch (_) {
-        // No hay sesión de empleado
       }
 
       // 2. ¿Hay sesión de dueño activa? (cookie JWT) — tiene prioridad sobre tablet
@@ -118,11 +144,24 @@ const VistaInternaPOS = () => {
           }
         }
         if (res?.data?.autenticado) {
-          const { rol, negocio_id } = res.data.user;
+          const { rol, negocio_id, nombre, avatar } = res.data.user;
           const vistaDestino = getRolVista(rol);
           if (!vistaDestino) { setVista('sin_permiso'); return; }
 
+          // 🛠️ Si este dispositivo fue configurado como terminal PIN (ver
+          // View_Login.jsx → handleSedeSetup), no lo mandamos automáticamente a
+          // la vista del dueño solo porque su JWT sigue vivo — ese JWT lo sigue
+          // necesitando el empleado para operar (mesas, órdenes, cobrar...), pero
+          // la pantalla debe forzar igual el PIN en vez de saltarse directo al ERP.
+          if (localStorage.getItem('dispositivo_terminal_pin') === 'true') {
+            setVista('login');
+            return;
+          }
+
           if (negocio_id) localStorage.setItem('negocio_id', negocio_id);
+          if (nombre) localStorage.setItem('usuario_nombre', nombre);
+          if (avatar) localStorage.setItem('usuario_avatar', avatar);
+          else localStorage.removeItem('usuario_avatar');
           setSesion({ rol });
 
           // El operador de la plataforma no tiene negocio propio — la
@@ -163,7 +202,7 @@ const VistaInternaPOS = () => {
       ? { rol: datosEmpleado, nombre: null, sede_id: null, suscripcion: null }
       : datosEmpleado;
 
-    const { rol, nombre, sede_id, suscripcion } = datos;
+    const { rol, nombre, sede_id, suscripcion, id, turno_abierto } = datos;
 
     if (suscripcion && !suscripcion.puede_operar) {
       setSuscripcion(suscripcion);
@@ -179,8 +218,51 @@ const VistaInternaPOS = () => {
       if (sus && !sus.puede_operar) { setVista('bloqueado'); return; }
     }
 
-    setSesion({ rol, nombre, sede_id });
+    // Ingreso obligatorio solo para roles operativos (mesero/cajero/cocinero)
+    // que entran por PIN — el dueño/admin/staff no marca asistencia.
+    // 🛠️ Antes se pedía SIEMPRE, aunque el empleado ya hubiera marcado su
+    // ingreso antes y no hubiera marcado su salida — si la sesión se perdía
+    // a mitad de turno (cookie vencida, error de red) y volvía a entrar con
+    // el PIN, le volvía a aparecer "marca tu ingreso" sin sentido. El login
+    // ahora dice si el turno ya está abierto (turno_abierto).
+    if (id && !turno_abierto && (vistaDestino === 'terminal' || vistaDestino === 'cocina')) {
+      setPendienteIngreso({ id, rol, nombre, sede_id, vistaDestino });
+      return;
+    }
+
+    setSesion({ rol, nombre, sede_id, id });
     setVista(vistaDestino);
+  };
+
+  const confirmarIngreso = async () => {
+    if (!pendienteIngreso || marcandoIngreso) return;
+    setMarcandoIngreso(true);
+    try {
+      await marcarIngresoEmpleado(pendienteIngreso.id);
+    } catch (_) {
+      // No bloqueamos el ingreso al trabajo por un error de red al marcar asistencia.
+    } finally {
+      setMarcandoIngreso(false);
+    }
+    const { id, rol, nombre, sede_id, vistaDestino } = pendienteIngreso;
+    setSesion({ rol, nombre, sede_id, id });
+    setVista(vistaDestino);
+    setPendienteIngreso(null);
+  };
+
+  // Fin de turno: marca la salida y vuelve al PIN (NO al login del dispositivo —
+  // ese vínculo con el negocio/sede ya está hecho y no se toca).
+  const handleCerrarTurno = async (empleadoId) => {
+    try {
+      if (empleadoId) await marcarSalidaEmpleado(empleadoId);
+    } catch (_) {
+      // Igual dejamos salir aunque falle la marca de salida por red.
+    }
+    localStorage.removeItem('empleado_id');
+    localStorage.removeItem('empleado_nombre');
+    localStorage.removeItem('usuario_rol');
+    setSesion(null);
+    setVista('login');
   };
 
   if (cargando || vista === null) {
@@ -251,6 +333,29 @@ const VistaInternaPOS = () => {
     );
   }
 
+  if (pendienteIngreso) {
+    return (
+      <div className="bg-[#0a0a0a] h-screen flex flex-col items-center justify-center text-center p-6">
+        <div className="w-24 h-24 rounded-3xl bg-[#ff5a1f]/10 flex items-center justify-center mb-6">
+          <span className="text-5xl">🕒</span>
+        </div>
+        <h1 className="text-3xl font-black text-white mb-3 uppercase tracking-tighter">
+          {pendienteIngreso.nombre ? `Hola, ${pendienteIngreso.nombre}` : 'Bienvenido'}
+        </h1>
+        <p className="text-neutral-400 font-bold mb-8 max-w-sm text-sm">
+          Antes de empezar tu turno, marca tu ingreso.
+        </p>
+        <button
+          onClick={confirmarIngreso}
+          disabled={marcandoIngreso}
+          className="px-8 py-4 rounded-2xl bg-[#ff5a1f] text-white font-black uppercase tracking-widest text-sm shadow-lg shadow-orange-900/20 active:scale-95 transition-all disabled:opacity-50"
+        >
+          {marcandoIngreso ? 'Marcando…' : 'Marcar Ingreso'}
+        </button>
+      </div>
+    );
+  }
+
   const mostrarBannerAlerta = suscripcion?.estado === 'prueba' && suscripcion?.alerta;
 
   return (
@@ -272,8 +377,8 @@ const VistaInternaPOS = () => {
       )}
 
       {vista === 'login'    && <LoginView onAccesoConcedido={handleAccesoConcedido} />}
-      {vista === 'terminal' && <PosTerminal rolUsuario={sesion?.rol} onIrAErp={() => setVista('erp')} />}
-      {vista === 'cocina'   && <KdsView onVolver={() => setVista('login')} />}
+      {vista === 'terminal' && <PosTerminal rolUsuario={sesion?.rol} onIrAErp={() => setVista('erp')} onCerrarTurno={() => handleCerrarTurno(sesion?.id)} />}
+      {vista === 'cocina'   && <KdsView onVolver={() => setVista('login')} onCerrarTurno={() => handleCerrarTurno(sesion?.id)} />}
       {vista === 'erp'      && <ErpDashboard onVolverAlPos={() => setVista('terminal')} rolUsuario={sesion?.rol} />}
       {vista === 'staff'    && <StaffDashboard onLogout={async () => { await cerrarSesionGlobal(); setVista('login'); }} />}
     </div>
@@ -284,6 +389,7 @@ export default function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
+        <ActualizacionDisponible />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<VistaInternaPOS />} />

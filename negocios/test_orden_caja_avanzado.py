@@ -154,6 +154,91 @@ class ReglasDeNegocioEnCobroTest(BaseOrdenTest):
         self.assertEqual(orden.total, Decimal('20.00'))
 
 
+class TrasladarMesaTest(BaseOrdenTest):
+    """
+    /api/ordenes/<id>/trasladar_mesa/ — el cliente empezó en una mesa y se
+    cambió a otra ya con el pedido hecho. Antes no existía forma de mover
+    una orden de mesa; el mozo tenía que cancelar y rehacer todo el pedido.
+    """
+
+    def _crear_mesa(self, numero='1'):
+        from negocios.models import Mesa
+        return Mesa.objects.create(sede=self.sede, numero_o_nombre=numero, capacidad=4)
+
+    def _crear_orden_en_mesa(self, mesa, cantidad=1):
+        resp = self.client.post('/api/ordenes/', {
+            'sede': self.sede.id, 'tipo': 'salon', 'mesa': mesa.id,
+            'detalles': [{'producto': self.prod.id, 'cantidad': cantidad}],
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return Orden.objects.get(id=resp.data['id'])
+
+    def test_traslada_la_orden_y_libera_la_mesa_origen(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden = self._crear_orden_en_mesa(mesa1)  # 25.00
+
+        resp = self.client.post(f'/api/ordenes/{orden.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.mesa_id, mesa2.id)
+
+    def test_no_se_puede_trasladar_a_una_mesa_con_pedido_activo(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden1 = self._crear_orden_en_mesa(mesa1)
+        orden2 = self._crear_orden_en_mesa(mesa2)  # mesa2 ya está ocupada
+
+        resp = self.client.post(f'/api/ordenes/{orden1.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 409, resp.data)
+
+        orden1.refresh_from_db()
+        self.assertEqual(orden1.mesa_id, mesa1.id)  # no se movió
+
+    def test_no_se_puede_trasladar_una_orden_ya_pagada(self):
+        mesa1 = self._crear_mesa('1')
+        mesa2 = self._crear_mesa('2')
+        orden = self._crear_orden_en_mesa(mesa1)
+        orden.estado_pago = 'pagado'
+        orden.estado = 'completado'
+        orden.save()
+
+        resp = self.client.post(f'/api/ordenes/{orden.id}/trasladar_mesa/', {
+            'mesa_destino_id': mesa2.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+
+class CobrarOrdenSesionCajaTest(BaseOrdenTest):
+    """
+    /api/ordenes/<id>/cobrar_orden/ tomaba sesion_caja_id del body sin
+    validar que perteneciera a la sede de la orden — un cliente con un bug
+    (o un request armado a mano) podía atribuir el pago a la caja de OTRA
+    sede/negocio, descuadrando el cierre de esa caja ajena.
+    """
+
+    def test_no_se_puede_cobrar_con_sesion_caja_de_otra_sede(self):
+        otra_sede = Sede.objects.create(negocio=self.negocio, nombre='Sucursal 2')
+        sesion_ajena = SesionCaja.objects.create(
+            sede=otra_sede, estado='abierta', fondo_inicial=Decimal('50'))
+
+        orden = self._crear_orden()  # 25.00, en self.sede
+        resp = self.client.post(f'/api/ordenes/{orden.id}/cobrar_orden/', {
+            'pagos': [{'metodo': 'efectivo', 'monto': '25.00'}],
+            'sesion_caja_id': sesion_ajena.id,
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 403, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado_pago, 'pendiente')  # no se cobró
+        self.assertEqual(Pago.objects.filter(orden=orden).count(), 0)
+
+
 class PagoConfirmadoPorAppSobreviveReintentoTest(BaseOrdenTest):
 
     def test_pago_confirmado_por_notificacion_no_se_cancela_ni_se_duplica(self):
@@ -241,6 +326,37 @@ class ConfirmarPagoYapeTest(BaseOrdenTest):
         self.assertEqual(
             Pago.objects.filter(orden=orden, metodo='efectivo', monto=Decimal('30.00')).count(), 1)
 
+    def test_no_se_puede_confirmar_la_misma_notificacion_dos_veces(self):
+        """
+        Cubre el fix de la race condition: confirmar_pago_yape ahora envuelve
+        el chequeo 'usado'+creación del Pago en una transacción con
+        select_for_update. Este test no reproduce el hilo concurrente real
+        (el test client de Django es síncrono), pero sí verifica que el
+        camino que la transacción protege sigue rechazando correctamente un
+        segundo intento sobre la misma notificación — sin crear un segundo
+        Pago ni marcar pagada una segunda orden con la misma plata.
+        """
+        orden1 = self._crear_orden()  # 25.00
+        orden2 = self._crear_orden()  # otra mesa, mismo monto — el caso real
+        notif = self._notif('25.00')
+
+        self.client.force_authenticate(user=self.user)
+        resp1 = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden1.id,
+        }, format='json')
+        self.assertEqual(resp1.status_code, 200, resp1.data)
+
+        resp2 = self.client.post('/api/yape/confirmar/', {
+            'notificacion_id': notif.id, 'orden_id': orden2.id,
+        }, format='json')
+        self.assertEqual(resp2.status_code, 409, resp2.data)
+
+        orden1.refresh_from_db()
+        orden2.refresh_from_db()
+        self.assertEqual(orden1.estado_pago, 'pagado')
+        self.assertEqual(orden2.estado_pago, 'pendiente')  # no se le acreditó el pago ajeno
+        self.assertEqual(Pago.objects.filter(notificacion_origen=notif).count(), 1)
+
     def test_no_puede_confirmar_notificacion_de_otro_negocio(self):
         otro_user = User.objects.create_user(username='otro_dueno', password='x')
         otro_negocio = Negocio.objects.create(
@@ -258,6 +374,37 @@ class ConfirmarPagoYapeTest(BaseOrdenTest):
         self.assertFalse(notif_ajena.usado)  # no se consumió
         orden.refresh_from_db()
         self.assertEqual(orden.estado_pago, 'pendiente')
+
+
+class CancelarPedidoLiberaLaMesaTest(BaseOrdenTest):
+    """
+    El mozo anulaba los platos uno por uno (anular_item) hasta dejar la
+    orden vacía, pero la orden en sí seguía 'pendiente'/'preparando' — la
+    mesa quedaba "ocupada" para siempre por un pedido fantasma sin items.
+    El fix real es un botón de "Cancelar Pedido" en el POS (mobile) que
+    cancela la orden entera de una vez, en vez de vaciarla item por item.
+    Este test confirma que el mecanismo que ya usa perform_update
+    (creado_en el fix de cobrar_orden/yape) efectivamente libera la mesa
+    cuando se cancela la orden completa vía PATCH.
+    """
+
+    def test_cancelar_la_orden_marca_la_mesa_libre(self):
+        from negocios.models import Mesa
+        mesa = Mesa.objects.create(sede=self.sede, numero_o_nombre='5', capacidad=4)
+        resp = self.client.post('/api/ordenes/', {
+            'sede': self.sede.id, 'tipo': 'salon', 'mesa': mesa.id,
+            'detalles': [{'producto': self.prod.id, 'cantidad': 1}],
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 201, resp.data)
+        orden = Orden.objects.get(id=resp.data['id'])
+
+        resp = self.client.patch(f'/api/ordenes/{orden.id}/', {
+            'estado': 'cancelado',
+        }, format='json', **_hdr(self.cajero))
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'cancelado')
 
 
 class ProductoNoDisponibleTest(BaseOrdenTest):
