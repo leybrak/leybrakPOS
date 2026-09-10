@@ -130,7 +130,7 @@ class SedeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'negocio', 'nombre', 'direccion', 'activo', 'columnas_salon',
             'latitud', 'longitud', 'whatsapp_instancia', 'whatsapp_numero',
-            'enlace_carta_virtual', 'carta_pdf', 'hora_apertura', 'hora_cierre',
+            'enlace_carta_virtual', 'carta_pdf', 'carta_modo', 'hora_apertura', 'hora_cierre',
             'dias_atencion', 'bot_puntos_activos', 'bot_ingreso_automatico', 'bot_max_pedidos_pendientes',
             'bot_cumple_activo', 'bot_cumple_tipo', 'bot_cumple_valor',
             'bot_cumple_minimo', 'bot_cumple_productos',

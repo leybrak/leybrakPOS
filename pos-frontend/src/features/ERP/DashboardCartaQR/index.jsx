@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import usePosStore from '../../../store/usePosStore';
 import VistaQR from './VistaQR';
 import VistaEditor from './VistaEditor';
+import VistaConfigCarta from './VistaConfigCarta';
 
 // ============================================================
 // COMPONENTE PRINCIPAL (ORQUESTADOR)
@@ -39,19 +40,23 @@ export default function DashboardCartaQR() {
             className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shrink-0"
             style={{ backgroundColor: colorPrimario + '15', color: colorPrimario }}
           >
-            <i className={`fi ${vista === 'qr' ? 'fi-rr-qrcode' : 'fi-rr-picture'} mt-1`} />
+            <i className={`fi ${vista === 'qr' ? 'fi-rr-qrcode' : vista === 'editor' ? 'fi-rr-picture' : 'fi-rr-file-pdf'} mt-1`} />
           </div>
           <div>
             <h2 className={`text-2xl font-black tracking-tight ${textCls}`}>
               {vista === 'qr'
                 ? <><span style={{ color: colorPrimario }}>Carta</span> Digital QR</>
-                : <>Editor de <span style={{ color: colorPrimario }}>Carta Digital</span></>
+                : vista === 'editor'
+                ? <>Editor de <span style={{ color: colorPrimario }}>Carta Digital</span></>
+                : <><span style={{ color: colorPrimario }}>Carta</span> del Bot</>
               }
             </h2>
             <p className={`text-sm mt-1 ${labelCls}`}>
               {vista === 'qr'
                 ? (esDueñoQR ? 'Gestiona los códigos QR de todas tus sedes.' : 'Genera los QR para las mesas de tu local.')
-                : 'Personaliza el estilo visual que verán tus clientes al escanear el QR.'
+                : vista === 'editor'
+                ? 'Personaliza el estilo visual que verán tus clientes al escanear el QR.'
+                : 'Elige qué le manda el bot de WhatsApp al cliente cuando pide el menú.'
               }
             </p>
           </div>
@@ -84,22 +89,39 @@ export default function DashboardCartaQR() {
                 <i className="fi fi-rr-picture text-sm" /> Editor
               </button>
             )}
+            <button
+              onClick={() => setVista('config')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 border border-transparent ${
+                vista === 'config'
+                  ? 'text-white shadow-md'
+                  : isDark ? 'text-neutral-500 hover:text-neutral-300 hover:bg-[#1a1a1a]' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+              style={vista === 'config' ? { backgroundColor: colorPrimario } : {}}
+            >
+              <i className="fi fi-rr-file-pdf text-sm" /> Carta del Bot
+            </button>
           </div>
         </div>
       </div>
 
       {/* ═══ RENDERIZADO DE MÓDULOS ═══ */}
       {vista === 'qr' ? (
-        <VistaQR 
-          esDueñoQR={esDueñoQR} 
-          colorPrimario={colorPrimario} 
-          isDark={isDark} 
+        <VistaQR
+          esDueñoQR={esDueñoQR}
+          colorPrimario={colorPrimario}
+          isDark={isDark}
+        />
+      ) : vista === 'editor' ? (
+        <VistaEditor
+          esDueño={esDueño}
+          colorPrimario={colorPrimario}
+          isDark={isDark}
         />
       ) : (
-        <VistaEditor 
-          esDueño={esDueño} 
-          colorPrimario={colorPrimario} 
-          isDark={isDark} 
+        <VistaConfigCarta
+          esDueño={esDueñoQR}
+          colorPrimario={colorPrimario}
+          isDark={isDark}
         />
       )}
 

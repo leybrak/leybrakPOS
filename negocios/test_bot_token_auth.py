@@ -136,6 +136,58 @@ class BotTokenAuthenticationTest(APITestCase):
         r = self.client.get('/api/sedes/info_bot/', {'instancia': 'instancia_sede_a'})
         self.assertEqual(r.status_code, 403)
 
+    # ── info_bot: bloque 'carta' — el bot manda link/PDF, no lista productos ──
+    @override_settings(BOT_API_TOKEN='token-global-de-arranque')
+    def _info_bot(self):
+        self.sede_a.whatsapp_instancia = 'instancia_sede_a'
+        self.sede_a.save(update_fields=['whatsapp_instancia'])
+        return self.client.get(
+            '/api/sedes/info_bot/', {'instancia': 'instancia_sede_a'},
+            HTTP_X_BOT_TOKEN='token-global-de-arranque',
+        )
+
+    @override_settings(BOT_API_TOKEN='token-global-de-arranque')
+    def test_carta_modo_propia_manda_link_de_la_pagina_publica(self):
+        self.sede_a.carta_modo = 'propia'
+        self.sede_a.save(update_fields=['carta_modo'])
+        r = self._info_bot()
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data['carta']['modo'], 'propia')
+        self.assertIn(f'/menu/{self.negocio_a.id}/{self.sede_a.id}/0', r.data['carta']['link'])
+        self.assertIsNone(r.data['carta']['pdf_url'])
+
+    @override_settings(BOT_API_TOKEN='token-global-de-arranque')
+    def test_carta_modo_link_manda_el_link_externo(self):
+        self.sede_a.carta_modo = 'link'
+        self.sede_a.enlace_carta_virtual = 'https://ejemplo.com/mi-carta'
+        self.sede_a.save(update_fields=['carta_modo', 'enlace_carta_virtual'])
+        r = self._info_bot()
+        self.assertEqual(r.data['carta']['modo'], 'link')
+        self.assertEqual(r.data['carta']['link'], 'https://ejemplo.com/mi-carta')
+        self.assertIsNone(r.data['carta']['pdf_url'])
+
+    @override_settings(BOT_API_TOKEN='token-global-de-arranque')
+    def test_carta_modo_pdf_sin_archivo_no_rompe(self):
+        self.sede_a.carta_modo = 'pdf'
+        self.sede_a.save(update_fields=['carta_modo'])
+        r = self._info_bot()
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data['carta']['modo'], 'pdf')
+        self.assertIsNone(r.data['carta']['link'])
+        self.assertIsNone(r.data['carta']['pdf_url'])
+
+    @override_settings(BOT_API_TOKEN='token-global-de-arranque')
+    def test_carta_modo_pdf_con_archivo_manda_la_url(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.sede_a.carta_modo = 'pdf'
+        self.sede_a.carta_pdf = SimpleUploadedFile('carta.pdf', b'%PDF-1.4 fake', content_type='application/pdf')
+        self.sede_a.save()
+        r = self._info_bot()
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertIsNotNone(r.data['carta']['pdf_url'])
+        self.assertIn('carta', r.data['carta']['pdf_url'])
+        self.assertIsNone(r.data['carta']['link'])
+
 
 class JtiRevocadoTest(APITestCase):
     """

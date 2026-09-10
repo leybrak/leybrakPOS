@@ -328,6 +328,15 @@ class Sede(models.Model):
     )
     enlace_carta_virtual = models.URLField(max_length=500, null=True, blank=True, help_text="Link a tu menú digital, Canva, Drive o Instagram")
     carta_pdf = models.FileField(upload_to='cartas_pdf/', null=True, blank=True, help_text="Sube tu carta en formato PDF")
+    CARTA_MODOS = [
+        ('propia', 'Nuestra Carta Digital'),
+        ('pdf', 'PDF Propio'),
+        ('link', 'Link Externo'),
+    ]
+    carta_modo = models.CharField(
+        max_length=10, choices=CARTA_MODOS, default='propia',
+        help_text="Qué le manda el bot al cliente cuando pide el menú."
+    )
     hora_apertura = models.TimeField(null=True, blank=True)
     hora_cierre = models.TimeField(null=True, blank=True)
 

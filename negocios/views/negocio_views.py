@@ -460,6 +460,24 @@ class SedeViewSet(viewsets.ModelViewSet):
         max_cocina = sede.bot_max_pedidos_pendientes or 0
         cocina_saturada = bool(max_cocina) and pedidos_en_cocina >= max_cocina
 
+        # 📖 Carta: el bot manda un link o un PDF en vez de listar productos
+        # en texto (lento de generar y se ve mal). "propia" reusa la misma
+        # página pública que ya usan los QR de mesa, con mesaId=0 ("sin
+        # mesa": orden_publica no encuentra ninguna orden real con ese id y
+        # el menú se ve normal, sin "pedido en curso").
+        if sede.carta_modo == 'propia':
+            carta_link = f"{settings.FRONTEND_URL}/menu/{negocio.id}/{sede.id}/0"
+            carta_pdf_url = None
+        elif sede.carta_modo == 'link':
+            carta_link = sede.enlace_carta_virtual
+            carta_pdf_url = None
+        else:  # 'pdf'
+            carta_link = None
+            if sede.carta_pdf:
+                carta_pdf_url = (_base.rstrip('/') + sede.carta_pdf.url) if _base else request.build_absolute_uri(sede.carta_pdf.url)
+            else:
+                carta_pdf_url = None
+
         return Response({
             'sede_id':       sede.id,
             'negocio_id':    negocio.id,
@@ -484,6 +502,11 @@ class SedeViewSet(viewsets.ModelViewSet):
             'max_pedidos_cocina': max_cocina,
             'cocina_saturada':    cocina_saturada,
             'stickers':           stickers,
+            'carta': {
+                'modo': sede.carta_modo,
+                'link': carta_link,
+                'pdf_url': carta_pdf_url,
+            },
             # 🤖 PERSONALIDAD CONFIGURABLE (la inyecta n8n en el prompt del LLM).
             # El backend compone el texto estructurado desde los presets de tono + reglas.
             'persona': _construir_persona(negocio),
