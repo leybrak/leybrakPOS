@@ -76,7 +76,16 @@ class NegocioViewSet(viewsets.ModelViewSet):
         # configurada. Sin esto, el bot cae siempre a "un agente humano
         # validará el envío" (Consultar_Delivery en cliente_views.py) para
         # TODOS los pedidos delivery, en silencio, hasta que alguien lo note.
-        if serializer.validated_data.get('mod_delivery_activo') is True:
+        # 🔧 Solo dispara al PRENDER el módulo (False→True): el ERP siempre
+        # reenvía todos los mod_*_activo al guardar cualquier pestaña, así
+        # que si ya estaba en True (aunque el módulo esté bloqueado por plan
+        # y el dueño no lo pueda tocar desde la UI) no debe bloquear guardados
+        # de config que no tienen nada que ver con Delivery.
+        activa_delivery = (
+            serializer.validated_data.get('mod_delivery_activo') is True
+            and not serializer.instance.mod_delivery_activo
+        )
+        if activa_delivery:
             tiene_zonas = ZonaDelivery.objects.filter(
                 sede__negocio=serializer.instance, activa=True).exists()
             if not tiene_zonas:

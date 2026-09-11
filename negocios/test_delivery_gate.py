@@ -63,3 +63,15 @@ class DeliveryGateTest(APITestCase):
         r = self.client.patch(
             f'/api/negocios/{self.negocio.id}/', {'nombre': 'Otro Nombre'}, format='json')
         self.assertEqual(r.status_code, 200, r.data)
+
+    def test_no_revalida_si_ya_estaba_activo_aunque_lo_reenvien_en_true(self):
+        # El ERP (Erp_TabModulos.jsx) reenvía TODOS los mod_*_activo en cada
+        # guardado, no solo el que cambió — si el módulo ya estaba en True
+        # (aunque esté bloqueado por plan y sin zonas, de antes de este
+        # gate), guardar otra pestaña de config no debe romperse por eso.
+        self.negocio.mod_delivery_activo = True
+        self.negocio.save(update_fields=['mod_delivery_activo'])
+        r = self.client.patch(
+            f'/api/negocios/{self.negocio.id}/',
+            {'nombre': 'Otro Nombre', 'mod_delivery_activo': True}, format='json')
+        self.assertEqual(r.status_code, 200, r.data)
