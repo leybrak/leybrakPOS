@@ -13,7 +13,7 @@ const obtenerPrecio = (p) => {
   return parseFloat(precio) || 0;
 };
 
-export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
+export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago, modoInline = false, mostrarTodos = false }) {
   const { configuracionGlobal } = usePosStore();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
@@ -22,21 +22,29 @@ export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
   const [carrito, setCarrito] = useState([]);
   const sedeActualId = localStorage.getItem('sede_id');
 
-  useEffect(() => {
-    if (isOpen) {
-      cargarProductos();
-    }
-  }, [isOpen]);
+  // 🏬 Modo Tienda (modoInline + mostrarTodos): siempre "abierto", muestra
+  // el catálogo completo en vez de solo los productos marcados a mano como
+  // "venta rápida" — no tiene sentido pedirle al dueño de una tienda que
+  // marque producto por producto. El modo restaurante (drawer normal) no
+  // se toca: sigue filtrando por es_venta_rapida.
+  const abierto = modoInline || isOpen;
 
   const cargarProductos = async () => {
     try {
       const res = await getProductos({ sede_id: sedeActualId });
-      const filtrados = res.data.filter(p => p.es_venta_rapida === true);
+      const filtrados = mostrarTodos ? (res.data || []) : (res.data || []).filter(p => p.es_venta_rapida === true);
       setProductosRapidos(filtrados);
     } catch (error) {
       console.error("Error cargando menú para venta rápida", error);
     }
   };
+
+  useEffect(() => {
+    if (abierto) {
+      cargarProductos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto]);
 
   const agregarAlCarrito = (producto) => {
     setCarrito(prev => {
@@ -63,13 +71,19 @@ export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
   const calcularTotal = () => carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
 
   return (
-    <div className={`fixed inset-0 z-[100] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose}></div>
+    <div className={modoInline
+      ? 'h-full w-full flex flex-col'
+      : `fixed inset-0 z-[100] transition-all duration-300 ease-out ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`
+    }>
+      {!modoInline && <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose}></div>}
 
-      <div className={`absolute right-0 top-0 bottom-0 w-[95%] md:w-[85%] lg:w-[80%] max-w-[1400px] flex flex-col transform transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${
-        tema === 'dark' ? 'bg-[#0a0a0a] border-l border-[#222]' : 'bg-[#fcfcfc] border-l border-gray-200'
-      }`}>
-        
+      <div className={modoInline
+        ? `flex-1 flex flex-col overflow-hidden ${tema === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[#fcfcfc]'}`
+        : `absolute right-0 top-0 bottom-0 w-[95%] md:w-[85%] lg:w-[80%] max-w-[1400px] flex flex-col transform transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${
+          tema === 'dark' ? 'bg-[#0a0a0a] border-l border-[#222]' : 'bg-[#fcfcfc] border-l border-gray-200'
+        }`
+      }>
+
         {/* CABECERA */}
         <div className={`p-4 md:p-6 flex justify-between items-center border-b sticky top-0 z-10 shrink-0 ${
           tema === 'dark' ? 'border-[#222] bg-[#0d0d0d]' : 'border-gray-200 bg-white'
@@ -80,7 +94,7 @@ export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
             </div>
             <div>
                 <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter leading-none" style={{ color: colorPrimario }}>
-                  Venta Directa
+                  {modoInline ? 'Tienda' : 'Venta Directa'}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded ${tema === 'dark' ? 'bg-[#1a1a1a] text-neutral-500' : 'bg-gray-100 text-gray-400'}`}>
@@ -89,16 +103,18 @@ export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
                 </div>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
-            className={`w-12 h-12 rounded-2xl flex justify-center items-center transition-all active:scale-90 ${
-              tema === 'dark' 
-                ? 'bg-[#1a1a1a] text-neutral-400 hover:text-white border border-[#222]' 
-                : 'bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200'
-            }`}
-          >
-            <i className="fi fi-rr-cross-small text-2xl"></i>
-          </button>
+          {!modoInline && (
+            <button
+              onClick={onClose}
+              className={`w-12 h-12 rounded-2xl flex justify-center items-center transition-all active:scale-90 ${
+                tema === 'dark'
+                  ? 'bg-[#1a1a1a] text-neutral-400 hover:text-white border border-[#222]'
+                  : 'bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200'
+              }`}
+            >
+              <i className="fi fi-rr-cross-small text-2xl"></i>
+            </button>
+          )}
         </div>
 
         {/* CUERPO */}
@@ -110,7 +126,7 @@ export default function DrawerVentaRapida({ isOpen, onClose, onProcederPago }) {
           }`}>
             <div className="flex items-center gap-3 mb-6">
               <i className={`fi fi-rr-apps ${tema === 'dark' ? 'text-neutral-600' : 'text-gray-400'}`}></i>
-              <h3 className={`text-xs font-black uppercase tracking-[0.2em] ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-400'}`}>Productos Rápidos</h3>
+              <h3 className={`text-xs font-black uppercase tracking-[0.2em] ${tema === 'dark' ? 'text-neutral-500' : 'text-gray-400'}`}>{mostrarTodos ? 'Catálogo' : 'Productos Rápidos'}</h3>
               <div className={`flex-1 h-px ${tema === 'dark' ? 'bg-[#1a1a1a]' : 'bg-gray-200'}`}></div>
             </div>
 

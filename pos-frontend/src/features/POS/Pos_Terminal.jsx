@@ -31,6 +31,10 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   const prompt = usePrompt();
   const tema = configuracionGlobal?.temaFondo || 'dark';
   const colorPrimario = configuracionGlobal?.colorPrimario || '#ff5a1f';
+  // 🏬 Modo Tienda: la Terminal es SOLO el catálogo completo + cobrar, sin
+  // mesas ni "Para Llevar". Todo lo que depende de esto queda gateado por
+  // esta bandera para no tocar el flujo normal de restaurante/bar.
+  const esTienda = configuracionGlobal?.tipo_negocio === 'tienda';
 
   // ── Estados Locales ──────────────────────────────────────────────────────────
   const [sedeActualId, setSedeActualId] = useState(localStorage.getItem('sede_id') || '');
@@ -282,16 +286,16 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
     );
   }
 
-  if (modulos.salon === false && modulos.delivery === false) {
-    const esTienda = configuracionGlobal?.tipo_negocio === 'tienda';
+  // Modo Fast Food: solo para restaurante/bar con Salón y Delivery apagados
+  // a mano. El modo Tienda tiene su propia pantalla principal más abajo
+  // (catálogo completo siempre visible) y no debe pasar por acá.
+  if (!esTienda && modulos.salon === false && modulos.delivery === false) {
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center text-center p-6 ${tema === 'dark' ? 'bg-[#0a0a0a] text-white' : 'bg-[#f0f0f0] text-gray-900'}`}>
-        <span className="text-6xl mb-4">{esTienda ? '🛒' : '🍔'}</span>
-        <h1 className="text-3xl font-black mb-2 uppercase">{esTienda ? 'Modo Tienda' : 'Modo Fast Food Activo'}</h1>
-        <p className="text-neutral-500 mb-8 max-w-md">
-          {esTienda ? 'Vende directo en mostrador, sin mesas ni cocina.' : 'El salón y delivery están desactivados. Usa la Venta Rápida.'}
-        </p>
-        <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">{esTienda ? '🛒 NUEVA VENTA' : '⚡ INICIAR VENTA RÁPIDA'}</button>
+        <span className="text-6xl mb-4">🍔</span>
+        <h1 className="text-3xl font-black mb-2 uppercase">Modo Fast Food Activo</h1>
+        <p className="text-neutral-500 mb-8 max-w-md">El salón y delivery están desactivados. Usa la Venta Rápida.</p>
+        <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">⚡ INICIAR VENTA RÁPIDA</button>
         <DrawerVentaRapida isOpen={drawerVentaRapidaAbierto} onClose={() => setDrawerVentaRapidaAbierto(false)} onProcederPago={(carrito, total) => { setOrdenACobrar({ id: 'venta_rapida', es_venta_rapida: true, total, detalles: carrito.map((c) => ({ producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad })) }); setDrawerVentaRapidaAbierto(false); }} />
         <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
       </div>
@@ -313,45 +317,61 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
         onIrAErp={onIrAErp} setModalMovimientosAbierto={setModalMovimientosAbierto}
         manejarCierreCajaSeguro={manejarCierreCajaSeguro}
         onCerrarTurno={onCerrarTurno}
+        esTienda={esTienda}
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <div 
-          className={`h-full overflow-y-auto transition-all duration-300 ${tema === 'dark' ? 'border-[#222]' : 'border-gray-200'} border-r ${mesaSeleccionada ? 'hidden lg:block lg:w-[60%]' : 'w-full lg:w-[60%]'}`}
-          onClick={(e) => { if (!e.target.closest('button')) setMesaSeleccionada(null); }}
-        >
-          {vistaLocal === 'salon' && modulos.salon && (
-            <TerminalMesasGrid 
-              mesas={mesas} 
-              modoUnir={modoUnir} 
-              mesaPrincipal={mesaPrincipal} 
-              mesaSeleccionada={mesaSeleccionada} 
-              manejarClickMesa={manejarClickMesa} 
-              mostrarPuertaMovil={mostrarPuertaMovil} 
-              setMostrarPuertaMovil={setMostrarPuertaMovil} 
-              tema={tema} 
-              colorPrimario={colorPrimario} 
-              sedeActual={sedes.find(s => String(s.id) === String(sedeActualId))}
-              manejarSepararMesa={manejarSepararMesa} /* 👈 ¡AÑADE ESTA LÍNEA AQUÍ! */
-            />
-          )}
-
-          {vistaLocal === 'llevar' && modulos.delivery && (
-            <TerminalLlevarView 
-              ordenesLlevar={ordenesLlevar} tema={tema} colorPrimario={colorPrimario} 
-              setModalClienteAbierto={setModalClienteAbierto} manejarCancelacion={manejarCancelacion} 
-              setOrdenACobrar={setOrdenACobrar} entregarOrdenLlevar={entregarOrdenLlevar} 
-            />
-          )}
+      {esTienda ? (
+        // 🏬 Modo Tienda: el catálogo completo + carrito ES la pantalla
+        // principal, sin mesas ni "Para Llevar". Cada cobro crea una Orden
+        // 'llevar'/completado igual que la Venta Rápida de restaurante — es
+        // simplemente una venta.
+        <div className="flex-1 overflow-hidden">
+          <DrawerVentaRapida
+            modoInline mostrarTodos
+            onProcederPago={(carrito, total) => {
+              setOrdenACobrar({ id: 'venta_rapida', es_venta_rapida: true, total, detalles: carrito.map((c) => ({ producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad })) });
+            }}
+          />
         </div>
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
+          <div
+            className={`h-full overflow-y-auto transition-all duration-300 ${tema === 'dark' ? 'border-[#222]' : 'border-gray-200'} border-r ${mesaSeleccionada ? 'hidden lg:block lg:w-[60%]' : 'w-full lg:w-[60%]'}`}
+            onClick={(e) => { if (!e.target.closest('button')) setMesaSeleccionada(null); }}
+          >
+            {vistaLocal === 'salon' && modulos.salon && (
+              <TerminalMesasGrid
+                mesas={mesas}
+                modoUnir={modoUnir}
+                mesaPrincipal={mesaPrincipal}
+                mesaSeleccionada={mesaSeleccionada}
+                manejarClickMesa={manejarClickMesa}
+                mostrarPuertaMovil={mostrarPuertaMovil}
+                setMostrarPuertaMovil={setMostrarPuertaMovil}
+                tema={tema}
+                colorPrimario={colorPrimario}
+                sedeActual={sedes.find(s => String(s.id) === String(sedeActualId))}
+                manejarSepararMesa={manejarSepararMesa} /* 👈 ¡AÑADE ESTA LÍNEA AQUÍ! */
+              />
+            )}
 
-        <TerminalSidebar
-          mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada}
-          setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas}
-          mesas={mesas} tema={tema} colorPrimario={colorPrimario}
-          setOrdenACobrar={setOrdenACobrar}
-        />
-      </div>
+            {vistaLocal === 'llevar' && modulos.delivery && (
+              <TerminalLlevarView
+                ordenesLlevar={ordenesLlevar} tema={tema} colorPrimario={colorPrimario}
+                setModalClienteAbierto={setModalClienteAbierto} manejarCancelacion={manejarCancelacion}
+                setOrdenACobrar={setOrdenACobrar} entregarOrdenLlevar={entregarOrdenLlevar}
+              />
+            )}
+          </div>
+
+          <TerminalSidebar
+            mesaSeleccionada={mesaSeleccionada} setMesaSeleccionada={setMesaSeleccionada}
+            setTriggerRecarga={setTriggerRecarga} todasLasOrdenesActivas={todasLasOrdenesActivas}
+            mesas={mesas} tema={tema} colorPrimario={colorPrimario}
+            setOrdenACobrar={setOrdenACobrar}
+          />
+        </div>
+      )}
 
       {/* ══════════════════ MODALES GLOBALES ══════════════════ */}
       {modalClienteAbierto && (

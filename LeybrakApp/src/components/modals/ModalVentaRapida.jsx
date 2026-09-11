@@ -17,7 +17,7 @@ const obtenerPrecio = (p) => {
 // ─── Equivalente movil de Pos_DrawerVentaRapida.jsx (web) — antes el botón
 // "Venta Rápida" de SalonScreen solo guardaba un estado que nadie leía, así
 // que no pasaba nada al presionarlo.
-export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
+export default function ModalVentaRapida({ visible, onClose, onProcederPago, modoInline = false, mostrarTodos = false }) {
   const { configuracionGlobal } = useAppStore();
   const isDark = configuracionGlobal?.temaFondo !== 'light';
   const color  = configuracionGlobal?.colorPrimario || '#ff5a1f';
@@ -37,25 +37,33 @@ export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
   const [productos, setProductos]   = useState([]);
   const [carrito, setCarrito]       = useState([]);
 
-  useEffect(() => {
-    if (visible) {
-      setCarrito([]);
-      cargarProductos();
-    }
-  }, [visible]);
+  // 🏬 Modo Tienda (modoInline + mostrarTodos): siempre "visible", muestra
+  // el catálogo completo en vez de solo los productos marcados a mano como
+  // "venta rápida" — no tiene sentido pedirle al dueño de una tienda que
+  // marque producto por producto. El modo restaurante (modal normal) no se
+  // toca: sigue filtrando por es_venta_rapida.
+  const abierto = modoInline || visible;
 
   const cargarProductos = async () => {
     setCargando(true);
     try {
       const sedeId = await EncryptedStorage.getItem('sede_id');
       const { data } = await getProductos({ sede_id: sedeId });
-      setProductos((data || []).filter((p) => p.es_venta_rapida === true));
+      setProductos(mostrarTodos ? (data || []) : (data || []).filter((p) => p.es_venta_rapida === true));
     } catch (e) {
       setProductos([]);
     } finally {
       setCargando(false);
     }
   };
+
+  useEffect(() => {
+    if (abierto) {
+      setCarrito([]);
+      cargarProductos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto]);
 
   const agregarAlCarrito = (producto) => {
     setCarrito((prev) => {
@@ -78,10 +86,7 @@ export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
 
   const total = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
 
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <SafeAreaProvider>
-        <View style={[s.overlay, { backgroundColor: t.bg }]}>
+  const contenido = (
           <SafeAreaView style={{ flex: 1 }}>
 
             {/* Header */}
@@ -90,16 +95,18 @@ export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
                 <Icon name="bolt" size={20} color={color} />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[s.titulo, { color }]}>Venta Directa</Text>
-                <Text style={[s.subtitulo, { color: t.textMut }]}>VENTA RÁPIDA SIN MESA</Text>
+                <Text style={[s.titulo, { color }]}>{modoInline ? 'Tienda' : 'Venta Directa'}</Text>
+                <Text style={[s.subtitulo, { color: t.textMut }]}>{modoInline ? 'TODO EL CATÁLOGO' : 'VENTA RÁPIDA SIN MESA'}</Text>
               </View>
-              <TouchableOpacity
-                onPress={onClose}
-                style={[s.closeBtn, { backgroundColor: t.bg3, borderColor: t.border2 }]}
-                activeOpacity={0.7}
-              >
-                <Icon name="times" size={16} color={t.textSec} />
-              </TouchableOpacity>
+              {!modoInline && (
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={[s.closeBtn, { backgroundColor: t.bg3, borderColor: t.border2 }]}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="times" size={16} color={t.textSec} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Grid de productos */}
@@ -111,7 +118,9 @@ export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
                   <Icon name="cube" size={40} color={t.textMut} style={{ opacity: 0.5, marginBottom: 12 }} />
                   <Text style={[s.vacioText, { color: t.textMut }]}>SIN PRODUCTOS CONFIGURADOS</Text>
                   <Text style={[s.vacioSub, { color: t.textMut }]}>
-                    Marca productos como "Venta Rápida" desde el ERP → Menú.
+                    {mostrarTodos
+                      ? 'Agrega productos desde el ERP → Menú.'
+                      : 'Marca productos como "Venta Rápida" desde el ERP → Menú.'}
                   </Text>
                 </View>
               ) : (
@@ -179,6 +188,21 @@ export default function ModalVentaRapida({ visible, onClose, onProcederPago }) {
             </View>
 
           </SafeAreaView>
+  );
+
+  if (modoInline) {
+    return (
+      <View style={[s.overlay, { flex: 1, backgroundColor: t.bg }]}>
+        {contenido}
+      </View>
+    );
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <SafeAreaProvider>
+        <View style={[s.overlay, { backgroundColor: t.bg }]}>
+          {contenido}
         </View>
       </SafeAreaProvider>
     </Modal>

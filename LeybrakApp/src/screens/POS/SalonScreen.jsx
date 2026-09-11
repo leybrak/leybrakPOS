@@ -170,7 +170,10 @@ function ModalCliente({ visible, t, color, onConfirmar, onCerrar }) {
 export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno, mesaIdActiva }) {
   const t = useTema();
   const confirmar = useConfirm();
-  const { estadoCaja, setEstadoCaja } = useAppStore();
+  const { estadoCaja, setEstadoCaja, configuracionGlobal } = useAppStore();
+  // 🏬 Modo Tienda: la pantalla es SOLO el catálogo completo + cobrar, sin
+  // mesas ni "Para Llevar". Ver Erp_TabModulos.jsx / ConfiguracionScreen.jsx.
+  const esTienda = configuracionGlobal?.tipo_negocio === 'tienda';
 
   const [mesas, setMesas]                 = useState([]);
   const [sedes, setSedes]                 = useState([]);
@@ -588,9 +591,9 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
             numberOfLines={2} 
             ellipsizeMode="tail"
           >
-            {vistaLocal === 'salon' ? 'SALÓN ' : 'PARA '}
+            {esTienda ? '' : (vistaLocal === 'salon' ? 'SALÓN ' : 'PARA ')}
             <Text style={{ color: t.color }}>
-              {vistaLocal === 'salon' ? (sedeActualInfo?.nombre || 'PRINCIPAL') : 'LLEVAR'}
+              {esTienda ? 'TIENDA' : (vistaLocal === 'salon' ? (sedeActualInfo?.nombre || 'PRINCIPAL') : 'LLEVAR')}
             </Text>
           </Text>
           <View style={s.envivoWrapper}>
@@ -627,9 +630,13 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
-              <Icon name="bolt" size={16} color={t.color} />
-            </TouchableOpacity>
+            {/* Venta Rápida — no aplica en modo Tienda: el catálogo completo
+                YA es la pantalla principal, no hace falta un atajo. */}
+            {!esTienda && (
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: `${t.color}1A`, borderColor: `${t.color}4D` }]} onPress={() => setDrawerVentaRapidaAbierto(true)}>
+                <Icon name="bolt" size={16} color={t.color} />
+              </TouchableOpacity>
+            )}
 
             {/* Terminar mi turno — marca la salida y vuelve al PIN (mesero/cajero/cocinero) */}
             {onCerrarTurno && (
@@ -672,6 +679,25 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
         </View>
       </View>
 
+      {esTienda ? (
+        // 🏬 Modo Tienda: el catálogo completo + carrito ES la pantalla
+        // principal, sin mesas ni "Para Llevar". Cada cobro crea una Orden
+        // 'llevar'/completado igual que la Venta Rápida — simplemente una venta.
+        <ModalVentaRapida
+          modoInline
+          mostrarTodos
+          onProcederPago={(carritoVR, totalVR) => {
+            setOrdenACobrar({
+              id: 'venta_rapida',
+              es_venta_rapida: true,
+              total: totalVR,
+              detalles: carritoVR.map(c => ({
+                producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad,
+              })),
+            });
+          }}
+        />
+      ) : (
       <ScrollView
         contentContainerStyle={s.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} tintColor={t.color} />}
@@ -794,6 +820,7 @@ export default function SalonScreen({ onSeleccionarMesa, onVolver, onCerrarTurno
           </View>
         )}
       </ScrollView>
+      )}
 
       <ModalCliente visible={modalClienteVisible} t={t} color={t.color} onConfirmar={({ nombre, telefono }) => { setModalClienteVisible(false); onSeleccionarMesa({ id: 'llevar', cliente: nombre, telefono }); }} onCerrar={() => setModalClienteVisible(false)} />
       <ModalCierreCaja

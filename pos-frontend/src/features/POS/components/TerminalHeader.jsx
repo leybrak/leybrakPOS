@@ -6,7 +6,8 @@ export default function TerminalHeader({
   sedes, sedeActualId, manejarCambioSede, modoUnir, setModoUnir,
   setMesaPrincipal, modSalonActivo, modLlevarActivo, setVistaLocal,
   ordenesLlevar, setDrawerVentaRapidaAbierto, rolUsuario, onIrAErp,
-  setModalMovimientosAbierto, manejarCierreCajaSeguro, onCerrarTurno
+  setModalMovimientosAbierto, manejarCierreCajaSeguro, onCerrarTurno,
+  esTienda
 }) {
   const confirmar = useConfirm();
   return (
@@ -18,7 +19,9 @@ export default function TerminalHeader({
         <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
           <div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight uppercase leading-none text-white flex items-center gap-2">
-              {vistaLocal === 'salon' ? (
+              {esTienda ? (
+                <><span style={{ color: colorPrimario }}>Tienda</span></>
+              ) : vistaLocal === 'salon' ? (
                 <>Salón <span style={{ color: colorPrimario }}>Principal</span></>
               ) : (
                 <>Para <span style={{ color: colorPrimario }}>Llevar</span></>
@@ -104,15 +107,18 @@ export default function TerminalHeader({
               </button>
             )}
 
-            {/* Botón Venta Rápida (Acento) */}
-            <button
-              onClick={() => setDrawerVentaRapidaAbierto(true)}
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95"
-              style={{ backgroundColor: `${colorPrimario}15`, borderColor: `${colorPrimario}30`, color: colorPrimario }}
-              title="Venta Rápida"
-            >
-              <i className="fi fi-rr-bolt mt-0.5 text-lg"></i>
-            </button>
+            {/* Botón Venta Rápida (Acento) — no aplica en modo Tienda: el catálogo
+                completo YA es la pantalla principal, no hace falta un atajo. */}
+            {!esTienda && (
+              <button
+                onClick={() => setDrawerVentaRapidaAbierto(true)}
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95"
+                style={{ backgroundColor: `${colorPrimario}15`, borderColor: `${colorPrimario}30`, color: colorPrimario }}
+                title="Venta Rápida"
+              >
+                <i className="fi fi-rr-bolt mt-0.5 text-lg"></i>
+              </button>
+            )}
 
             {/* Terminar mi turno (todos los roles — marca la salida y vuelve al PIN) */}
             {onCerrarTurno && (
