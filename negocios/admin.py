@@ -205,7 +205,7 @@ class NegocioAdmin(ModelAdmin): # ✨ UNFOLD
             'fields': (
                 'nombre', 'ruc', 'razon_social', 'logo',
                 'telefono_propietario', 'dni_propietario', 'nombre_propietario',
-                'plan', 'fin_prueba', 'activo',
+                'plan', 'fin_prueba', 'activo', 'tipo_negocio',
             ),
         }),
         ('Billeteras digitales', {

@@ -283,12 +283,15 @@ export default function PosTerminal({ onIrAErp, onCerrarTurno }) {
   }
 
   if (modulos.salon === false && modulos.delivery === false) {
+    const esTienda = configuracionGlobal?.tipo_negocio === 'tienda';
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center text-center p-6 ${tema === 'dark' ? 'bg-[#0a0a0a] text-white' : 'bg-[#f0f0f0] text-gray-900'}`}>
-        <span className="text-6xl mb-4">🍔</span>
-        <h1 className="text-3xl font-black mb-2 uppercase">Modo Fast Food Activo</h1>
-        <p className="text-neutral-500 mb-8 max-w-md">El salón y delivery están desactivados. Usa la Venta Rápida.</p>
-        <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">⚡ INICIAR VENTA RÁPIDA</button>
+        <span className="text-6xl mb-4">{esTienda ? '🛒' : '🍔'}</span>
+        <h1 className="text-3xl font-black mb-2 uppercase">{esTienda ? 'Modo Tienda' : 'Modo Fast Food Activo'}</h1>
+        <p className="text-neutral-500 mb-8 max-w-md">
+          {esTienda ? 'Vende directo en mostrador, sin mesas ni cocina.' : 'El salón y delivery están desactivados. Usa la Venta Rápida.'}
+        </p>
+        <button onClick={() => setDrawerVentaRapidaAbierto(true)} style={{ backgroundColor: colorPrimario }} className="px-8 py-4 rounded-2xl text-white font-black text-xl shadow-lg active:scale-95">{esTienda ? '🛒 NUEVA VENTA' : '⚡ INICIAR VENTA RÁPIDA'}</button>
         <DrawerVentaRapida isOpen={drawerVentaRapidaAbierto} onClose={() => setDrawerVentaRapidaAbierto(false)} onProcederPago={(carrito, total) => { setOrdenACobrar({ id: 'venta_rapida', es_venta_rapida: true, total, detalles: carrito.map((c) => ({ producto: c.id, nombre: c.nombre, precio_unitario: c.precio, cantidad: c.cantidad })) }); setDrawerVentaRapidaAbierto(false); }} />
         <ModalCobro isOpen={!!ordenACobrar} onClose={() => setOrdenACobrar(null)} total={ordenACobrar ? parseFloat(ordenACobrar.total) : 0} carrito={ordenACobrar?.detalles?.map((d) => ({ id: d.producto, nombre: d.producto_nombre || d.nombre, precio: parseFloat(d.precio_unitario), cantidad: d.cantidad || 1 })) || []} esVentaRapida={true} onCobroExitoso={async (datosCobro) => { try { const pagos = datosCobro?.pagos || []; const { data: nueva } = await crearOrden({ tipo: 'llevar', estado: 'completado', estado_pago: 'pagado', sede: sedeActualId, detalles: ordenACobrar.detalles || [] }); for (const p of pagos) await crearPago({ orden: nueva.id, monto: p.monto, metodo: p.metodo }); return { ordenId: nueva.id }; } catch (e) { alert('Error al guardar el pago.'); throw e; } }} />
       </div>

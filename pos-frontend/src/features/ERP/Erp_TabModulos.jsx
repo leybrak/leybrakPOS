@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Armchair, Users, FileText, ChefHat, Truck,
-  Package, QrCode, Bot, BrainCircuit, Lock, ArrowRight
+  Package, QrCode, Bot, BrainCircuit, Lock, ArrowRight, Store, UtensilsCrossed
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -131,6 +131,91 @@ const GLOBAL_KEY_MAP = {
   mod_bot_wsp_activo:     'botWsp',
   mod_ml_activo:          'machineLearning',
 };
+
+// ─────────────────────────────────────────────────────────────
+// Preset "Tipo de negocio" — atajo para prender/apagar de una vez los
+// módulos que no aplican a una tienda (Salón, KDS). No reemplaza los
+// toggles de abajo: el dueño puede seguir tocando cada uno a mano
+// después de elegir el preset.
+// ─────────────────────────────────────────────────────────────
+const TIPOS_NEGOCIO = [
+  {
+    value: 'restaurante',
+    icon:  UtensilsCrossed,
+    title: 'Restaurante / Bar',
+    desc:  'Mesas, mozos y cocina (KDS).',
+  },
+  {
+    value: 'tienda',
+    icon:  Store,
+    title: 'Tienda',
+    desc:  'Venta directa en mostrador, sin mesas ni cocina.',
+  },
+];
+
+function SelectorTipoNegocio({ config, setConfig, isDark, colorPrimario }) {
+  const tipoActual = config.tipo_negocio || 'restaurante';
+
+  const elegirTipo = (value) => {
+    if (value === tipoActual) return;
+    if (value === 'tienda') {
+      setConfig({
+        ...config,
+        tipo_negocio: 'tienda',
+        mod_salon_activo: false, modSalon: false,
+        mod_cocina_activo: false, modCocina: false,
+      });
+    } else {
+      setConfig({
+        ...config,
+        tipo_negocio: 'restaurante',
+        mod_salon_activo: true, modSalon: true,
+      });
+    }
+  };
+
+  return (
+    <div className={`p-6 md:p-8 rounded-[2rem] border shadow-sm ${isDark ? 'bg-[#111] border-[#222]' : 'bg-white border-gray-200'}`}>
+      <h3 className={`text-base font-black mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        Tipo de Negocio
+      </h3>
+      <p className={`text-xs mb-6 ${isDark ? 'text-neutral-500' : 'text-gray-400'}`}>
+        Ajusta la Terminal (POS) a como vendes. Puedes afinar cada módulo abajo.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {TIPOS_NEGOCIO.map(({ value, icon: Icon, title, desc }) => {
+          const activo = tipoActual === value;
+          return (
+            <button
+              key={value}
+              onClick={() => elegirTipo(value)}
+              className="flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98]"
+              style={activo
+                ? { borderColor: colorPrimario, backgroundColor: colorPrimario + '10' }
+                : { borderColor: isDark ? '#2a2a2a' : '#e5e7eb' }
+              }
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: activo ? colorPrimario + '20' : isDark ? '#222' : '#f3f4f6',
+                  color: activo ? colorPrimario : isDark ? '#666' : '#9ca3af',
+                }}
+              >
+                <Icon size={16} />
+              </div>
+              <div className="min-w-0">
+                <h4 className={`font-black text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h4>
+                <p className={`text-[11px] mt-0.5 leading-relaxed ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>{desc}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // Toggle switch reutilizable
@@ -367,6 +452,11 @@ export default function Tab_Modulos({ config, setConfig, isDark, colorPrimario }
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════
+          🏬 TIPO DE NEGOCIO
+      ══════════════════════════════════════════════════════ */}
+      <SelectorTipoNegocio config={config} setConfig={setConfig} isDark={isDark} colorPrimario={colorPrimario} />
 
       {/* ══════════════════════════════════════════════════════
           🔧 MÓDULOS DEL SISTEMA

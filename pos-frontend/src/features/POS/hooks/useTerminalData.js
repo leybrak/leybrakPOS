@@ -47,6 +47,7 @@ export const useTerminalData = (sedeActualId, triggerRecarga, setConfiguracionGl
             device_token:            data.device_token            || null,
             negocio_id:              data.id,
             facturacion_emision:     data.facturacion_emision || 'desactivado',
+            tipo_negocio:            data.tipo_negocio || 'restaurante',
             modulos: mods,
           });
         }

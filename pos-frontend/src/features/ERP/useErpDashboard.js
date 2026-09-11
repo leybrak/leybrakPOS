@@ -59,6 +59,8 @@ export const useErpDashboard = () => {
     confirmacion_automatica: false,
     device_token: null,
     negocio_id: null,
+    // Preset "Tipo de negocio" (ver Erp_TabModulos.jsx)
+    tipo_negocio: 'restaurante',
     // Módulos — camelCase (para manejarGuardarConfig y hayCambiosPendientes)
     modSalon: true, modCocina: false, modDelivery: false, modInventario: false,
     modClientes: false, modFacturacion: false, modCartaQr: false, modBotWsp: false, modMl: false,
@@ -231,6 +233,7 @@ export const useErpDashboard = () => {
           confirmacion_automatica: datosBD.confirmacion_automatica || false,
           device_token:            datosBD.device_token            || null,
           negocio_id:              datosBD.id,
+          tipo_negocio:            datosBD.tipo_negocio || 'restaurante',
           // Módulos camelCase (para manejarGuardarConfig — NO CAMBIAR)
           modSalon:       datosBD.mod_salon_activo       ?? true,
           modCocina:      datosBD.mod_cocina_activo      ?? false,
@@ -283,6 +286,7 @@ export const useErpDashboard = () => {
           confirmacion_automatica: configData.confirmacion_automatica,
           device_token:            configData.device_token,
           negocio_id:              configData.negocio_id,
+          tipo_negocio:            configData.tipo_negocio,
           facturacion_emision:     datosBD.facturacion_emision || 'desactivado',
           modulos_globales:        g,
           modulos: {
@@ -427,6 +431,8 @@ export const useErpDashboard = () => {
       if (config.yape_qrFile) formData.append('yape_qr', config.yape_qrFile);
       if (config.plin_qrFile) formData.append('plin_qr', config.plin_qrFile);
 
+      formData.append('tipo_negocio', config.tipo_negocio || 'restaurante');
+
       // Feature Flags — sigue leyendo camelCase, no tocar
       formData.append('mod_salon_activo',       config.modSalon       ? 'True' : 'False');
       formData.append('mod_cocina_activo',       config.modCocina      ? 'True' : 'False');
@@ -461,6 +467,7 @@ export const useErpDashboard = () => {
         confirmacion_automatica: config.confirmacion_automatica,
         device_token:            config.device_token,
         negocio_id:              parseInt(negocioId),
+        tipo_negocio:            config.tipo_negocio,
         modulos: {
           salon:           config.modSalon      && (g.salon           ?? true),
           cocina:          config.modCocina      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),

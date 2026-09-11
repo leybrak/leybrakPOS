@@ -28,6 +28,14 @@ const MODULOS_META = [
   { id: 'modFacturacion', key_plan: 'modulo_facturacion', icon: 'file-text', color: '#6b7280', title: 'Facturación Elec.', desc: 'Emite boletas y facturas (SUNAT).',           badge: 'PREMIUM',    badgeColor: '#3b82f6'  },
 ];
 
+// Preset "Tipo de negocio" — atajo para prender/apagar de una vez los
+// módulos que no aplican a una tienda (Salón, KDS). Ver Erp_TabModulos.jsx
+// en la web (misma idea): el dueño puede seguir tocando cada módulo abajo.
+const TIPOS_NEGOCIO_META = [
+  { value: 'restaurante', icon: 'cutlery',       title: 'Restaurante / Bar', desc: 'Mesas, mozos y cocina (KDS).' },
+  { value: 'tienda',      icon: 'shopping-cart', title: 'Tienda',            desc: 'Venta directa en mostrador, sin mesas ni cocina.' },
+];
+
 // Llave de cada módulo en config.modulos_globales (interruptor único de Leybrak)
 const GLOBAL_KEY_MAP = {
   modSalon: 'salon', modCocina: 'cocina', modInventario: 'inventario', modDelivery: 'delivery',
@@ -346,6 +354,45 @@ function TabModulos({ config, setConfig, t }) {
         </View>
       </Tarjeta>
 
+      {/* TIPO DE NEGOCIO */}
+      <Tarjeta titulo="Tipo de Negocio" icono="building" color={t.color} t={t}>
+        <Text style={[s.descText, { color: t.textSec, marginBottom: 12 }]}>
+          Ajusta la Terminal (POS) a como vendes. Puedes afinar cada módulo abajo.
+        </Text>
+        <View style={s.modulosGrid}>
+          {TIPOS_NEGOCIO_META.map(tipo => {
+            const activo = (config.tipo_negocio || 'restaurante') === tipo.value;
+            return (
+              <TouchableOpacity
+                key={tipo.value}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (activo) return;
+                  if (tipo.value === 'tienda') {
+                    setConfig({ ...config, tipo_negocio: 'tienda', modSalon: false, modCocina: false });
+                  } else {
+                    setConfig({ ...config, tipo_negocio: 'restaurante', modSalon: true });
+                  }
+                }}
+                style={[
+                  s.moduloCard,
+                  { backgroundColor: t.bgInput, borderColor: t.border },
+                  activo && { borderColor: t.color, backgroundColor: `${t.color}10` },
+                ]}
+              >
+                <View style={[s.moduloIconoWrapper, { backgroundColor: activo ? `${t.color}20` : t.bgInput2 }]}>
+                  <Icon name={tipo.icon} size={14} color={activo ? t.color : t.textMuted} />
+                </View>
+                <View style={s.moduloInfo}>
+                  <Text style={[s.moduloTitulo, { color: t.textPrim }]}>{tipo.title}</Text>
+                  <Text style={[s.moduloDesc, { color: t.textSec }]}>{tipo.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Tarjeta>
+
       {/* MÓDULOS */}
       <Tarjeta
         titulo="Módulos del Sistema"
@@ -595,6 +642,7 @@ export default function ConfiguracionScreen() {
         plan_detalles:           d.plan_detalles           || null,
         // Interruptor global de Leybrak (ver TabModulos: "Próximamente")
         modulos_globales:        d.modulos_globales        || {},
+        tipo_negocio:   d.tipo_negocio || 'restaurante',
         modSalon:       d.mod_salon_activo       ?? true,
         modCocina:      d.mod_cocina_activo      ?? false,
         modInventario:  d.mod_inventario_activo  ?? false,
@@ -632,6 +680,7 @@ export default function ConfiguracionScreen() {
         color_primario:           config.colorPrimario   || '#3b82f6',
         tema_fondo:               config.temaFondo       || 'dark',
         confirmacion_automatica:  config.confirmacion_automatica || false,
+        tipo_negocio:             config.tipo_negocio   || 'restaurante',
         mod_salon_activo:         config.modSalon       ?? true,
         mod_cocina_activo:        config.modCocina      ?? false,
         mod_inventario_activo:    config.modInventario  ?? false,
@@ -656,6 +705,7 @@ export default function ConfiguracionScreen() {
         negocio_id:              negocioId,
         yape_numero:             config.yape_numero,
         plin_numero:             config.plin_numero,
+        tipo_negocio:            config.tipo_negocio,
         modulos: {
           salon:           (config.modSalon       ?? true)  && (g.salon           ?? true),
           cocina:          config.modCocina      && (plan.modulo_kds        ?? false) && (g.cocina          ?? true),

@@ -103,6 +103,7 @@ class NegocioSerializer(serializers.ModelSerializer):
             'confirmacion_automatica', 'device_token',
             'plan', 'plan_detalles', 'fecha_registro', 'fin_prueba', 'activo',
             'estado_suscripcion', 'dias_restantes_suscripcion',
+            'tipo_negocio',
             'mod_salon_activo', 'mod_cocina_activo', 'mod_inventario_activo',
             'mod_delivery_activo', 'mod_clientes_activo', 'mod_facturacion_activo',
             'mod_carta_qr_activo', 'mod_bot_wsp_activo', 'mod_ml_activo',

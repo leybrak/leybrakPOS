@@ -181,6 +181,16 @@ class Negocio(models.Model):
     fin_prueba = models.DateTimeField()
     activo = models.BooleanField(default=True)
     
+    # Preset de "Tipo de negocio": solo cambia copys/UI y sirve como atajo
+    # para prender/apagar mod_salon_activo + mod_cocina_activo de una vez
+    # desde el ERP (ver Erp_TabModulos.jsx). No es una fuente de verdad
+    # adicional: el dueño puede seguir tocando los mod_*_activo a mano.
+    TIPO_NEGOCIO_CHOICES = [
+        ('restaurante', 'Restaurante'),
+        ('tienda', 'Tienda'),
+    ]
+    tipo_negocio = models.CharField(max_length=20, choices=TIPO_NEGOCIO_CHOICES, default='restaurante')
+
     # ==========================================
     # 🛡️ MÓDULOS DEL SISTEMA (Feature Flags)
     # ==========================================

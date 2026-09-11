@@ -77,6 +77,7 @@ export default function App() {
           confirmacion_automatica: d.confirmacion_automatica || false,
           device_token:            d.device_token            || null,
           negocio_id:              d.id,
+          tipo_negocio:            d.tipo_negocio            || 'restaurante',
           facturacion_emision:     d.facturacion_emision     || 'desactivado',
           yape_numero:             d.yape_numero             || '',
           plin_numero:             d.plin_numero             || '',
