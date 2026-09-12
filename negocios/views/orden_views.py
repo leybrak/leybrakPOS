@@ -20,7 +20,7 @@ from ..services import aplicar_reglas_negocio, calcular_preview_happy_hours
 from ..models import (
     Orden, DetalleOrden, DetalleOrdenOpcion, Pago,
     Producto, OpcionVariacion, Cliente, SolicitudCambio, SesionCaja, RegistroAuditoria, Sede,
-    CanjePuntos, Mesa
+    CanjePuntos, Mesa, ModificadorRapido
 )
 from ..serializers import OrdenSerializer, DetalleOrdenSerializer, PagoSerializer
 from django.db.models import Sum, Count
@@ -136,6 +136,22 @@ def _procesar_opciones(opciones_ids_raw, variaciones_dict, negocio):
                 pass
 
     return opciones_a_guardar, subtotal
+
+
+def _calcular_subtotal_chips(chips, negocio):
+    """
+    Suma el precio de los "Agregados Extras" / "Notas Rápidas" (ModificadorRapido)
+    seleccionados en el modal de modificadores. El frontend los manda por NOMBRE
+    (notas_y_modificadores.chips), no por id, así que se resuelven acá contra el
+    negocio para no confiar en un precio calculado del lado del cliente.
+    """
+    if not chips:
+        return Decimal('0.00')
+    precios_por_nombre = dict(
+        ModificadorRapido.objects.filter(negocio=negocio, nombre__in=chips)
+        .values_list('nombre', 'precio')
+    )
+    return sum((precios_por_nombre.get(nombre) or Decimal('0.00') for nombre in chips), Decimal('0.00'))
 
 
 # ============================================================
@@ -261,7 +277,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 opciones_ids_raw = d.get('opciones', []) or d.get('opciones_seleccionadas', [])
                 opciones_a_guardar, subtotal_opciones = _procesar_opciones(
                     opciones_ids_raw, variaciones_dict, self.request.user.negocio)
-                precio_final_unitario = precio_seguro + subtotal_opciones
+                subtotal_chips = _calcular_subtotal_chips(notas.get('chips', []), self.request.user.negocio)
+                precio_final_unitario = precio_seguro + subtotal_opciones + subtotal_chips
 
                 detalle = DetalleOrden.objects.create(
                     orden=orden,
@@ -538,7 +555,8 @@ class OrdenViewSet(viewsets.ModelViewSet):
                 opciones_ids_raw = detalle_data.get('opciones_seleccionadas', [])
                 opciones_a_guardar, subtotal_opciones = _procesar_opciones(
                     opciones_ids_raw, variaciones_dict, orden.sede.negocio)
-                precio_final_unitario = precio_seguro + subtotal_opciones
+                subtotal_chips = _calcular_subtotal_chips(notas.get('chips', []), orden.sede.negocio)
+                precio_final_unitario = precio_seguro + subtotal_opciones + subtotal_chips
 
                 nuevo_detalle = DetalleOrden.objects.create(
                     orden=orden,
