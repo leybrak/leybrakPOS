@@ -610,8 +610,8 @@ class SedeViewSet(viewsets.ModelViewSet):
         headers = {"apikey": settings.EVO_GLOBAL_KEY}
         try:
             response = requests.delete(url, headers=headers)
-        except Exception as e:
-            print(f"Error de conexión con Evolution API: {e}")
+        except Exception:
+            logger.warning('Error de conexión con Evolution API al eliminar instancia %s', instancia_nombre, exc_info=True)
         sede.whatsapp_instancia = None
         sede.whatsapp_numero = None
         sede.save()
